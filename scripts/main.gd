@@ -2,7 +2,8 @@ extends Control
 ## Playable local practice build for Kampung Legenda: Misteri Tiga Rumah.
 
 const MENU_ART := "res://assets/ui/main_menu.png"
-const MAP_ART := "res://assets/maps/heritage_maps.png"
+const WAITING_ROOM_ART := "res://assets/ui/waiting_room.png"
+const MAP_ART := "res://assets/maps/palace_village_maps.png"
 const CAST_ART := "res://assets/characters/folklore_cast.png"
 const INK := Color("21170f")
 const CREAM := Color("fff0cf")
@@ -14,6 +15,26 @@ const CHARACTERS := [
 	"Bawang Putih", "Bawang Merah", "Raja Bersiung", "Nenek Kebayan",
 	"Orang Kampung Lelaki", "Orang Kampung Perempuan"
 ]
+
+const MAP_CHARACTERS := {
+	"Istana Puteri Gunung Ledang": ["Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Raja Bersiung", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
+	"Rumah Pak Kaduk": ["Pak Kaduk", "Pak Pandir", "Badang", "Bawang Putih", "Bawang Merah", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
+	"Rumah Mahsuri": ["Mahsuri", "Puteri Gunung Ledang", "Pak Pandir", "Bawang Putih", "Bawang Merah", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"]
+}
+
+const CHARACTER_PORTRAITS := {
+	"Puteri Gunung Ledang": "res://assets/characters/portraits/puteri_gunung_ledang.png",
+	"Pak Kaduk": "res://assets/characters/portraits/pak_kaduk.png",
+	"Badang": "res://assets/characters/portraits/badang.png",
+	"Mahsuri": "res://assets/characters/portraits/mahsuri.png",
+	"Pak Pandir": "res://assets/characters/portraits/pak_pandir.png",
+	"Bawang Putih": "res://assets/characters/portraits/bawang_putih.png",
+	"Bawang Merah": "res://assets/characters/portraits/bawang_merah.png",
+	"Raja Bersiung": "res://assets/characters/portraits/raja_bersiung.png",
+	"Nenek Kebayan": "res://assets/characters/portraits/nenek_kebayan.png",
+	"Orang Kampung Lelaki": "res://assets/characters/portraits/orang_kampung_lelaki.png",
+	"Orang Kampung Perempuan": "res://assets/characters/portraits/orang_kampung_perempuan.png"
+}
 
 const CHARACTER_CLUES := {
 	"Puteri Gunung Ledang": ["Golden jewelry box", "Purple silk cloth", "Floral medallion"],
@@ -30,9 +51,9 @@ const CHARACTER_CLUES := {
 }
 
 const MAPS := [
-	{"name": "Istana Puteri Gunung Ledang", "description": "Explore the royal palace, gardens and mountain path.", "region": Rect2(0, 0, 1350, 490)},
-	{"name": "Rumah Pak Kaduk", "description": "Search the kampung yard, paddy field and rooster arena.", "region": Rect2(0, 500, 750, 445)},
-	{"name": "Rumah Mahsuri", "description": "Follow the village paths from Mahsuri's home to her garden.", "region": Rect2(780, 500, 750, 445)}
+	{"name": "Istana Puteri Gunung Ledang", "description": "Explore palace halls and gardens\non the mountain path.", "region": Rect2(0, 0, 1420, 505)},
+	{"name": "Rumah Pak Kaduk", "description": "Search the kampung yard and paddy field\nfor the rooster arena.", "region": Rect2(10, 515, 745, 440)},
+	{"name": "Rumah Mahsuri", "description": "Follow village paths from Mahsuri's home\nto her garden.", "region": Rect2(780, 515, 748, 440)}
 ]
 
 const TASKS := {
@@ -79,7 +100,10 @@ const NPC_POINTS := [Vector2(430, 330), Vector2(760, 300), Vector2(990, 475), Ve
 
 var current_screen := "menu"
 var selected_map := 0
+var lobby_player_name := "Player 1"
+var waiting_elapsed := 0.0
 var selected_character := ""
+var character_reservations: Dictionary = {}
 var impostor_character := ""
 var player_is_impostor := false
 var player_position := Vector2(640, 390)
@@ -90,6 +114,7 @@ var collected_clues: Array[String] = []
 var task_overlay_index := -1
 var last_notice := ""
 var last_notice_time := 0.0
+var audio_muted := false
 var dead_npcs: Array[String] = []
 var rng := RandomNumberGenerator.new()
 var map_image: Texture2D
@@ -101,6 +126,19 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - last_notice_time > 2.4:
+		var notice_label := get_node_or_null("NoticeLabel") as Label
+		if notice_label: notice_label.text = ""
+		var menu_notice := get_node_or_null("MenuNoticeLabel") as Label
+		if menu_notice: menu_notice.text = ""
+	if current_screen == "waiting_room":
+		waiting_elapsed += delta
+		var timer_label := find_child("LobbyStatusLabel", true, false) as Label
+		if timer_label:
+			var elapsed := int(waiting_elapsed)
+			timer_label.text = "1 / 5 PLAYERS   •   WAITING %02d:%02d" % [floori(float(elapsed) / 60.0), elapsed % 60]
+		return
 	if current_screen != "game" or task_overlay_index >= 0:
 		return
 	var direction := move_vector
@@ -115,9 +153,6 @@ func _process(delta: float) -> void:
 	var pawn := get_node_or_null("Pawn") as Control
 	if pawn:
 		pawn.position = player_position - Vector2(20, 24)
-	var notice := get_node_or_null("NoticeLabel") as Label
-	if notice and Time.get_ticks_msec() / 1000.0 - last_notice_time > 2.4:
-		notice.text = ""
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -135,17 +170,71 @@ func build_menu() -> void:
 	await clear_screen("menu")
 	add_background(load(MENU_ART))
 	add_color_overlay(Color(0.05, 0.07, 0.08, 0.32))
-	var title := make_label("Kampung Legenda", 60, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(270, 78); title.size = Vector2(740, 82); title.add_theme_color_override("font_shadow_color", INK); title.add_theme_constant_override("shadow_offset_x", 4); title.add_theme_constant_override("shadow_offset_y", 5)
-	var subtitle := make_label("Misteri Tiga Rumah", 27, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	subtitle.position = Vector2(410, 158); subtitle.size = Vector2(460, 42)
+	# The menu artwork already contains the full title plaque and subtitle. Avoid
+	# drawing a second title label, which was clipped against the bottom edge.
 	var menu_panel := make_panel(Rect2(465, 255, 350, 395), Color(0.13, 0.075, 0.045, 0.91))
 	var menu_buttons := ["PLAY", "HOW TO PLAY", "SETTINGS", "EXIT"]
 	for i in menu_buttons.size():
 		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 300, 54, i == 0)
 		btn.position = Vector2(25, 25 + i * 85)
+	build_menu_icon_buttons()
 	var badge := make_label("LOCAL PRACTICE  •  NETWORK ROOMS NOT CONNECTED", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
 	badge.position = Vector2(300, 680); badge.size = Vector2(680, 24)
+	var menu_notice := make_label("", 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	menu_notice.name = "MenuNoticeLabel"; menu_notice.position = Vector2(900, 78); menu_notice.size = Vector2(350, 28)
+
+
+func build_menu_icon_buttons() -> void:
+	# These transparent hit targets sit over the gear, music and help artwork.
+	_make_art_icon_button(Rect2(1072, 22, 54, 54), "Settings", Callable(self, "show_settings").bind("menu"))
+	var music := _make_art_icon_button(Rect2(1137, 22, 52, 54), "Toggle music and sound", Callable(self, "_toggle_audio"))
+	music.name = "MenuMusicButton"
+	var mute_slash := ColorRect.new()
+	mute_slash.name = "AudioMutedSlash"
+	mute_slash.color = Color("ff5b50")
+	mute_slash.position = Vector2(9, 24); mute_slash.size = Vector2(34, 5)
+	mute_slash.pivot_offset = mute_slash.size / 2; mute_slash.rotation_degrees = -45
+	mute_slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mute_slash.visible = audio_muted
+	music.add_child(mute_slash)
+	_make_art_icon_button(Rect2(1200, 22, 54, 54), "How to play", Callable(self, "show_how_to_play").bind("menu"))
+
+
+func _make_art_icon_button(rect: Rect2, hint: String, callback: Callable) -> Button:
+	var button := Button.new()
+	button.position = rect.position; button.size = rect.size
+	button.focus_mode = Control.FOCUS_NONE
+	button.tooltip_text = hint
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for state in ["normal", "pressed", "hover", "disabled", "focus"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0, 0, 0, 0)
+		style.border_color = Color(0, 0, 0, 0)
+		if state == "hover": style.bg_color = Color(1, 0.82, 0.42, 0.18)
+		if state == "pressed": style.bg_color = Color(1, 0.82, 0.42, 0.28)
+		button.add_theme_stylebox_override(state, style)
+	button.pressed.connect(callback)
+	add_child(button)
+	return button
+
+
+func _toggle_audio() -> void:
+	audio_muted = not audio_muted
+	var master_bus := AudioServer.get_bus_index("Master")
+	if master_bus >= 0: AudioServer.set_bus_mute(master_bus, audio_muted)
+	var music_button := get_node_or_null("MenuMusicButton") as Button
+	if music_button: music_button.tooltip_text = "Turn music and sound on" if audio_muted else "Turn music and sound off"
+	var mute_slash := get_node_or_null("MenuMusicButton/AudioMutedSlash") as ColorRect
+	if mute_slash: mute_slash.visible = audio_muted
+	var settings_audio := get_node_or_null("SettingsAudioButton") as Button
+	if settings_audio: settings_audio.text = "UNMUTE AUDIO" if audio_muted else "MUTE AUDIO"
+	if current_screen == "menu": show_menu_notice("Music and sound muted." if audio_muted else "Music and sound enabled.")
+
+
+func show_menu_notice(message: String) -> void:
+	last_notice_time = Time.get_ticks_msec() / 1000.0
+	var label := get_node_or_null("MenuNoticeLabel") as Label
+	if label: label.text = message
 
 
 func _menu_action(index: int) -> void:
@@ -164,56 +253,171 @@ func build_map_select() -> void:
 	title.position = Vector2(250, 35); title.size = Vector2(780, 58)
 	var atlas := load(MAP_ART) as Texture2D
 	for i in MAPS.size():
-		var card := make_panel(Rect2(70 + i * 390, 120, 350, 490), Color(0.12, 0.09, 0.07, 0.96))
-		var preview := TextureRect.new(); preview.texture = make_map_texture(atlas, MAPS[i]["region"]); preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		preview.position = Vector2(12, 12); preview.size = Vector2(326, 275); card.add_child(preview)
-		var map_name := make_label(MAPS[i]["name"], 20, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-		map_name.position = Vector2(15, 300); map_name.size = Vector2(320, 58); map_name.reparent(card, false)
-		var description := make_label(MAPS[i]["description"], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-		description.position = Vector2(20, 360); description.size = Vector2(310, 52); description.reparent(card, false)
-		var choose := make_button(card, "SELECT MAP", Callable(self, "_choose_map").bind(i), 270, 48, true)
-		choose.position = Vector2(40, 425)
+		var card := make_panel(Rect2(40 + i * 400, 120, 380, 500), Color(0.12, 0.09, 0.07, 0.97))
+		var preview := TextureRect.new()
+		preview.texture = make_map_texture(atlas, MAPS[i]["region"])
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		preview.position = Vector2(12, 12); preview.size = Vector2(356, 230)
+		preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(preview)
+		_make_child_label(card, MAPS[i]["name"], 20, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 252, 340, 42))
+		var description := _make_child_label(card, MAPS[i]["description"], 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(26, 298, 328, 66))
+		description.clip_contents = true
+		var choose := make_button(card, "SELECT MAP", Callable(self, "_choose_map").bind(i), 316, 50, true)
+		choose.position = Vector2(32, 422)
 	var back := make_button(self, "BACK", Callable(self, "build_menu"), 125, 44)
 	back.position = Vector2(36, 34)
 
 
 func _choose_map(index: int) -> void:
 	selected_map = index
-	build_character_select()
+	selected_character = ""
+	character_reservations.clear()
+	waiting_elapsed = 0.0
+	build_waiting_room()
+
+
+func build_waiting_room() -> void:
+	await clear_screen("waiting_room")
+	add_background(load(WAITING_ROOM_ART))
+	add_color_overlay(Color(0.025, 0.025, 0.025, 0.38))
+
+	var header := make_panel(Rect2(40, 28, 1200, 86), Color(0.11, 0.075, 0.045, 0.94))
+	_make_child_label(header, "WAITING ROOM", 30, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(24, 12, 300, 58))
+	_make_child_label(header, "MAP  •  " + MAPS[selected_map]["name"], 19, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(350, 18, 480, 48))
+	var status := _make_child_label(header, "1 / 5 PLAYERS   •   WAITING 00:00", 17, Color("d8edb2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(840, 18, 330, 48))
+	status.name = "LobbyStatusLabel"
+
+	var map_panel := make_panel(Rect2(55, 140, 420, 430), Color(0.12, 0.08, 0.055, 0.96))
+	_make_child_label(map_panel, "YOUR SELECTED MAP", 18, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 14, 380, 34))
+	var map_preview := TextureRect.new()
+	map_preview.texture = make_map_texture(load(MAP_ART), MAPS[selected_map]["region"])
+	map_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	map_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
+	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_panel.add_child(map_preview)
+	_make_child_label(map_panel, "Waiting for more players to join this map.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 42))
+	_make_child_label(map_panel, "Network rooms are not connected in this build.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 345, 372, 44))
+
+	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
+	_make_child_label(players_panel, "PLAYERS IN ROOM", 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 14, 420, 34))
+	_make_child_label(players_panel, "1 PLAYER HERE  •  4 OPEN SLOTS", 14, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(430, 14, 270, 34))
+	for i in 5:
+		var slot := _make_child_panel(players_panel, Rect2(22 + i * 138, 64, 124, 260), Color(0.17, 0.12, 0.085, 0.96))
+		if i == 0:
+			_add_player_avatar(slot)
+			var name_entry := LineEdit.new()
+			name_entry.name = "LobbyNameEntry"
+			name_entry.text = lobby_player_name
+			name_entry.placeholder_text = "Your name"
+			name_entry.max_length = 20
+			name_entry.position = Vector2(8, 174); name_entry.size = Vector2(108, 34)
+			name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_entry.add_theme_font_size_override("font_size", 14)
+			name_entry.add_theme_color_override("font_color", CREAM)
+			var field_style := StyleBoxFlat.new()
+			field_style.bg_color = Color("35271c"); field_style.border_color = Color("c5904b")
+			field_style.set_border_width_all(1); field_style.set_corner_radius_all(7)
+			field_style.content_margin_left = 4; field_style.content_margin_right = 4
+			name_entry.add_theme_stylebox_override("normal", field_style)
+			name_entry.add_theme_stylebox_override("focus", field_style)
+			name_entry.text_changed.connect(_on_lobby_name_changed)
+			slot.add_child(name_entry)
+			_make_child_label(slot, "YOU  •  HOST", 12, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 214, 108, 26))
+		else:
+			var empty_avatar := _make_child_panel(slot, Rect2(28, 30, 68, 68), Color(0.20, 0.17, 0.13, 1.0))
+			empty_avatar.add_theme_stylebox_override("panel", _circle_style(Color(0.20, 0.17, 0.13, 1.0), Color("8d785f")))
+			_make_child_label(slot, "+", 34, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 33, 68, 60))
+			_make_child_label(slot, "OPEN SLOT", 12, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(7, 120, 110, 30))
+			_make_child_label(slot, "Waiting for\na player", 12, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 155, 108, 48))
+
+	var back := make_button(self, "CHANGE MAP", Callable(self, "build_map_select"), 210, 48)
+	back.position = Vector2(55, 610)
+	var next := make_button(self, "CHOOSE CHARACTER", Callable(self, "build_character_select"), 270, 48, true)
+	next.position = Vector2(955, 610)
+	var local_note := make_label("LOCAL LOBBY PREVIEW  •  MULTIPLAYER JOINING IS NOT CONNECTED YET", 13, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
+	local_note.position = Vector2(300, 620); local_note.size = Vector2(680, 28)
+
+
+func _add_player_avatar(parent: Control) -> void:
+	var avatar_bg := _make_child_panel(parent, Rect2(16, 10, 92, 100), Color(0.12, 0.18, 0.20, 1.0))
+	avatar_bg.add_theme_stylebox_override("panel", _circle_style(Color("283a38"), Color("d3a24e")))
+	_make_child_panel(parent, Rect2(38, 64, 48, 34), Color("734c77"))
+	_make_child_panel(parent, Rect2(41, 34, 42, 48), Color("e8b58a"))
+	_make_child_panel(parent, Rect2(39, 29, 46, 20), Color("30231d"))
+	_make_child_panel(parent, Rect2(49, 53, 5, 5), Color("251a17"))
+	_make_child_panel(parent, Rect2(69, 53, 5, 5), Color("251a17"))
+	_make_child_label(parent, "PLAYER AVATAR", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 112, 108, 22))
+
+
+func _on_lobby_name_changed(new_name: String) -> void:
+	lobby_player_name = new_name.strip_edges()
+
+
+func _circle_style(fill: Color, border: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill; style.border_color = border
+	style.set_border_width_all(2); style.set_corner_radius_all(48)
+	return style
+
+
+func _make_child_panel(parent: Control, rect: Rect2, color: Color) -> Panel:
+	var panel := Panel.new(); panel.position = rect.position; panel.size = rect.size
+	var style := StyleBoxFlat.new(); style.bg_color = color; style.border_color = Color("8d6436")
+	style.set_border_width_all(1); style.set_corner_radius_all(10)
+	panel.add_theme_stylebox_override("panel", style)
+	parent.add_child(panel)
+	return panel
 
 
 func build_character_select() -> void:
 	await clear_screen("character_select")
-	add_background(load(MENU_ART)); add_color_overlay(Color(0.035, 0.055, 0.06, 0.84))
-	var title := make_label("Select Your Character", 38, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(300, 20); title.size = Vector2(680, 54)
-	var subtitle := make_label(MAPS[selected_map]["name"], 19, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	subtitle.position = Vector2(300, 70); subtitle.size = Vector2(680, 32)
-	var cast := TextureRect.new(); cast.texture = load(CAST_ART); cast.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; cast.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	cast.position = Vector2(34, 120); cast.size = Vector2(270, 500); cast.modulate = Color(1, 1, 1, 0.85); add_child(cast)
-	for i in CHARACTERS.size():
-		var col := i % 4; var row := i / 4
-		var card := make_panel(Rect2(330 + col * 226, 128 + row * 166, 205, 148), Color(0.16, 0.105, 0.07, 0.97))
-		var sigil := make_label(_character_sigil(i), 30, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-		sigil.position = Vector2(5, 6); sigil.size = Vector2(195, 40); sigil.reparent(card, false)
-		var name := make_label(CHARACTERS[i], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-		name.position = Vector2(8, 45); name.size = Vector2(189, 45); name.reparent(card, false)
-		var select := make_button(card, "SELECT", Callable(self, "_select_character").bind(CHARACTERS[i]), 150, 36, selected_character == CHARACTERS[i])
-		select.position = Vector2(27, 100)
-	var selected := selected_character if not selected_character.is_empty() else "Choose one of 11 folklore characters"
-	var selected_label := make_label("Selected: " + selected, 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	selected_label.position = Vector2(340, 640); selected_label.size = Vector2(640, 28)
-	var start := make_button(self, "START PRACTICE", Callable(self, "start_practice"), 245, 52, true)
-	start.position = Vector2(880, 635); start.disabled = selected_character.is_empty()
-	var back := make_button(self, "BACK", Callable(self, "build_map_select"), 115, 42)
-	back.position = Vector2(35, 35)
-	var online := make_label("Offline practice uses four village characters as local suspects.", 13, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER)
-	online.position = Vector2(345, 684); online.size = Vector2(630, 20)
+	add_background(load(MENU_ART)); add_color_overlay(Color(0.035, 0.055, 0.06, 0.86))
+	_make_child_label(self, "CHOOSE YOUR CHARACTER", 34, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(250, 16, 780, 48))
+	_make_child_label(self, MAPS[selected_map]["name"] + "  •  8 CHARACTERS", 18, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(270, 65, 740, 32))
+	var roster: Array = MAP_CHARACTERS[MAPS[selected_map]["name"]]
+	for i in roster.size():
+		var character: String = roster[i]
+		var col := i % 4; var row := floori(float(i) / 4.0)
+		var card := make_panel(Rect2(46 + col * 298, 112 + row * 250, 286, 230), Color(0.13, 0.085, 0.055, 0.97))
+		var portrait_frame := _make_child_panel(card, Rect2(10, 12, 102, 164), Color(0.10, 0.075, 0.055, 1.0))
+		var portrait := TextureRect.new()
+		portrait.texture = load(CHARACTER_PORTRAITS[character])
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.position = Vector2(12, 14); portrait.size = Vector2(98, 160)
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait_frame.add_child(portrait)
+		_make_child_label(card, character, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(118, 26, 158, 58))
+		_make_child_label(card, "FOLKLORE CHARACTER", 10, Color("d8b974"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(118, 91, 158, 24))
+		var reserved := character_reservations.has(character)
+		var is_selected := selected_character == character
+		var button_text := "SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT")
+		var select := make_button(card, button_text, Callable(self, "_select_character").bind(character), 150, 42, is_selected)
+		select.position = Vector2(122, 145)
+		select.disabled = is_selected or reserved
+		if reserved: select.tooltip_text = "Selected by " + str(character_reservations[character])
+	var selection_text := selected_character if not selected_character.is_empty() else "Choose one character"
+	_make_child_label(self, "Selected: " + selection_text, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(290, 625, 520, 30))
+	var start := make_button(self, "START PRACTICE", Callable(self, "start_practice"), 230, 48, true)
+	start.position = Vector2(1000, 632); start.disabled = selected_character.is_empty()
+	var back := make_button(self, "BACK TO ROOM", Callable(self, "build_waiting_room"), 190, 46)
+	back.position = Vector2(36, 632)
+	_make_child_label(self, "Characters reserved by other players will be unavailable when multiplayer is connected.", 12, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(330, 674, 620, 22))
 
 
 func _select_character(character: String) -> void:
+	if character_reservations.has(character): return
 	selected_character = character
 	build_character_select()
+
+
+func update_character_reservations(reservations: Dictionary) -> void:
+	character_reservations = reservations.duplicate()
+	if character_reservations.has(selected_character): selected_character = ""
+	if current_screen == "character_select": build_character_select()
 
 
 func _character_sigil(index: int) -> String:
@@ -513,13 +717,27 @@ func show_how_to_play(return_screen: String) -> void:
 
 
 func show_settings(_return_screen: String) -> void:
-	var overlay := make_panel(Rect2(375, 185, 530, 340), Color(0.12, 0.08, 0.06, 0.98))
-	var title := make_label("SETTINGS", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(20, 20); title.size = Vector2(490, 42); title.reparent(overlay, false)
-	var copy := make_label("Landscape layout is enabled.\n\nMusic and sound hooks are reserved for original game audio.\n\nTouch movement and keyboard movement are supported.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	copy.position = Vector2(35, 95); copy.size = Vector2(460, 135); copy.reparent(overlay, false)
+	var overlay := make_panel(Rect2(375, 200, 530, 320), Color(0.12, 0.08, 0.06, 0.99))
+	_make_child_label(overlay, "SETTINGS", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 22, 480, 42))
+	_make_child_label(overlay, "Landscape layout is enabled.\nTouch and keyboard movement are supported.\nAudio controls apply to all game sound.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 78, 460, 84))
+	var audio := make_button(overlay, "UNMUTE AUDIO" if audio_muted else "MUTE AUDIO", Callable(self, "_toggle_audio"), 210, 42, true)
+	audio.name = "SettingsAudioButton"; audio.position = Vector2(150, 174)
 	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 140, 42)
-	close.position = Vector2(195, 274)
+	close.position = Vector2(195, 232)
+
+
+func _make_child_label(parent: Control, text: String, font_size: int, color: Color, align: HorizontalAlignment, rect: Rect2) -> Label:
+	var label := Label.new()
+	label.text = text; label.position = rect.position; label.size = rect.size
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+	label.add_theme_constant_override("shadow_offset_x", 1); label.add_theme_constant_override("shadow_offset_y", 2)
+	label.horizontal_alignment = align; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(label)
+	return label
 
 
 func add_background(texture: Texture2D) -> void:

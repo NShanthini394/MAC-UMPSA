@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://h5axgryr0ofo"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://b272046qo5xo4" path="res://scripts/main.gd" id="1_main"]
 
-[node name="KampungLegenda" type="Control"]
+[node name="KampungLegenda" type="Control" unique_id=949776630]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

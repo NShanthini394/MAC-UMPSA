@@ -2,6 +2,7 @@ extends RefCounted
 ## Builds the playable screen while delegating game actions to the main controller.
 
 const GameData = preload("res://scripts/game_data.gd")
+const CharacterActor = preload("res://scripts/character_actor.gd")
 
 
 func build(app) -> void:
@@ -80,10 +81,12 @@ func build(app) -> void:
 		clue.name = "ClueMarker_%d" % i
 		clue.position = clue_points[i]; clue.add_theme_font_size_override("font_size", 11)
 	if not online_match:
-		var pawn: Panel = app.make_panel(Rect2(app.player_position - Vector2(20, 24), Vector2(40, 48)), Color("f5bc51"))
+		var pawn = CharacterActor.new()
 		pawn.name = "Pawn"
-		var pawn_label: Label = app.make_label("YOU", 12, GameData.INK, HORIZONTAL_ALIGNMENT_CENTER)
-		pawn_label.position = Vector2(1, 13); pawn_label.size = Vector2(38, 20); pawn_label.reparent(pawn, false)
+		pawn.size = Vector2(80, 92)
+		pawn.position = app.player_position - Vector2(40, 66)
+		app.add_child(pawn)
+		pawn.configure(app.selected_character)
 	var notice: Label = app.make_label("", 15, Color("fff3cd"), HORIZONTAL_ALIGNMENT_CENTER)
 	notice.name = "NoticeLabel"; notice.position = Vector2(310, 612); notice.size = Vector2(660, 28)
 	build_control_bar(app)

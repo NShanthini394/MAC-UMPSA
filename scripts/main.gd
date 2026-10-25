@@ -149,7 +149,8 @@ func _process(delta: float) -> void:
 	player_position.y = clampf(player_position.y, 135.0, 670.0)
 	var pawn := get_node_or_null("Pawn") as Control
 	if pawn:
-		pawn.position = player_position - Vector2(20, 24)
+		pawn.position = player_position - Vector2(pawn.size.x / 2.0, pawn.size.y * 0.72)
+		pawn.call("set_running", direction.length_squared() > 0.01)
 	var route_line := get_node_or_null("RouteLine") as Line2D
 	if route_active and route_line:
 		route_line.clear_points()
@@ -745,6 +746,7 @@ func _show_role_reveal() -> void:
 
 
 func build_waiting_room() -> void:
+	_auto_select_available_character()
 	await clear_screen("waiting_room")
 	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	add_background(load(WAITING_ROOM_ART))
@@ -836,6 +838,23 @@ func build_waiting_room() -> void:
 	start_button.disabled = not _all_lobby_players_ready() or lobby_players.size() >= 10 or (network_room and lobby_players.size() < 5)
 	var lobby_note := _make_child_label(self, "Online room" if network_room else "Offline practice lobby", 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(760, 578, 465, 24))
 	lobby_note.clip_text = true
+
+
+func _auto_select_available_character() -> void:
+	if not selected_character.is_empty(): return
+	var local_index := _local_player_index()
+	if local_index < 0: return
+	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
+	for character in CHARACTERS:
+		if character_reservations.has(character): continue
+		if network_room:
+			# Let the server reserve the character; room state will confirm the choice.
+			network_manager.set_character(character)
+		else:
+			selected_character = character
+			lobby_players[local_index]["character"] = character
+		return
+	show_notice("No characters are available in this room.")
 
 
 func _leave_room_to_menu() -> void:
@@ -972,13 +991,13 @@ func build_character_select() -> void:
 	await clear_screen("character_select")
 	add_background(load(MENU_ART)); add_color_overlay(Color(0.035, 0.055, 0.06, 0.86))
 	_make_child_label(self, "CHOOSE YOUR CHARACTER", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(250, 10, 780, 44))
-	_make_child_label(self, MAPS[selected_map]["name"] + "  •  11 CHARACTERS", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(270, 54, 740, 30))
+	_make_child_label(self, MAPS[selected_map]["name"] + "  •  10 CHARACTERS", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(270, 54, 740, 30))
 	var roster: Array = CHARACTERS
 	for i in roster.size():
 		var character: String = roster[i]
-		var col := i % 6
-		var row := floori(float(i) / 6.0)
-		var cards_in_row := 6 if row == 0 else 5
+		var col := i % 5
+		var row := floori(float(i) / 5.0)
+		var cards_in_row := 5
 		var row_width := cards_in_row * 195 + (cards_in_row - 1) * 12
 		var row_start_x := (1280.0 - row_width) / 2.0
 		var card_x := row_start_x + col * 207

@@ -12,14 +12,14 @@ const PANEL := Color("241b18", 0.94)
 
 const CHARACTERS := [
 	"Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Pak Pandir",
-	"Bawang Putih", "Bawang Merah", "Raja Bersiung", "Nenek Kebayan",
+	"Bawang Putih", "Bawang Merah", "Raja Bersiung",
 	"Orang Kampung Lelaki", "Orang Kampung Perempuan"
 ]
 
 const MAP_CHARACTERS := {
-	"Istana Puteri Gunung Ledang": ["Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Raja Bersiung", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
-	"Rumah Pak Kaduk": ["Pak Kaduk", "Pak Pandir", "Badang", "Bawang Putih", "Bawang Merah", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
-	"Rumah Mahsuri": ["Mahsuri", "Puteri Gunung Ledang", "Pak Pandir", "Bawang Putih", "Bawang Merah", "Nenek Kebayan", "Orang Kampung Lelaki", "Orang Kampung Perempuan"]
+	"Istana Puteri Gunung Ledang": ["Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Raja Bersiung", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
+	"Rumah Pak Kaduk": ["Pak Kaduk", "Pak Pandir", "Badang", "Bawang Putih", "Bawang Merah", "Orang Kampung Lelaki", "Orang Kampung Perempuan"],
+	"Rumah Mahsuri": ["Mahsuri", "Puteri Gunung Ledang", "Pak Pandir", "Bawang Putih", "Bawang Merah", "Orang Kampung Lelaki", "Orang Kampung Perempuan"]
 }
 
 const CHARACTER_PORTRAITS := {

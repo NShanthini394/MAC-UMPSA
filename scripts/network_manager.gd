@@ -21,6 +21,7 @@ const PORT := 7000
 const MAX_PLAYERS_PER_ROOM := 10
 const MAX_SERVER_CLIENTS := 100
 const GameData = preload("res://scripts/game_data.gd")
+const MapGeometry = preload("res://scripts/map_geometry.gd")
 const CLUE_CANDIDATE_POINTS := [
 	Vector2(370, 235), Vector2(530, 235), Vector2(880, 245), Vector2(1050, 370),
 	Vector2(880, 530), Vector2(625, 555), Vector2(350, 520), Vector2(340, 390),
@@ -84,10 +85,19 @@ func _process(delta: float) -> void:
 			var direction: Vector2 = player.get("direction", Vector2.ZERO)
 			if direction == Vector2.ZERO:
 				continue
-			var position: Vector2 = player.get("position", Vector2(640, 390))
-			position += direction * delta * 250.0
-			position.x = clampf(position.x, 72.0, 1205.0)
-			position.y = clampf(position.y, 135.0, 670.0)
+			var map_index := int(room.get("map_index", 0))
+			var world_size: Vector2 = MapGeometry.world_size(map_index)
+			var position: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
+			var candidate := position + direction * delta * 250.0
+			candidate.x = clampf(candidate.x, 12.0, world_size.x - 12.0)
+			candidate.y = clampf(candidate.y, 12.0, world_size.y - 12.0)
+			if not MapGeometry.is_position_blocked(map_index, candidate):
+				position = candidate
+			else:
+				var horizontal := Vector2(candidate.x, position.y)
+				var vertical := Vector2(position.x, candidate.y)
+				if not MapGeometry.is_position_blocked(map_index, horizontal): position.x = horizontal.x
+				if not MapGeometry.is_position_blocked(map_index, vertical): position.y = vertical.y
 			player["position"] = position
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
@@ -442,12 +452,17 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	var role_player_index := _server_random.randi_range(0, members.size() - 1)
 	var secret_character := str(members[role_player_index].get("character", ""))
 	var map_name: String = GameData.MAPS[int(room["map_index"])]["name"]
+	var map_index := int(room["map_index"])
 	room["completed_tasks"] = []
 	room["task_progress"] = []
 	for _task in GameData.TASKS[map_name].size():
 		room["completed_tasks"].append(0)
 		room["task_progress"].append(0)
-	var candidate_points: Array = CLUE_CANDIDATE_POINTS.duplicate()
+	var candidate_points: Array = []
+	for point in MapGeometry.clue_candidates(map_index):
+		if not MapGeometry.is_position_blocked(map_index, point): candidate_points.append(point)
+	if candidate_points.size() < 3:
+		candidate_points = MapGeometry.clue_candidates(map_index).duplicate()
 	candidate_points.shuffle()
 	room["clue_positions"] = candidate_points.slice(0, 3)
 	room["clue_names"] = GameData.CHARACTER_CLUES[secret_character].duplicate()
@@ -458,6 +473,9 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["secret_character"] = secret_character
 	for i in members.size():
 		var member: Dictionary = members[i]
+		var player_id := int(member["id"])
+		room["players"][player_id]["position"] = MapGeometry.spawn_point_for_player(map_index, i)
+		room["players"][player_id]["direction"] = Vector2.ZERO
 		var role := "nenek_kebayan" if i == role_player_index else "villager"
 		room["players"][int(member["id"])]["role"] = role
 		_rpc_private_role.rpc_id(int(member["id"]), role, secret_character if role == "nenek_kebayan" else "")
@@ -660,7 +678,7 @@ func request_task_answer(task_index: int, answer: int) -> void:
 		_rpc_task_resolved.rpc_id(sender, task_index, false, 0, false)
 		return
 	var position: Vector2 = member.get("position", Vector2.ZERO)
-	if position.distance_to(GameData.TASK_POINTS[task_index]) > 110.0:
+	if position.distance_to(MapGeometry.task_points(int(room["map_index"]))[task_index]) > 72.0:
 		_rpc_task_resolved.rpc_id(sender, task_index, false, int(room["task_progress"][task_index]), bool(room["completed_tasks"][task_index]))
 		return
 	var task: Dictionary = tasks[task_index]
@@ -701,7 +719,7 @@ func request_inspect_clue(clue_index: int) -> void:
 	if clue_index < 0 or clue_index >= positions.size() or clue_index in room["found_clues"]:
 		return
 	var position: Vector2 = member.get("position", Vector2.ZERO)
-	if position.distance_to(positions[clue_index]) > 110.0:
+	if position.distance_to(positions[clue_index]) > 72.0:
 		_rpc_room_error.rpc_id(sender, "Move closer to the clue to inspect it.")
 		return
 	room["found_clues"].append(clue_index)
@@ -724,7 +742,7 @@ func request_call_meeting() -> void:
 	if not room["players"].has(sender) or not bool(room["players"][sender].get("alive", true)):
 		return
 	var position: Vector2 = room["players"][sender].get("position", Vector2.ZERO)
-	if position.distance_to(Vector2(640, 120)) > 100.0:
+	if position.distance_to(MapGeometry.gong_point(int(room["map_index"]))) > 78.0:
 		_rpc_room_error.rpc_id(sender, "Move close to the gong to call a meeting.")
 		return
 	room["meeting_state"] = "discussion"

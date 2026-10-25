@@ -19,6 +19,7 @@ var _is_running := false
 var _elapsed := 0.0
 var _frame_index := 0
 var _base_sprite_y := 0.0
+var _name_label: Label
 
 
 func _ready() -> void:
@@ -31,23 +32,24 @@ func _ready() -> void:
 	_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_sprite)
 	_base_sprite_y = _sprite.position.y
-	var name_label := Label.new()
-	name_label.name = "PlayerName"
-	name_label.text = "YOU"
-	name_label.position = Vector2(0, 73)
-	name_label.size = Vector2(80, 18)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 10)
-	name_label.add_theme_color_override("font_color", GameData.CREAM)
-	name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	name_label.add_theme_constant_override("shadow_offset_x", 1)
-	name_label.add_theme_constant_override("shadow_offset_y", 2)
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(name_label)
+	_name_label = Label.new()
+	_name_label.name = "PlayerName"
+	_name_label.text = "YOU"
+	_name_label.position = Vector2(0, -18)
+	_name_label.size = Vector2(80, 18)
+	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_name_label.add_theme_font_size_override("font_size", 10)
+	_name_label.add_theme_color_override("font_color", GameData.CREAM)
+	_name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_name_label.add_theme_constant_override("shadow_offset_x", 1)
+	_name_label.add_theme_constant_override("shadow_offset_y", 2)
+	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_name_label)
 
 
-func configure(character: String) -> void:
+func configure(character: String, display_name: String = "YOU") -> void:
+	_name_label.text = display_name
 	_walk_frames.clear()
 	_frame_index = 0
 	if WALK_ROWS.has(character):

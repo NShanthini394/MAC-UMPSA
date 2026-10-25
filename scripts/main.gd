@@ -5,6 +5,7 @@ const GameData = preload("res://scripts/game_data.gd")
 const GameUI = preload("res://scripts/game_ui.gd")
 const GameScreen = preload("res://scripts/game_screen.gd")
 const NetworkManagerScript = preload("res://scripts/network_manager.gd")
+const MapGeometry = preload("res://scripts/map_geometry.gd")
 const MENU_ART := GameData.MENU_ART
 const WAITING_ROOM_ART := GameData.WAITING_ROOM_ART
 const MAP_ART := GameData.MAP_ART
@@ -51,6 +52,10 @@ var dead_npcs: Array[String] = []
 var rng := RandomNumberGenerator.new()
 var map_image: Texture2D
 var game_screen := GameScreen.new()
+var game_world: Node2D
+var game_hud: CanvasLayer
+var player_body: CharacterBody2D
+var current_area_name := ""
 var network_manager = null
 var server_address := "127.0.0.1"
 var clue_points: Array = []
@@ -93,11 +98,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - last_notice_time > 2.4:
-		var notice_label := get_node_or_null("NoticeLabel") as Label
+		var notice_label := find_child("NoticeLabel", true, false) as Label
 		if notice_label: notice_label.text = ""
-		var menu_notice := get_node_or_null("MenuNoticeLabel") as Label
+		var menu_notice := find_child("MenuNoticeLabel", true, false) as Label
 		if menu_notice: menu_notice.text = ""
-		var room_notice := get_node_or_null("RoomErrorNotice") as Label
+		var room_notice := find_child("RoomErrorNotice", true, false) as Label
 		if room_notice: room_notice.text = ""
 	if current_screen == "meeting":
 		var timer_label := find_child("MeetingTimerLabel", true, false) as Label
@@ -143,15 +148,15 @@ func _process(delta: float) -> void:
 	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	if online_match:
 		network_manager.send_player_input(direction)
+		_update_interaction_prompt()
 		return
-	player_position += direction * delta * 250.0
-	player_position.x = clampf(player_position.x, 72.0, 1205.0)
-	player_position.y = clampf(player_position.y, 135.0, 670.0)
-	var pawn := get_node_or_null("Pawn") as Control
-	if pawn:
-		pawn.position = player_position - Vector2(pawn.size.x / 2.0, pawn.size.y * 0.72)
-		pawn.call("set_running", direction.length_squared() > 0.01)
-	var route_line := get_node_or_null("RouteLine") as Line2D
+	if is_instance_valid(player_body):
+		player_body.call("set_input_direction", direction)
+		player_position = player_body.global_position
+	_update_area_indicator()
+	_update_interaction_prompt()
+	var route_line: Line2D = null
+	if is_instance_valid(game_world): route_line = game_world.get_node_or_null("RouteLine") as Line2D
 	if route_active and route_line:
 		route_line.clear_points()
 		route_line.add_point(player_position)
@@ -163,6 +168,56 @@ func _process(delta: float) -> void:
 		if route_line: route_line.visible = false
 
 
+func _update_area_indicator() -> void:
+	var area_name := "Village Yard"
+	for area in MapGeometry.areas(selected_map):
+		var area_rect: Rect2 = area["rect"]
+		if area_rect.has_point(player_position):
+			area_name = str(area["name"])
+			break
+	if area_name != current_area_name:
+		current_area_name = area_name
+		show_notice(area_name)
+
+
+func _update_interaction_prompt() -> void:
+	var prompt := find_child("InteractionPromptLabel", true, false) as Label
+	var inspect := find_child("InspectClueButton", true, false) as Button
+	var interact := find_child("InteractButton", true, false) as Button
+	if prompt == null or inspect == null or interact == null:
+		return
+	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
+	var clue_positions: Array = clue_points if clue_points.size() == 3 else MapGeometry.clue_candidates(selected_map).slice(0, 3)
+	var clue_index := _nearest_index(clue_positions, 72.0)
+	var clue_available := clue_index >= 0 and not player_is_impostor
+	if clue_available and online_match and clue_index in network_found_clues:
+		clue_available = false
+	elif clue_available and not online_match:
+		var local_clues: Array = CHARACTER_CLUES.get(impostor_character, [])
+		if clue_index < local_clues.size() and collected_clues.has(local_clues[clue_index]):
+			clue_available = false
+	inspect.disabled = not clue_available
+	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
+	var gong_near := player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0
+	var npc_index := _nearest_index(MapGeometry.npc_points(selected_map), 78.0)
+	if clue_available:
+		prompt.text = "A clue is nearby • tap INSPECT CLUE"
+		interact.disabled = false
+	elif task_index >= 0:
+		var tasks: Array = TASKS[MAPS[selected_map]["name"]]
+		prompt.text = "Task nearby • " + str(tasks[task_index]["name"])
+		interact.disabled = completed_tasks.size() > task_index and completed_tasks[task_index] == 1
+	elif gong_near:
+		prompt.text = "Emergency meeting gong • tap INTERACT"
+		interact.disabled = false
+	elif npc_index >= 0:
+		prompt.text = "Villager nearby • tap INTERACT"
+		interact.disabled = false
+	else:
+		prompt.text = ""
+		interact.disabled = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if current_screen == "game" and task_overlay_index < 0 and event is InputEventKey and event.pressed and event.keycode == KEY_E:
 		interact_nearest()
@@ -170,6 +225,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func clear_screen(screen_name: String) -> void:
 	current_screen = screen_name
+	game_world = null
+	game_hud = null
+	player_body = null
+	current_area_name = ""
 	for child in get_children():
 		if child != network_manager: child.queue_free()
 	await get_tree().process_frame
@@ -511,7 +570,9 @@ func _on_network_match_started(map_index: int, new_clue_points: Array) -> void:
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
 	network_found_clues.clear()
 	task_progress.clear()
-	player_position = Vector2(640, 395)
+	player_position = MapGeometry.spawn_point(selected_map)
+	for i in lobby_players.size():
+		lobby_players[i]["position"] = MapGeometry.spawn_point_for_player(selected_map, i)
 	var tasks: Array = TASKS[MAPS[selected_map]["name"]]
 	for _i in tasks.size():
 		completed_tasks.append(0)
@@ -530,8 +591,13 @@ func _on_network_positions_changed(members: Array) -> void:
 				break
 		if network_manager.local_peer_id() == peer_id:
 			player_position = position
-		var actor := get_node_or_null("PlayerActor_%d" % peer_id) as Control
-		if actor: actor.position = position - Vector2(22, 40)
+		var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
+		if actor: actor.call("set_network_target", position)
+		if network_manager.local_peer_id() == peer_id and is_instance_valid(player_body):
+			player_body.call("set_network_target", position)
+	if current_screen == "game":
+		_update_area_indicator()
+		_update_interaction_prompt()
 
 
 func _on_network_task_state_changed(completed: Array, progress: Array) -> void:
@@ -549,7 +615,7 @@ func _on_network_task_state_changed(completed: Array, progress: Array) -> void:
 
 func _on_network_task_resolved(task_index: int, success: bool, progress: int, complete: bool) -> void:
 	task_overlay_index = -1
-	var overlay := get_node_or_null("TaskOverlay")
+	var overlay := find_child("TaskOverlay", true, false)
 	if overlay: overlay.queue_free()
 	if success:
 		show_notice("Task complete." if complete else "Progress %d." % progress)
@@ -567,8 +633,9 @@ func _on_network_clue_found(clue_index: int, clue_name: String, found_by: int) -
 		show_clue_panel(clue_name, "the hidden character")
 	elif current_screen == "game":
 		show_notice("Clue found: " + clue_name)
-	var marker := get_node_or_null("ClueMarker_%d" % clue_index)
+	var marker := game_world.get_node_or_null("ClueMarker_%d" % clue_index) if is_instance_valid(game_world) else null
 	if marker: marker.queue_free()
+	_update_interaction_prompt()
 
 
 func _on_network_meeting_changed(state: String, seconds_left: int, members: Array, votes_cast: int, alive_count: int) -> void:
@@ -602,13 +669,13 @@ func _on_network_chat_received(_peer_id: int, player_name: String, message: Stri
 
 func _on_network_meeting_result(target_id: int, message: String, _winner: String) -> void:
 	network_meeting_state = ""
-	var overlay := get_node_or_null("MeetingOverlay")
+	var overlay := find_child("MeetingOverlay", true, false)
 	if overlay: overlay.queue_free()
 	if target_id >= 0:
 		for i in lobby_players.size():
 			if int(lobby_players[i].get("id", -1)) == target_id:
 				lobby_players[i]["alive"] = false
-		var actor := get_node_or_null("PlayerActor_%d" % target_id)
+		var actor := game_world.get_node_or_null("PlayerActor_%d" % target_id) if is_instance_valid(game_world) else null
 		if actor: actor.queue_free()
 	show_notice(message)
 	if current_screen == "meeting": current_screen = "game"
@@ -618,7 +685,7 @@ func _on_network_player_eliminated(peer_id: int, message: String, _winner: Strin
 	for i in lobby_players.size():
 		if int(lobby_players[i].get("id", -1)) == peer_id:
 			lobby_players[i]["alive"] = false
-	var actor := get_node_or_null("PlayerActor_%d" % peer_id)
+	var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
 	if actor: actor.queue_free()
 	show_notice(message)
 
@@ -628,7 +695,7 @@ func _on_network_match_finished(winner: String, message: String) -> void:
 
 
 func _show_network_discussion() -> void:
-	var old_overlay := get_node_or_null("MeetingOverlay")
+	var old_overlay := find_child("MeetingOverlay", true, false)
 	if old_overlay:
 		old_overlay.queue_free()
 		await get_tree().process_frame
@@ -667,7 +734,7 @@ func _send_meeting_chat() -> void:
 
 
 func _show_network_voting(members: Array) -> void:
-	var old_overlay := get_node_or_null("MeetingOverlay")
+	var old_overlay := find_child("MeetingOverlay", true, false)
 	if old_overlay:
 		old_overlay.queue_free()
 		await get_tree().process_frame
@@ -723,7 +790,7 @@ func _submit_network_vote(target_id: int) -> void:
 		selected_id = network_vote_selection
 	network_vote_submitted = true
 	network_manager.cast_vote(selected_id)
-	var overlay := get_node_or_null("MeetingOverlay")
+	var overlay := find_child("MeetingOverlay", true, false)
 	if overlay:
 		for child in overlay.find_children("*", "Button", true, false): child.disabled = true
 		_make_child_label(overlay, "Vote submitted.", 16, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(240, 548, 330, 24))
@@ -1087,7 +1154,12 @@ func _character_sigil(index: int) -> String:
 func start_practice() -> void:
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
 	task_progress.clear()
-	player_position = Vector2(640, 395)
+	player_position = MapGeometry.spawn_point(selected_map)
+	clue_points.clear()
+	for candidate in MapGeometry.clue_candidates(selected_map):
+		if not MapGeometry.is_position_blocked(selected_map, candidate): clue_points.append(candidate)
+	clue_points.shuffle()
+	clue_points = clue_points.slice(0, 3)
 	var tasks: Array = TASKS[MAPS[selected_map]["name"]]
 	for i in tasks.size():
 		completed_tasks.append(0)
@@ -1111,19 +1183,20 @@ func build_control_bar() -> void:
 
 
 func interact_nearest() -> void:
-	var task_index := _nearest_index(TASK_POINTS, 110.0)
+	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	if task_index >= 0:
 		if completed_tasks[task_index] == 1: show_notice("That task is already complete."); return
 		open_task(task_index); return
-	if player_position.distance_to(Vector2(640, 120)) < 100.0:
+	if player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0:
 		call_meeting(); return
-	if _nearest_index(NPC_POINTS, 90.0) >= 0:
+	if _nearest_index(MapGeometry.npc_points(selected_map), 78.0) >= 0:
 		show_notice("The villagers look uneasy. Check the clue journal before accusing anyone."); return
 	show_notice("Move closer to a marked task, villager or gong.")
 
 
 func open_task(index: int) -> void:
 	task_overlay_index = index
+	_stop_move()
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		network_manager.send_player_input(Vector2.ZERO)
 	var task: Dictionary = TASKS[MAPS[selected_map]["name"]][index]
@@ -1153,7 +1226,8 @@ func _answer_task(task_index: int, answer: int) -> void:
 		var required: int = TASK_STEPS[MAPS[selected_map]["name"]][task_index]
 		if task_progress[task_index] >= required: completed_tasks[task_index] = 1
 		task_overlay_index = -1
-		if get_node_or_null("TaskOverlay"): get_node("TaskOverlay").queue_free()
+		var task_overlay := find_child("TaskOverlay", true, false)
+		if task_overlay: task_overlay.queue_free()
 		if completed_tasks.count(1) == 8:
 			show_result(true, "The village is safe. All shared tasks are complete.")
 		else:
@@ -1168,14 +1242,14 @@ func _answer_task(task_index: int, answer: int) -> void:
 
 func _close_task() -> void:
 	task_overlay_index = -1
-	var overlay := get_node_or_null("TaskOverlay")
+	var overlay := find_child("TaskOverlay", true, false)
 	if overlay: overlay.queue_free()
 
 
 func inspect_nearest_clue() -> void:
 	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
-	var clue_points_local: Array = clue_points if online_match and clue_points.size() == 3 else [Vector2(335, 320), Vector2(720, 520), Vector2(1065, 265)]
-	var nearest := _nearest_index(clue_points_local, 110.0)
+	var clue_points_local: Array = clue_points if clue_points.size() == 3 else MapGeometry.clue_candidates(selected_map).slice(0, 3)
+	var nearest := _nearest_index(clue_points_local, 72.0)
 	if nearest < 0: show_notice("Move close to a glowing clue marker to inspect it."); return
 	if online_match:
 		if nearest in network_found_clues: show_notice("This clue has already been recorded."); return
@@ -1185,11 +1259,14 @@ func inspect_nearest_clue() -> void:
 	var clue_name: String = clues[nearest]
 	if collected_clues.has(clue_name): show_notice("You already recorded this clue."); return
 	collected_clues.append(clue_name)
+	var clue_marker := game_world.get_node_or_null("ClueMarker_%d" % nearest) if is_instance_valid(game_world) else null
+	if clue_marker: clue_marker.queue_free()
 	show_clue_panel(clue_name, impostor_character)
 	_update_progress()
 
 
 func show_clue_panel(clue_name: String, character: String) -> void:
+	_stop_move()
 	var overlay := make_panel(Rect2(370, 190, 540, 300), Color(0.12, 0.08, 0.06, 0.98))
 	var title := make_label("CLUE RECORDED", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(25, 24); title.size = Vector2(490, 40); title.reparent(overlay, false)
@@ -1200,6 +1277,7 @@ func show_clue_panel(clue_name: String, character: String) -> void:
 
 
 func show_journal() -> void:
+	_stop_move()
 	var overlay := make_panel(Rect2(320, 115, 640, 480), Color(0.12, 0.08, 0.06, 0.98))
 	var title := make_label("CLUE JOURNAL", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(20, 18); title.size = Vector2(600, 40); title.reparent(overlay, false)
@@ -1214,7 +1292,8 @@ func show_journal() -> void:
 
 
 func show_map_overlay() -> void:
-	if get_node_or_null("MapOverlay") != null: return
+	if find_child("MapOverlay", true, false) != null: return
+	_stop_move()
 	var overlay := make_panel(Rect2(250, 110, 780, 500), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "MapOverlay"
 	_make_child_label(overlay, MAPS[selected_map]["name"], 22, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 14, 732, 36))
@@ -1233,12 +1312,13 @@ func call_meeting() -> void:
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		network_manager.call_meeting()
 		return
-	if player_position.distance_to(Vector2(640, 120)) > 100.0:
+	if player_position.distance_to(MapGeometry.gong_point(selected_map)) > 78.0:
 		show_notice("Move close to the central gong to call a meeting."); return
 	show_vote_panel()
 
 
 func show_vote_panel() -> void:
+	_stop_move()
 	var overlay := make_panel(Rect2(300, 120, 680, 480), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "VoteOverlay"
 	var title := make_label("EMERGENCY MEETING", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1256,7 +1336,7 @@ func show_vote_panel() -> void:
 
 func _cast_vote(suspect: String) -> void:
 	if suspect.is_empty():
-		var skipped_overlay := get_node_or_null("VoteOverlay")
+		var skipped_overlay := find_child("VoteOverlay", true, false)
 		if skipped_overlay: skipped_overlay.queue_free()
 		build_game(); show_notice("The group skipped the vote."); return
 	var picked_impostor := (not player_is_impostor and suspect == impostor_character) or (player_is_impostor and suspect == selected_character)
@@ -1264,7 +1344,7 @@ func _cast_vote(suspect: String) -> void:
 		show_result(true, suspect + " was revealed as Nenek Kebayan. The Villagers win!")
 	else:
 		if not suspect.is_empty() and not dead_npcs.has(suspect): dead_npcs.append(suspect)
-		var vote_overlay := get_node_or_null("VoteOverlay")
+		var vote_overlay := find_child("VoteOverlay", true, false)
 		if vote_overlay: vote_overlay.queue_free()
 		build_game(); show_notice("" if suspect.is_empty() else suspect + " was a Villager. The investigation continues.")
 
@@ -1282,7 +1362,7 @@ func eliminate_nearest() -> void:
 		if nearest_peer < 0: show_notice("Move closer to a living player."); return
 		network_manager.eliminate_player(nearest_peer)
 		return
-	var nearest := _nearest_index(NPC_POINTS, 90.0)
+	var nearest := _nearest_index(MapGeometry.npc_points(selected_map), 78.0)
 	if nearest < 0: show_notice("Move close to a player to eliminate them."); return
 	var victim: String = NPC_NAMES[nearest]
 	if victim == impostor_character: show_notice("Your secret identity is tied to a different visual character."); return
@@ -1292,6 +1372,7 @@ func eliminate_nearest() -> void:
 
 
 func show_result(villagers_win: bool, message: String) -> void:
+	_stop_move()
 	current_screen = "result"
 	for child in get_children():
 		if child is Control: child.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1305,7 +1386,7 @@ func show_result(villagers_win: bool, message: String) -> void:
 
 
 func show_exit_confirmation() -> void:
-	if get_node_or_null("ExitConfirmation") != null: return
+	if find_child("ExitConfirmation", true, false) != null: return
 	_stop_move()
 	var overlay := make_panel(Rect2(390, 220, 500, 280), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "ExitConfirmation"
@@ -1328,23 +1409,25 @@ func _return_to_menu_cleanly() -> void:
 
 
 func _travel_hint(index: int) -> void:
-	_set_route(TASK_POINTS[index], "Follow the gold route, then press INTERACT [E] at the task.")
+	var task_points: Array = MapGeometry.task_points(selected_map)
+	if index >= 0 and index < task_points.size(): _set_route(task_points[index], "Follow the gold route, then press INTERACT at the task.")
 
 
 func _travel_npc(index: int) -> void:
-	_set_route(NPC_POINTS[index], "Follow the route to the villager and press INTERACT [E].")
+	var npc_points: Array = MapGeometry.npc_points(selected_map)
+	if index >= 0 and index < npc_points.size(): _set_route(npc_points[index], "Follow the route to the villager and press INTERACT.")
 
 
 func _travel_clue(index: int) -> void:
-	var route_points: Array = clue_points if not clue_points.is_empty() else [Vector2(335, 320), Vector2(720, 520), Vector2(1065, 265)]
+	var route_points: Array = clue_points if not clue_points.is_empty() else MapGeometry.clue_candidates(selected_map).slice(0, 3)
 	if index >= 0 and index < route_points.size(): _set_route(route_points[index], "Follow the route to the clue and press INSPECT CLUE.")
 
 
 func _request_eliminate_player(peer_id: int) -> void:
 	if network_manager == null or not player_is_impostor: return
-	var actor := get_node_or_null("PlayerActor_%d" % peer_id)
+	var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
 	if actor == null: return
-	var target_position: Vector2 = (actor as Control).position + Vector2(22, 40)
+	var target_position := (actor as Node2D).global_position
 	if player_position.distance_to(target_position) > 85.0:
 		show_notice("Move closer to that player."); return
 	network_manager.eliminate_player(peer_id)
@@ -1353,7 +1436,8 @@ func _request_eliminate_player(peer_id: int) -> void:
 func _set_route(target: Vector2, message: String) -> void:
 	route_target = target
 	route_active = true
-	var route_line := get_node_or_null("RouteLine") as Line2D
+	var route_line: Line2D = null
+	if is_instance_valid(game_world): route_line = game_world.get_node_or_null("RouteLine") as Line2D
 	if route_line:
 		route_line.clear_points()
 		route_line.add_point(player_position)
@@ -1404,6 +1488,7 @@ func _on_joystick_input(event: InputEvent, pad: Control, knob: Control) -> void:
 
 func _stop_move() -> void:
 	move_vector = Vector2.ZERO
+	if is_instance_valid(player_body): player_body.call("set_input_direction", Vector2.ZERO)
 
 
 func _update_progress() -> void:
@@ -1413,11 +1498,11 @@ func _update_progress() -> void:
 
 func show_notice(message: String) -> void:
 	last_notice = message; last_notice_time = Time.get_ticks_msec() / 1000.0
-	var label := get_node_or_null("NoticeLabel") as Label
+	var label := find_child("NoticeLabel", true, false) as Label
 	if label:
 		label.text = message
 		return
-	var room_notice := get_node_or_null("RoomErrorNotice") as Label
+	var room_notice := find_child("RoomErrorNotice", true, false) as Label
 	if room_notice == null:
 		room_notice = make_label("", 15, Color("fff3cd"), HORIZONTAL_ALIGNMENT_CENTER)
 		room_notice.name = "RoomErrorNotice"; room_notice.position = Vector2(250, 665); room_notice.size = Vector2(780, 32)
@@ -1467,12 +1552,18 @@ func make_map_texture(atlas: Texture2D, region: Rect2) -> Texture2D:
 
 
 func make_label(text: String, font_size: int, color: Color, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	return GameUI.make_label(self, text, font_size, color, align)
+	return GameUI.make_label(_screen_ui_parent(), text, font_size, color, align)
 
 
 func make_panel(rect: Rect2, color: Color) -> Panel:
-	return GameUI.make_panel(self, rect, color)
+	return GameUI.make_panel(_screen_ui_parent(), rect, color)
 
 
 func make_button(parent: Control, title: String, callback: Callable, width: float, height: float, highlight: bool = false) -> Button:
-	return GameUI.make_button(parent, title, callback, width, height, highlight)
+	var target_parent: Node = _screen_ui_parent() if parent == self else parent
+	return GameUI.make_button(target_parent, title, callback, width, height, highlight)
+
+
+func _screen_ui_parent() -> Node:
+	if is_instance_valid(game_hud): return game_hud
+	return self

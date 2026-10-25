@@ -36,6 +36,20 @@ const CHARACTER_PORTRAITS := {
 	"Orang Kampung Perempuan": "res://assets/characters/portraits/orang_kampung_perempuan.png"
 }
 
+const CHARACTER_AVATARS := {
+	"Puteri Gunung Ledang": "res://assets/characters/portraits/puteri_gunung_ledang_avatar.png",
+	"Pak Kaduk": "res://assets/characters/portraits/pak_kaduk_avatar.png",
+	"Badang": "res://assets/characters/portraits/badang_avatar.png",
+	"Mahsuri": "res://assets/characters/portraits/mahsuri_avatar.png",
+	"Pak Pandir": "res://assets/characters/portraits/pak_pandir_avatar.png",
+	"Bawang Putih": "res://assets/characters/portraits/bawang_putih_avatar.png",
+	"Bawang Merah": "res://assets/characters/portraits/bawang_merah_avatar.png",
+	"Raja Bersiung": "res://assets/characters/portraits/raja_bersiung_avatar.png",
+	"Nenek Kebayan": "res://assets/characters/portraits/nenek_kebayan_avatar.png",
+	"Orang Kampung Lelaki": "res://assets/characters/portraits/orang_kampung_lelaki_avatar.png",
+	"Orang Kampung Perempuan": "res://assets/characters/portraits/orang_kampung_perempuan_avatar.png"
+}
+
 const CHARACTER_CLUES := {
 	"Puteri Gunung Ledang": ["Golden jewelry box", "Purple silk cloth", "Floral medallion"],
 	"Pak Kaduk": ["Rooster feather", "Old playing cards", "Muddy footprints"],
@@ -102,8 +116,14 @@ var current_screen := "menu"
 var selected_map := 0
 var lobby_player_name := "Player 1"
 var waiting_elapsed := 0.0
+var room_code := ""
+var room_is_host := false
+var lobby_players: Array = []
 var selected_character := ""
 var character_reservations: Dictionary = {}
+var route_target := Vector2.ZERO
+var route_active := false
+var auto_start_triggered := false
 var impostor_character := ""
 var player_is_impostor := false
 var player_position := Vector2(640, 390)
@@ -134,10 +154,23 @@ func _process(delta: float) -> void:
 		if menu_notice: menu_notice.text = ""
 	if current_screen == "waiting_room":
 		waiting_elapsed += delta
+		var player_count := lobby_players.size()
 		var timer_label := find_child("LobbyStatusLabel", true, false) as Label
 		if timer_label:
 			var elapsed := int(waiting_elapsed)
-			timer_label.text = "1 / 5 PLAYERS   •   WAITING %02d:%02d" % [floori(float(elapsed) / 60.0), elapsed % 60]
+			timer_label.text = "%d / 10 PLAYERS   •   WAITING %02d:%02d" % [player_count, floori(float(elapsed) / 60.0), elapsed % 60]
+		var ready_button := find_child("LobbyReadyButton", true, false) as Button
+		if ready_button:
+			ready_button.text = "READY ✓" if _local_player_is_ready() else "NOT READY"
+			ready_button.disabled = selected_character.is_empty()
+		var start_button := find_child("LobbyStartButton", true, false) as Button
+		var all_ready := _all_lobby_players_ready()
+		if start_button:
+			start_button.disabled = not all_ready or player_count >= 10
+			start_button.text = "AUTO START AT 10" if player_count == 10 else "START GAME"
+		if player_count == 10 and all_ready and not auto_start_triggered:
+			auto_start_triggered = true
+			_start_from_lobby()
 		return
 	if current_screen != "game" or task_overlay_index >= 0:
 		return
@@ -153,6 +186,16 @@ func _process(delta: float) -> void:
 	var pawn := get_node_or_null("Pawn") as Control
 	if pawn:
 		pawn.position = player_position - Vector2(20, 24)
+	var route_line := get_node_or_null("RouteLine") as Line2D
+	if route_active and route_line:
+		route_line.clear_points()
+		route_line.add_point(player_position)
+		route_line.add_point(route_target)
+		if player_position.distance_to(route_target) < 44.0:
+			route_active = false
+			route_line.visible = false
+	else:
+		if route_line: route_line.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -172,11 +215,11 @@ func build_menu() -> void:
 	add_color_overlay(Color(0.05, 0.07, 0.08, 0.32))
 	# The menu artwork already contains the full title plaque and subtitle. Avoid
 	# drawing a second title label, which was clipped against the bottom edge.
-	var menu_panel := make_panel(Rect2(465, 255, 350, 395), Color(0.13, 0.075, 0.045, 0.91))
-	var menu_buttons := ["PLAY", "HOW TO PLAY", "SETTINGS", "EXIT"]
+	var menu_panel := make_panel(Rect2(465, 255, 350, 320), Color(0.13, 0.075, 0.045, 1.0))
+	var menu_buttons := ["PLAY", "JOIN ROOM", "EXIT"]
 	for i in menu_buttons.size():
 		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 300, 54, i == 0)
-		btn.position = Vector2(25, 25 + i * 85)
+		btn.position = Vector2(25, 45 + i * 88)
 	build_menu_icon_buttons()
 	var badge := make_label("LOCAL PRACTICE  •  NETWORK ROOMS NOT CONNECTED", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
 	badge.position = Vector2(300, 680); badge.size = Vector2(680, 24)
@@ -185,7 +228,6 @@ func build_menu() -> void:
 
 
 func build_menu_icon_buttons() -> void:
-	# These transparent hit targets sit over the gear, music and help artwork.
 	_make_art_icon_button(Rect2(1072, 22, 54, 54), "Settings", Callable(self, "show_settings").bind("menu"))
 	var music := _make_art_icon_button(Rect2(1137, 22, 52, 54), "Toggle music and sound", Callable(self, "_toggle_audio"))
 	music.name = "MenuMusicButton"
@@ -219,6 +261,7 @@ func _make_art_icon_button(rect: Rect2, hint: String, callback: Callable) -> But
 
 
 func _toggle_audio() -> void:
+	_close_menu_popups()
 	audio_muted = not audio_muted
 	var master_bus := AudioServer.get_bus_index("Master")
 	if master_bus >= 0: AudioServer.set_bus_mute(master_bus, audio_muted)
@@ -231,6 +274,15 @@ func _toggle_audio() -> void:
 	if current_screen == "menu": show_menu_notice("Music and sound muted." if audio_muted else "Music and sound enabled.")
 
 
+func _close_menu_popups() -> void:
+	var popup_names := ["SettingsOverlay", "HowToPlayOverlay", "JoinRoomChoiceOverlay", "JoinRoomCodeOverlay", "CreateRoomOverlay", "JoinRoomOverlay"]
+	for popup_name in popup_names:
+		var popup := get_node_or_null(popup_name)
+		if popup:
+			remove_child(popup)
+			popup.queue_free()
+
+
 func show_menu_notice(message: String) -> void:
 	last_notice_time = Time.get_ticks_msec() / 1000.0
 	var label := get_node_or_null("MenuNoticeLabel") as Label
@@ -239,10 +291,79 @@ func show_menu_notice(message: String) -> void:
 
 func _menu_action(index: int) -> void:
 	match index:
-		0: build_map_select()
-		1: show_how_to_play("menu")
-		2: show_settings("menu")
-		3: get_tree().quit()
+		0:
+			room_code = ""
+			room_is_host = false
+			build_map_select()
+		1: show_join_room()
+		2: get_tree().quit()
+
+
+func show_join_room() -> void:
+	_open_room_code_entry()
+
+
+func _create_room_code() -> void:
+	_close_menu_popups()
+	room_code = _generate_room_code()
+	room_is_host = true
+	lobby_players.clear()
+	var overlay := make_panel(Rect2(390, 195, 500, 330), Color(0.12, 0.08, 0.06, 0.99))
+	overlay.name = "CreateRoomOverlay"
+	_make_child_label(overlay, "ROOM CREATED", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 22, 452, 42))
+	_make_child_label(overlay, "Share this six-digit code with your players.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 82, 444, 36))
+	_make_child_label(overlay, room_code, 36, Color("fff0cf"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(60, 126, 380, 58))
+	var copy := make_button(overlay, "COPY CODE", Callable(self, "_copy_created_room_code"), 175, 44)
+	copy.name = "CopyCreatedRoomCodeButton"
+	copy.position = Vector2(162, 195)
+	var continue_button := make_button(overlay, "CHOOSE MAP", Callable(self, "_continue_to_room_map"), 190, 44, true)
+	continue_button.position = Vector2(44, 258)
+	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 150, 44)
+	close.position = Vector2(306, 258)
+
+
+func _copy_created_room_code() -> void:
+	DisplayServer.clipboard_set(room_code)
+	var copy := find_child("CopyCreatedRoomCodeButton", true, false) as Button
+	if copy: copy.text = "COPIED  " + room_code
+
+
+func _continue_to_room_map() -> void:
+	_close_menu_popups()
+	build_map_select()
+
+
+func _open_room_code_entry() -> void:
+	_close_menu_popups()
+	var overlay := make_panel(Rect2(390, 205, 500, 300), Color(0.12, 0.08, 0.06, 0.99))
+	overlay.name = "JoinRoomCodeOverlay"
+	_make_child_label(overlay, "ENTER ROOM CODE", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 20, 452, 42))
+	_make_child_label(overlay, "Enter the six-digit code shared by the host.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 74, 440, 40))
+	var code_entry := LineEdit.new()
+	code_entry.name = "JoinCodeEntry"; code_entry.placeholder_text = "6-DIGIT CODE"
+	code_entry.position = Vector2(70, 125); code_entry.size = Vector2(360, 44)
+	code_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER; code_entry.max_length = 6
+	code_entry.add_theme_font_size_override("font_size", 20)
+	overlay.add_child(code_entry)
+	var status := _make_child_label(overlay, "Online joining is not connected yet.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 176, 444, 32))
+	status.name = "JoinRoomStatusLabel"
+	var join := make_button(overlay, "JOIN", Callable(self, "_join_room_with_code"), 150, 42, true)
+	join.position = Vector2(82, 228)
+	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 150, 42)
+	close.position = Vector2(268, 228)
+
+
+func _join_room_with_code() -> void:
+	var entry := find_child("JoinCodeEntry", true, false) as LineEdit
+	var status := find_child("JoinRoomStatusLabel", true, false) as Label
+	if not entry or not status: return
+	var entered := entry.text.strip_edges().to_upper()
+	if room_is_host and not room_code.is_empty() and entered == room_code and not lobby_players.is_empty():
+		var overlay := get_node_or_null("JoinRoomCodeOverlay")
+		if overlay: overlay.queue_free()
+		build_waiting_room()
+	else:
+		status.text = "Room not found. Online joining is not connected yet."
 
 
 func build_map_select() -> void:
@@ -275,7 +396,15 @@ func _choose_map(index: int) -> void:
 	selected_character = ""
 	character_reservations.clear()
 	waiting_elapsed = 0.0
+	auto_start_triggered = false
+	if room_code.is_empty(): room_code = _generate_room_code()
+	if not room_is_host: room_is_host = true
+	lobby_players = [{"id": "local", "name": lobby_player_name, "character": "", "ready": false, "host": true}]
 	build_waiting_room()
+
+
+func _generate_room_code() -> String:
+	return str(rng.randi_range(100000, 999999))
 
 
 func build_waiting_room() -> void:
@@ -285,8 +414,11 @@ func build_waiting_room() -> void:
 
 	var header := make_panel(Rect2(40, 28, 1200, 86), Color(0.11, 0.075, 0.045, 0.94))
 	_make_child_label(header, "WAITING ROOM", 30, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(24, 12, 300, 58))
-	_make_child_label(header, "MAP  •  " + MAPS[selected_map]["name"], 19, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(350, 18, 480, 48))
-	var status := _make_child_label(header, "1 / 5 PLAYERS   •   WAITING 00:00", 17, Color("d8edb2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(840, 18, 330, 48))
+	_make_child_label(header, "MAP  •  " + MAPS[selected_map]["name"], 17, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(300, 18, 390, 48))
+	var copy_code := make_button(header, "CODE  " + room_code, Callable(self, "_copy_room_code"), 170, 42)
+	copy_code.name = "RoomCodeButton"
+	copy_code.position = Vector2(690, 22); copy_code.add_theme_font_size_override("font_size", 13)
+	var status := _make_child_label(header, "%d / 10 PLAYERS   •   WAITING 00:00" % lobby_players.size(), 16, Color("d8edb2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(865, 18, 305, 48))
 	status.name = "LobbyStatusLabel"
 
 	var map_panel := make_panel(Rect2(55, 140, 420, 430), Color(0.12, 0.08, 0.055, 0.96))
@@ -298,62 +430,147 @@ func build_waiting_room() -> void:
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
 	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_panel.add_child(map_preview)
-	_make_child_label(map_panel, "Waiting for more players to join this map.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 42))
-	_make_child_label(map_panel, "Network rooms are not connected in this build.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 345, 372, 44))
+	_make_child_label(map_panel, "Share the room code with friends.\nYour selected character appears here.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
+	_make_child_label(map_panel, "Online joining needs a multiplayer server.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 358, 372, 34))
 
 	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
-	_make_child_label(players_panel, "PLAYERS IN ROOM", 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 14, 420, 34))
-	_make_child_label(players_panel, "1 PLAYER HERE  •  4 OPEN SLOTS", 14, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(430, 14, 270, 34))
-	for i in 5:
-		var slot := _make_child_panel(players_panel, Rect2(22 + i * 138, 64, 124, 260), Color(0.17, 0.12, 0.085, 0.96))
-		if i == 0:
-			_add_player_avatar(slot)
-			var name_entry := LineEdit.new()
-			name_entry.name = "LobbyNameEntry"
-			name_entry.text = lobby_player_name
-			name_entry.placeholder_text = "Your name"
-			name_entry.max_length = 20
-			name_entry.position = Vector2(8, 174); name_entry.size = Vector2(108, 34)
-			name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
-			name_entry.add_theme_font_size_override("font_size", 14)
-			name_entry.add_theme_color_override("font_color", CREAM)
-			var field_style := StyleBoxFlat.new()
-			field_style.bg_color = Color("35271c"); field_style.border_color = Color("c5904b")
-			field_style.set_border_width_all(1); field_style.set_corner_radius_all(7)
-			field_style.content_margin_left = 4; field_style.content_margin_right = 4
-			name_entry.add_theme_stylebox_override("normal", field_style)
-			name_entry.add_theme_stylebox_override("focus", field_style)
-			name_entry.text_changed.connect(_on_lobby_name_changed)
-			slot.add_child(name_entry)
-			_make_child_label(slot, "YOU  •  HOST", 12, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 214, 108, 26))
+	var open_slots := maxi(0, 10 - lobby_players.size())
+	_make_child_label(players_panel, "PLAYERS IN ROOM", 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 10, 300, 34))
+	_make_child_label(players_panel, "%d HERE  •  %d OPEN SLOTS" % [lobby_players.size(), open_slots], 13, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(400, 10, 300, 34))
+	for i in 10:
+		var row := floori(float(i) / 5.0)
+		var col := i % 5
+		var slot := _make_child_panel(players_panel, Rect2(22 + col * 138, 52 + row * 174, 124, 160), Color(0.17, 0.12, 0.085, 0.96))
+		if i < lobby_players.size():
+			var member: Dictionary = lobby_players[i]
+			var member_character := str(member.get("character", ""))
+			var member_name := str(member.get("name", "Player"))
+			var is_local := str(member.get("id", "")) == "local"
+			var is_ready := bool(member.get("ready", false))
+			_add_player_avatar(slot, member_character)
+			if is_local:
+				var name_entry := LineEdit.new()
+				name_entry.name = "LobbyNameEntry"
+				name_entry.text = lobby_player_name
+				name_entry.placeholder_text = "Your name"
+				name_entry.max_length = 20
+				name_entry.position = Vector2(7, 82); name_entry.size = Vector2(110, 28)
+				name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
+				name_entry.add_theme_font_size_override("font_size", 12)
+				name_entry.add_theme_color_override("font_color", CREAM)
+				var field_style := StyleBoxFlat.new()
+				field_style.bg_color = Color("35271c"); field_style.border_color = Color("c5904b")
+				field_style.set_border_width_all(1); field_style.set_corner_radius_all(7)
+				name_entry.add_theme_stylebox_override("normal", field_style)
+				name_entry.add_theme_stylebox_override("focus", field_style)
+				name_entry.text_changed.connect(_on_lobby_name_changed)
+				slot.add_child(name_entry)
+				var host_status := _make_child_label(slot, "HOST  •  " + ("READY" if is_ready else "WAITING"), 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+				host_status.name = "LocalReadyStatusLabel"
+			else:
+				_make_child_label(slot, member_name, 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+				_make_child_label(slot, ("READY" if is_ready else "WAITING"), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 		else:
-			var empty_avatar := _make_child_panel(slot, Rect2(28, 30, 68, 68), Color(0.20, 0.17, 0.13, 1.0))
+			var empty_avatar := _make_child_panel(slot, Rect2(29, 10, 66, 66), Color(0.20, 0.17, 0.13, 1.0))
 			empty_avatar.add_theme_stylebox_override("panel", _circle_style(Color(0.20, 0.17, 0.13, 1.0), Color("8d785f")))
-			_make_child_label(slot, "+", 34, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 33, 68, 60))
-			_make_child_label(slot, "OPEN SLOT", 12, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(7, 120, 110, 30))
-			_make_child_label(slot, "Waiting for\na player", 12, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 155, 108, 48))
+			_make_child_label(slot, "+", 30, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(29, 9, 66, 66))
+			_make_child_label(slot, "OPEN SLOT", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+			_make_child_label(slot, "Waiting", 10, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 
 	var back := make_button(self, "CHANGE MAP", Callable(self, "build_map_select"), 210, 48)
 	back.position = Vector2(55, 610)
-	var next := make_button(self, "CHOOSE CHARACTER", Callable(self, "build_character_select"), 270, 48, true)
-	next.position = Vector2(955, 610)
-	var local_note := make_label("LOCAL LOBBY PREVIEW  •  MULTIPLAYER JOINING IS NOT CONNECTED YET", 13, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
-	local_note.position = Vector2(300, 620); local_note.size = Vector2(680, 28)
+	var choose := make_button(self, "CHOOSE CHARACTER", Callable(self, "build_character_select"), 245, 48)
+	choose.position = Vector2(290, 610)
+	var ready_button := make_button(self, "NOT READY", Callable(self, "_toggle_lobby_ready"), 185, 48, true)
+	ready_button.name = "LobbyReadyButton"; ready_button.position = Vector2(560, 610); ready_button.disabled = selected_character.is_empty()
+	var start_button := make_button(self, "START GAME", Callable(self, "_start_from_lobby"), 210, 48, true)
+	start_button.name = "LobbyStartButton"; start_button.position = Vector2(1015, 610)
+	start_button.disabled = not _all_lobby_players_ready() or lobby_players.size() >= 10
+	var lobby_note := _make_child_label(self, "Local lobby preview  •  multiplayer joining is not connected yet", 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(760, 578, 465, 24))
+	lobby_note.clip_text = true
 
 
-func _add_player_avatar(parent: Control) -> void:
-	var avatar_bg := _make_child_panel(parent, Rect2(16, 10, 92, 100), Color(0.12, 0.18, 0.20, 1.0))
+func _copy_room_code() -> void:
+	DisplayServer.clipboard_set(room_code)
+	var button := find_child("RoomCodeButton", true, false) as Button
+	if button: button.text = "COPIED  " + room_code
+
+
+func _local_player_index() -> int:
+	for i in lobby_players.size():
+		if str(lobby_players[i].get("id", "")) == "local": return i
+	return -1
+
+
+func _local_player_is_ready() -> bool:
+	var index := _local_player_index()
+	return index >= 0 and bool(lobby_players[index].get("ready", false))
+
+
+func _all_lobby_players_ready() -> bool:
+	if lobby_players.is_empty(): return false
+	for member in lobby_players:
+		if not bool(member.get("ready", false)): return false
+	return true
+
+
+func _toggle_lobby_ready() -> void:
+	if selected_character.is_empty(): return
+	var index := _local_player_index()
+	if index < 0: return
+	lobby_players[index]["ready"] = not bool(lobby_players[index].get("ready", false))
+	var host_status := find_child("LocalReadyStatusLabel", true, false) as Label
+	if host_status: host_status.text = "HOST  •  " + ("READY" if _local_player_is_ready() else "WAITING")
+
+
+func _start_from_lobby() -> void:
+	if selected_character.is_empty() or not _all_lobby_players_ready(): return
+	start_practice()
+
+
+func update_lobby_players(players: Array) -> void:
+	lobby_players.clear()
+	character_reservations.clear()
+	for player in players:
+		if lobby_players.size() >= 10: break
+		if player is Dictionary: lobby_players.append(player.duplicate(true))
+	for member in lobby_players:
+		var character := str(member.get("character", ""))
+		if character.is_empty() or str(member.get("id", "")) == "local": continue
+		character_reservations[character] = str(member.get("name", "Another player"))
+	if character_reservations.has(selected_character):
+		selected_character = ""
+		var local_index := _local_player_index()
+		if local_index >= 0:
+			lobby_players[local_index]["character"] = ""
+			lobby_players[local_index]["ready"] = false
+	if current_screen == "waiting_room": build_waiting_room()
+	elif current_screen == "character_select": build_character_select()
+
+
+func _add_player_avatar(parent: Control, character: String) -> void:
+	var avatar_bg := _make_child_panel(parent, Rect2(27, 8, 70, 70), Color(0.12, 0.18, 0.20, 1.0))
 	avatar_bg.add_theme_stylebox_override("panel", _circle_style(Color("283a38"), Color("d3a24e")))
-	_make_child_panel(parent, Rect2(38, 64, 48, 34), Color("734c77"))
-	_make_child_panel(parent, Rect2(41, 34, 42, 48), Color("e8b58a"))
-	_make_child_panel(parent, Rect2(39, 29, 46, 20), Color("30231d"))
-	_make_child_panel(parent, Rect2(49, 53, 5, 5), Color("251a17"))
-	_make_child_panel(parent, Rect2(69, 53, 5, 5), Color("251a17"))
-	_make_child_label(parent, "PLAYER AVATAR", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 112, 108, 22))
+	if not character.is_empty() and CHARACTER_AVATARS.has(character):
+		var portrait := TextureRect.new()
+		portrait.texture = load(CHARACTER_AVATARS[character])
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		avatar_bg.add_child(portrait)
+	else:
+		_make_child_panel(parent, Rect2(47, 48, 30, 25), Color("734c77"))
+		_make_child_panel(parent, Rect2(49, 26, 26, 31), Color("e8b58a"))
+		_make_child_panel(parent, Rect2(48, 22, 29, 13), Color("30231d"))
+		_make_child_panel(parent, Rect2(54, 36, 3, 3), Color("251a17"))
+		_make_child_panel(parent, Rect2(67, 36, 3, 3), Color("251a17"))
 
 
 func _on_lobby_name_changed(new_name: String) -> void:
 	lobby_player_name = new_name.strip_edges()
+	var index := _local_player_index()
+	if index >= 0: lobby_players[index]["name"] = lobby_player_name
 
 
 func _circle_style(fill: Color, border: Color) -> StyleBoxFlat:
@@ -401,22 +618,29 @@ func build_character_select() -> void:
 		if reserved: select.tooltip_text = "Selected by " + str(character_reservations[character])
 	var selection_text := selected_character if not selected_character.is_empty() else "Choose one character"
 	_make_child_label(self, "Selected: " + selection_text, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(290, 625, 520, 30))
-	var start := make_button(self, "START PRACTICE", Callable(self, "start_practice"), 230, 48, true)
-	start.position = Vector2(1000, 632); start.disabled = selected_character.is_empty()
-	var back := make_button(self, "BACK TO ROOM", Callable(self, "build_waiting_room"), 190, 46)
-	back.position = Vector2(36, 632)
+	var return_room := make_button(self, "RETURN TO ROOM", Callable(self, "build_waiting_room"), 230, 48, true)
+	return_room.position = Vector2(1000, 632); return_room.disabled = selected_character.is_empty()
 	_make_child_label(self, "Characters reserved by other players will be unavailable when multiplayer is connected.", 12, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(330, 674, 620, 22))
 
 
 func _select_character(character: String) -> void:
 	if character_reservations.has(character): return
 	selected_character = character
+	var index := _local_player_index()
+	if index >= 0:
+		lobby_players[index]["character"] = character
+		lobby_players[index]["ready"] = false
 	build_character_select()
 
 
 func update_character_reservations(reservations: Dictionary) -> void:
 	character_reservations = reservations.duplicate()
-	if character_reservations.has(selected_character): selected_character = ""
+	if character_reservations.has(selected_character):
+		selected_character = ""
+		var local_index := _local_player_index()
+		if local_index >= 0:
+			lobby_players[local_index]["character"] = ""
+			lobby_players[local_index]["ready"] = false
 	if current_screen == "character_select": build_character_select()
 
 
@@ -444,9 +668,15 @@ func start_practice() -> void:
 
 func build_game() -> void:
 	await clear_screen("game")
+	route_active = false
 	map_image = make_map_texture(load(MAP_ART), MAPS[selected_map]["region"])
 	var map_bg := TextureRect.new(); map_bg.texture = map_image; map_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; map_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; map_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(map_bg)
 	var shade := ColorRect.new(); shade.color = Color(0.04, 0.04, 0.03, 0.22); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
+	var route_line := Line2D.new()
+	route_line.name = "RouteLine"; route_line.width = 6.0
+	route_line.default_color = Color("ffd263"); route_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	route_line.begin_cap_mode = Line2D.LINE_CAP_ROUND; route_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	route_line.visible = false; add_child(route_line)
 	var header := make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	var title := make_label(MAPS[selected_map]["name"], 19, GOLD)
 	title.position = Vector2(18, 12); title.size = Vector2(440, 32); title.reparent(header, false)
@@ -666,16 +896,29 @@ func show_result(villagers_win: bool, message: String) -> void:
 	again.position = Vector2(220, 240)
 
 
-func _travel_hint(_index: int) -> void:
-	show_notice("Walk to the glowing location, then press INTERACT. WASD / arrow keys also move.")
+func _travel_hint(index: int) -> void:
+	_set_route(TASK_POINTS[index], "Follow the gold route, then press INTERACT [E] at the task.")
 
 
-func _travel_npc(_index: int) -> void:
-	show_notice("Walk close to a villager. Use INTERACT to hear a hint.")
+func _travel_npc(index: int) -> void:
+	_set_route(NPC_POINTS[index], "Follow the route to the villager and press INTERACT [E].")
 
 
-func _travel_clue(_index: int) -> void:
-	show_notice("Walk to the glowing marker and press INSPECT CLUE.")
+func _travel_clue(index: int) -> void:
+	var clue_points := [Vector2(335, 320), Vector2(720, 520), Vector2(1065, 265)]
+	_set_route(clue_points[index], "Follow the route to the clue and press INSPECT CLUE.")
+
+
+func _set_route(target: Vector2, message: String) -> void:
+	route_target = target
+	route_active = true
+	var route_line := get_node_or_null("RouteLine") as Line2D
+	if route_line:
+		route_line.clear_points()
+		route_line.add_point(player_position)
+		route_line.add_point(route_target)
+		route_line.visible = true
+	show_notice(message)
 
 
 func _nearest_index(points: Array, max_distance: float) -> int:
@@ -706,18 +949,23 @@ func show_notice(message: String) -> void:
 
 
 func show_how_to_play(return_screen: String) -> void:
+	_close_menu_popups()
 	var overlay := make_panel(Rect2(325, 115, 630, 490), Color(0.12, 0.08, 0.06, 0.98))
-	var title := make_label("HOW TO PLAY", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(25, 20); title.size = Vector2(580, 42); title.reparent(overlay, false)
-	var copy := make_label("Choose a map and a folklore character. In practice mode, five local characters enter the village.\n\nVillager: complete the eight map tasks, inspect identity clues and call the gong to vote.\n\nImpostor: keep your role secret and eliminate every Villager. The secret role is assigned independently from your selected character.\n\nMove with WASD, arrow keys, or the on-screen pad. Press E or INTERACT near a marked activity. Clues never increase task progress.", 16, CREAM)
-	copy.position = Vector2(48, 82); copy.size = Vector2(535, 290); copy.reparent(overlay, false)
+	overlay.name = "HowToPlayOverlay"
+	_make_child_label(overlay, "HOW TO PLAY", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 580, 42))
+	var help_body := _make_child_label(overlay, "Choose a map and a folklore character.\n\nVillagers: complete map tasks, inspect clues,\nand call the gong to vote.\n\nImpostor: keep your role secret and eliminate\nthe villagers.\n\nMove with WASD, arrow keys or the on-screen pad.\nPress E near a task. Inspect glowing markers for clues.", 18, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(48, 82, 535, 320))
+	help_body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	help_body.clip_text = true
+	help_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 140, 42)
 	close.position = Vector2(245, 420)
 	if return_screen == "menu": pass
 
 
 func show_settings(_return_screen: String) -> void:
+	_close_menu_popups()
 	var overlay := make_panel(Rect2(375, 200, 530, 320), Color(0.12, 0.08, 0.06, 0.99))
+	overlay.name = "SettingsOverlay"
 	_make_child_label(overlay, "SETTINGS", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 22, 480, 42))
 	_make_child_label(overlay, "Landscape layout is enabled.\nTouch and keyboard movement are supported.\nAudio controls apply to all game sound.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 78, 460, 84))
 	var audio := make_button(overlay, "UNMUTE AUDIO" if audio_muted else "MUTE AUDIO", Callable(self, "_toggle_audio"), 210, 42, true)

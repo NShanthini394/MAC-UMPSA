@@ -1,50 +1,42 @@
 # Kampung Legenda: Misteri Tiga Rumah
 
-A Godot 4.7 mobile landscape folklore deduction game. The current build is an **offline practice game** with a complete menu-to-match loop, three folklore maps, selectable characters, task collection, separate identity clues, meetings, voting, and both role win paths.
+Godot 4.7 landscape project. The game is currently **offline-first**: Play opens map selection and selecting a map enters the local practice lobby. Join Room explains that online multiplayer is coming later. The ENet room code remains in the project but is not exposed in the player flow until it is ready.
 
-## Run
+## Run the client
 
-Open this folder in Godot 4.7 or later and press **F6/F5**. The main scene is `res://scenes/main.tscn`.
+Open the folder in Godot 4.7 or later and run `res://scenes/main.tscn` (F6/F5). Choose **Play**, select a map and character, then enter the local practice match. Online room creation and joining are intentionally unavailable from the game menus for now.
 
-Controls:
+Controls: WASD/arrow keys or the on-screen joystick; E or INTERACT near tasks and the gong; INSPECT CLUE and CLUE JOURNAL for evidence.
 
-- Move with **WASD**, the **arrow keys**, or the on-screen directional pad.
-- Press **E** or **INTERACT** near a task, villager, or the meeting gong.
-- Use **INSPECT CLUE** near a glowing clue marker; the **CLUE JOURNAL** keeps evidence separate from task progress.
-- Impostors also get an **ELIMINATE** action near a local suspect.
+## Run a local room server
 
-## Included in this build
+With Godot on PATH, start the dedicated headless server from this project folder:
 
-- English interface text; Malay character and place names are preserved.
-- Illustrated main menu, three map previews and cropped map backdrops from the supplied references.
-- Eleven selectable character names. The selected visual character is kept separate from the randomly assigned practice role.
-- Eight map-specific task chains per map. Collection tasks require the specified number of interactions, and other activities use a choice challenge.
-- Three randomized identity clue markers tied to the Impostor's visual character. Clues do not count as tasks.
-- Emergency meeting, suspect voting, task victory, and an Impostor elimination victory.
-- Keyboard and on-screen movement controls in landscape layout.
+```powershell
+godot --headless --path . -- --server --port 7000
+```
 
-## Supplied art
+Keep the server running. Start clients on the same computer with server address `127.0.0.1`. For a different device, use the host's LAN address. Internet play needs a publicly reachable server and UDP port 7000 allowed through its firewall/router. No public server is bundled or hosted by this repository.
 
-The project includes the menu art, palace/village map collections, and folklore character references under `assets/`. The large reference sheets are retained as source art; the current gameplay maps use cropped regions of the supplied composite map image. Characters in the practice map are simple interface markers, not animated sprite-sheet actors yet.
+Rooms use server-generated five-character codes, have a ten-player cap, reserve characters on the server, synchronize readiness and movement, privately assign one Nenek Kebayan role, and handle shared task progress, clue collection, meetings, votes, eliminations, and outcomes on the server. A room needs five players to start; at ten players it starts automatically when everyone is Ready.
 
-## Current limits
+## Assets and content
 
-This is a local practice build, not the full online game described in the master prompt. It currently has no network room creation/joining, room codes, authoritative dedicated server, synchronized 5–10 player lobby, multiplayer movement, networked role secrecy, active NPC AI, real-time drag/timing mini-games, production collision map, audio, or export presets. The local suspects are used to exercise the task, clue, meeting, and elimination loop. Do not advertise online play as available until a reachable server and separate clients have been implemented and verified.
+The supplied menu, map atlas, portraits, and character assets remain under `assets/`. The three maps, eleven visual characters, and eight task entries per map are currently defined in `scripts/game_data.gd`. Task content still comes from the existing project data: the referenced task PDF has not yet been supplied, so it has not been used to validate or replace those entries.
 
-The game uses no external service or server. A public internet multiplayer release still needs a hosted authoritative Godot server, a public address, UDP port forwarding/firewall rules, and separate Android/iOS client testing. iOS export requires macOS and Xcode.
+## Known limits / verification status
 
-## Next implementation milestones
-
-1. Add animated character actors and collision-backed tile/map scenes.
-2. Implement interactive multi-step mini-games and clue inspection illustrations.
-3. Add an authoritative ENet server with 5–10 player room codes, character reservations, synchronized movement, role privacy, meetings, votes, and disconnect handling.
-4. Host the server on a reachable public endpoint; configure the clients and verify matches across separate networks.
-5. Add original/licensed audio, Android export configuration, and iOS export instructions/build validation.
+- A Godot executable/editor is not installed or discoverable in this workspace, so GDScript parsing, scene launch, and actual multi-client play have not been verified here.
+- The ENet server and separate client flow are implemented for local/LAN testing, but no public endpoint is configured or tested.
+- Gameplay uses the existing cropped composite map art and screen-space positions. There are no collision-backed connected paths, door transitions, or animated player sprites yet; online players use the supplied portrait assets as markers.
+- Task challenges use the current choice prompts and shared counters. Unique minigame mechanics and the PDF's exact eight tasks per map remain pending the original task PDF.
+- The waiting room has a synchronized 10-slot player list; avatar movement inside that lobby is not implemented.
+- Android/iOS export presets, mobile device testing, and production audio are not included.
 
 ## Project layout
 
-- `scenes/main.tscn` — game entry scene.
-- `scripts/main.gd` — screen flow and local practice gameplay.
-- `assets/ui/` — menu artwork.
-- `assets/maps/` — supplied map reference images.
-- `assets/characters/` — supplied character sprite/reference sheets.
+- `scenes/main.tscn` — unchanged game entry scene.
+- `scenes/server.tscn` — additive headless room-server scene.
+- `scripts/main.gd` — existing screen flow with network UI integration.
+- `scripts/network_manager.gd` — ENet room authority and RPC handlers.
+- `scripts/game_data.gd`, `scripts/game_ui.gd`, `scripts/game_screen.gd` — shared content and modular UI/gameplay helpers.

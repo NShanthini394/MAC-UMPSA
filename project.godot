@@ -25,6 +25,11 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
 
+[network]
+
+server_address="127.0.0.1"
+server_port=7000
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

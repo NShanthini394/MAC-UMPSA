@@ -37,6 +37,7 @@ var local_player_name := "Player"
 var local_character := ""
 var local_player_role := ""
 var local_secret_character := ""
+var local_role_character := ""
 var _pending_action: Dictionary = {}
 var _server_random := RandomNumberGenerator.new()
 var _position_broadcast_timer := 0.0
@@ -91,13 +92,13 @@ func _process(delta: float) -> void:
 			var candidate := position + direction * delta * 250.0
 			candidate.x = clampf(candidate.x, 12.0, world_size.x - 12.0)
 			candidate.y = clampf(candidate.y, 12.0, world_size.y - 12.0)
-			if not MapGeometry.is_position_blocked(map_index, candidate):
+			if not MapGeometry.is_position_blocked(map_index, candidate, 14.0):
 				position = candidate
 			else:
 				var horizontal := Vector2(candidate.x, position.y)
 				var vertical := Vector2(position.x, candidate.y)
-				if not MapGeometry.is_position_blocked(map_index, horizontal): position.x = horizontal.x
-				if not MapGeometry.is_position_blocked(map_index, vertical): position.y = vertical.y
+				if not MapGeometry.is_position_blocked(map_index, horizontal, 14.0): position.x = horizontal.x
+				if not MapGeometry.is_position_blocked(map_index, vertical, 14.0): position.y = vertical.y
 			player["position"] = position
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
@@ -270,6 +271,7 @@ func _on_server_disconnected() -> void:
 	local_character = ""
 	local_player_role = ""
 	local_secret_character = ""
+	local_role_character = ""
 	_pending_action.clear()
 	_disconnect_peer()
 	connection_changed.emit(false, "The room server disconnected.")
@@ -305,7 +307,7 @@ func _find_room_code() -> String:
 
 
 func _make_player(peer_id: int, player_name: String, is_host: bool = false) -> Dictionary:
-	return {"id": peer_id, "name": _clean_player_name(player_name), "character": "", "ready": false, "host": is_host, "alive": true, "position": Vector2(640, 390), "direction": Vector2.ZERO, "role": "villager"}
+	return {"id": peer_id, "name": _clean_player_name(player_name), "character": "", "ready": false, "host": is_host, "alive": true, "position": Vector2(640, 390), "direction": Vector2.ZERO, "role": "villager", "role_character": ""}
 
 
 func _room_members(room: Dictionary) -> Array:
@@ -313,6 +315,7 @@ func _room_members(room: Dictionary) -> Array:
 	for member in room["players"].values():
 		var visible_member: Dictionary = member.duplicate(true)
 		visible_member.erase("role")
+		visible_member.erase("role_character")
 		visible_member.erase("direction")
 		members.append(visible_member)
 	return members
@@ -451,6 +454,11 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	var members: Array = room["players"].values()
 	var role_player_index := _server_random.randi_range(0, members.size() - 1)
 	var secret_character := str(members[role_player_index].get("character", ""))
+	var villager_role_characters: Array[String] = []
+	for i in members.size():
+		if i != role_player_index:
+			villager_role_characters.append(str(members[i].get("character", "")))
+	villager_role_characters.shuffle()
 	var map_name: String = GameData.MAPS[int(room["map_index"])]["name"]
 	var map_index := int(room["map_index"])
 	room["completed_tasks"] = []
@@ -471,14 +479,20 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["meeting_timer"] = 0.0
 	room["votes"] = {}
 	room["secret_character"] = secret_character
+	var villager_character_index := 0
 	for i in members.size():
 		var member: Dictionary = members[i]
 		var player_id := int(member["id"])
 		room["players"][player_id]["position"] = MapGeometry.spawn_point_for_player(map_index, i)
 		room["players"][player_id]["direction"] = Vector2.ZERO
 		var role := "nenek_kebayan" if i == role_player_index else "villager"
+		var role_character := secret_character
+		if role == "villager":
+			role_character = villager_role_characters[villager_character_index]
+			villager_character_index += 1
 		room["players"][int(member["id"])]["role"] = role
-		_rpc_private_role.rpc_id(int(member["id"]), role, secret_character if role == "nenek_kebayan" else "")
+		room["players"][int(member["id"])]["role_character"] = role_character
+		_rpc_private_role.rpc_id(int(member["id"]), role, secret_character if role == "nenek_kebayan" else "", role_character)
 	for peer_id in room["players"].keys():
 		_rpc_match_started.rpc_id(int(peer_id), int(room["map_index"]), room["clue_positions"])
 	_send_room_state(code)
@@ -839,6 +853,7 @@ func _rpc_room_opened(code: String, map_index: int, members: Array, is_host: boo
 	active_room_code = code
 	local_player_role = ""
 	local_secret_character = ""
+	local_role_character = ""
 	room_opened.emit(code, map_index, members, is_host)
 
 
@@ -857,9 +872,10 @@ func _rpc_room_error(message: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_private_role(role: String, secret_character: String) -> void:
+func _rpc_private_role(role: String, secret_character: String, role_character: String) -> void:
 	local_player_role = role
 	local_secret_character = secret_character
+	local_role_character = role_character
 	role_received.emit(role, secret_character)
 
 

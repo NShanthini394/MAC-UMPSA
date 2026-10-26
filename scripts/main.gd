@@ -38,7 +38,9 @@ var route_target := Vector2.ZERO
 var route_active := false
 var auto_start_triggered := false
 var impostor_character := ""
+var assigned_role_character := ""
 var player_is_impostor := false
+var village_tasks_expanded := false
 var player_position := Vector2(640, 390)
 var move_vector := Vector2.ZERO
 var completed_tasks: Array[int] = []
@@ -326,12 +328,14 @@ func _menu_action(index: int) -> void:
 
 func show_join_room() -> void:
 	_close_menu_popups()
-	var overlay := make_panel(Rect2(390, 210, 500, 300), Color(0.12, 0.08, 0.06, 0.99))
+	var overlay := make_panel(Rect2(390, 200, 500, 320), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "OnlineUnavailableOverlay"
 	_make_child_label(overlay, "ONLINE MULTIPLAYER", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 24, 452, 42))
-	_make_child_label(overlay, "Online rooms are temporarily unavailable.\nChoose Play for offline practice while multiplayer is being prepared.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(42, 90, 416, 86))
+	var message := _make_child_label(overlay, "Online rooms are temporarily unavailable.\n\nUse Play for offline practice.\nMultiplayer is being prepared.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(54, 82, 392, 132))
+	message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	message.clip_text = true
 	var close := make_button(overlay, "OK", func(): overlay.queue_free(), 150, 44, true)
-	close.position = Vector2(175, 215)
+	close.position = Vector2(175, 244)
 
 
 func _create_room_code() -> void:
@@ -562,12 +566,14 @@ func _on_network_room_error(message: String) -> void:
 func _on_network_role_received(role: String, secret_character: String) -> void:
 	player_is_impostor = role == "nenek_kebayan"
 	impostor_character = secret_character
+	assigned_role_character = network_manager.local_role_character
 
 
 func _on_network_match_started(map_index: int, new_clue_points: Array) -> void:
 	selected_map = map_index
 	clue_points = new_clue_points.duplicate()
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
+	village_tasks_expanded = false
 	network_found_clues.clear()
 	task_progress.clear()
 	player_position = MapGeometry.spawn_point(selected_map)
@@ -799,21 +805,107 @@ func _submit_network_vote(target_id: int) -> void:
 func _show_role_reveal() -> void:
 	await clear_screen("role_reveal")
 	add_background(load(WAITING_ROOM_ART))
-	add_color_overlay(Color(0.02, 0.03, 0.05, 0.72))
-	var role_title := "You are Nenek Kebayan" if player_is_impostor else "You are a Villager"
-	var role_copy := "Eliminate all Villagers without being caught." if player_is_impostor else "Complete all tasks, collect clues, and discover Nenek Kebayan."
+	add_color_overlay(Color(0.025, 0.025, 0.025, 0.58))
+	var card := make_panel(Rect2(370, 132, 540, 456), Color(0.105, 0.073, 0.047, 0.97))
+	card.name = "PrivateRoleReveal"
+	_make_child_label(card, "YOUR SECRET ROLE", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 18, 484, 42))
+	var shuffle_status := _make_child_label(card, "Cards are being shuffled…", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 62, 472, 32))
+	var shuffle_row := Control.new()
+	shuffle_row.name = "ShuffleCards"
+	shuffle_row.position = Vector2(140, 112)
+	shuffle_row.size = Vector2(260, 182)
+	card.add_child(shuffle_row)
+	var shuffle_cards: Array[Panel] = []
+	for i in 3:
+		var back := _make_child_panel(shuffle_row, Rect2(72 + i * 8, 14, 116, 156), Color("53351f"))
+		var back_style := StyleBoxFlat.new()
+		back_style.bg_color = Color("53351f")
+		back_style.border_color = Color("e4b25b")
+		back_style.set_border_width_all(3)
+		back_style.set_corner_radius_all(12)
+		back.add_theme_stylebox_override("panel", back_style)
+		_make_child_label(back, "✦", 42, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 30, 92, 60))
+		_make_child_label(back, "ROLE CARD", 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 103, 100, 28))
+		shuffle_cards.append(back)
+	var revealed := _make_child_panel(card, Rect2(42, 96, 456, 238), Color("182e38"))
+	revealed.name = "RevealedRoleCard"
+	revealed.visible = false
+	var revealed_style := StyleBoxFlat.new()
+	revealed_style.bg_color = Color("4a1d22") if player_is_impostor else Color("182e38")
+	revealed_style.border_color = Color("e4b25b")
+	revealed_style.set_border_width_all(2)
+	revealed_style.set_corner_radius_all(12)
+	revealed.add_theme_stylebox_override("panel", revealed_style)
+	var role_portrait := TextureRect.new()
+	role_portrait.name = "RolePortrait"
+	var card_character := assigned_role_character if not assigned_role_character.is_empty() else selected_character
+	role_portrait.texture = load(CHARACTER_PORTRAITS.get(card_character, CHARACTER_PORTRAITS["Orang Kampung Lelaki"]))
+	role_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	role_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	role_portrait.position = Vector2(8, 18)
+	role_portrait.size = Vector2(160, 202)
+	revealed.add_child(role_portrait)
 	var role_color := Color("a92625") if player_is_impostor else Color("185b9d")
-	var card := make_panel(Rect2(370, 170, 540, 380), role_color)
-	_make_child_label(card, role_title, 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 28, 484, 58))
-	if player_is_impostor and not impostor_character.is_empty():
-		_make_child_label(card, "Visual character: " + selected_character, 18, Color("fff0cf"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 100, 470, 34))
-	_make_child_label(card, role_copy, 19, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(42, 158, 456, 104))
-	var continue_button := make_button(card, "CONTINUE", Callable(self, "build_game"), 220, 52, true)
-	continue_button.position = Vector2(160, 286)
+	var role_style := StyleBoxFlat.new()
+	role_style.bg_color = role_color
+	role_style.border_color = Color("e4b25b")
+	role_style.set_border_width_all(2)
+	role_style.set_corner_radius_all(10)
+	var role_badge := Panel.new()
+	role_badge.name = "RoleBadge"
+	role_badge.position = Vector2(174, 16)
+	role_badge.size = Vector2(266, 48)
+	role_badge.add_theme_stylebox_override("panel", role_style)
+	revealed.add_child(role_badge)
+	var role_title := "You are Nenek Kebayan" if player_is_impostor else "You are Orang Kampung"
+	_make_child_label(role_badge, role_title, 19, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(6, 3, 254, 42))
+	var lobby_pick_label := _make_child_label(revealed, "Lobby pick:\n" + selected_character, 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 70, 266, 42))
+	lobby_pick_label.clip_text = true
+	var role_character_label := _make_child_label(revealed, "Shuffled character:\n" + card_character, 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 114, 266, 42))
+	role_character_label.clip_text = true
+	var role_copy := "Eliminate Orang Kampung\nwithout being caught." if player_is_impostor else "Complete tasks and clues\nto discover Nenek Kebayan."
+	var role_copy_label := _make_child_label(revealed, role_copy, 13, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 162, 266, 52))
+	role_copy_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	role_copy_label.clip_text = true
+	var footer := _make_child_label(card, "Only you can see this role. Other players see their own reveal.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 342, 472, 28))
+	footer.name = "RoleRevealPrivacy"
+	var countdown := _make_child_label(card, "", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 376, 472, 50))
+	countdown.name = "RoleRevealCountdown"
+	for turn in 7:
+		var shuffle_tween := create_tween()
+		shuffle_tween.set_parallel(true)
+		for i in shuffle_cards.size():
+			var shuffle_card := shuffle_cards[i]
+			var target_x: float = [20.0, 72.0, 124.0][(i + turn) % 3]
+			var target_y: float = [18.0, 4.0, 18.0][(i + turn) % 3]
+			var target_angle: float = [-9.0, 0.0, 9.0][(i + turn) % 3]
+			shuffle_tween.tween_property(shuffle_card, "position", Vector2(target_x, target_y), 0.11)
+			shuffle_tween.tween_property(shuffle_card, "rotation", deg_to_rad(target_angle), 0.11)
+		await shuffle_tween.finished
+		await get_tree().create_timer(0.07).timeout
+	if not is_instance_valid(card): return
+	shuffle_status.text = "Your card has been revealed"
+	var reveal_tween := create_tween()
+	reveal_tween.tween_property(shuffle_row, "scale", Vector2(0.05, 1.0), 0.16)
+	await reveal_tween.finished
+	shuffle_row.visible = false
+	revealed.visible = true
+	revealed.scale = Vector2(0.05, 1.0)
+	var flip_tween := create_tween()
+	flip_tween.tween_property(revealed, "scale", Vector2.ONE, 0.2)
+	await flip_tween.finished
+	for seconds in [3, 2, 1]:
+		if not is_instance_valid(countdown): return
+		countdown.text = "Starting in  %d" % seconds
+		countdown.scale = Vector2(1.25, 1.25)
+		var count_tween := create_tween()
+		count_tween.tween_property(countdown, "scale", Vector2.ONE, 0.25)
+		await count_tween.finished
+		await get_tree().create_timer(0.65).timeout
+	if is_instance_valid(card): await build_game()
 
 
 func build_waiting_room() -> void:
-	_auto_select_available_character()
 	await clear_screen("waiting_room")
 	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	add_background(load(WAITING_ROOM_ART))
@@ -840,7 +932,7 @@ func build_waiting_room() -> void:
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
 	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_panel.add_child(map_preview)
-	_make_child_label(map_panel, "Your selected character appears in the player list.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
+	_make_child_label(map_panel, "Choose a character to update your avatar.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
 	_make_child_label(map_panel, "Room code is server-generated." if network_room else "No online room was created.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 358, 372, 34))
 
 	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
@@ -905,23 +997,6 @@ func build_waiting_room() -> void:
 	start_button.disabled = not _all_lobby_players_ready() or lobby_players.size() >= 10 or (network_room and lobby_players.size() < 5)
 	var lobby_note := _make_child_label(self, "Online room" if network_room else "Offline practice lobby", 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(760, 578, 465, 24))
 	lobby_note.clip_text = true
-
-
-func _auto_select_available_character() -> void:
-	if not selected_character.is_empty(): return
-	var local_index := _local_player_index()
-	if local_index < 0: return
-	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
-	for character in CHARACTERS:
-		if character_reservations.has(character): continue
-		if network_room:
-			# Let the server reserve the character; room state will confirm the choice.
-			network_manager.set_character(character)
-		else:
-			selected_character = character
-			lobby_players[local_index]["character"] = character
-		return
-	show_notice("No characters are available in this room.")
 
 
 func _leave_room_to_menu() -> void:
@@ -991,6 +1066,18 @@ func _start_from_lobby() -> void:
 		if room_is_host: network_manager.start_match()
 		return
 	start_practice()
+
+
+func toggle_village_tasks() -> void:
+	village_tasks_expanded = not village_tasks_expanded
+	var task_panel := find_child("VillageTasksPanel", true, false) as Panel
+	if task_panel == null: return
+	task_panel.size.y = 421.0 if village_tasks_expanded else 56.0
+	var toggle := task_panel.get_node_or_null("VillageTasksToggle") as Button
+	if toggle: toggle.text = "VILLAGE TASKS  −" if village_tasks_expanded else "VILLAGE TASKS  +"
+	for i in 8:
+		var entry := task_panel.get_node_or_null("TaskEntry_%d" % i) as Label
+		if entry: entry.visible = village_tasks_expanded
 
 
 func update_lobby_players(players: Array) -> void:
@@ -1153,6 +1240,7 @@ func _character_sigil(index: int) -> String:
 
 func start_practice() -> void:
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
+	village_tasks_expanded = false
 	task_progress.clear()
 	player_position = MapGeometry.spawn_point(selected_map)
 	clue_points.clear()
@@ -1167,11 +1255,13 @@ func start_practice() -> void:
 	player_is_impostor = rng.randi_range(0, 4) == 0
 	if player_is_impostor:
 		impostor_character = selected_character
+		assigned_role_character = selected_character
 	else:
 		var available := NPC_NAMES.filter(func(c: String) -> bool: return c != selected_character)
 		impostor_character = available[rng.randi_range(0, available.size() - 1)]
-	build_game()
-	show_notice("You are Nenek Kebayan." if player_is_impostor else "You are a Villager. Complete tasks and discover Nenek Kebayan.")
+		var role_characters := CHARACTERS.filter(func(c: String) -> bool: return c != selected_character)
+		assigned_role_character = role_characters[rng.randi_range(0, role_characters.size() - 1)]
+	_show_role_reveal()
 
 
 func build_game() -> void:

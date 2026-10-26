@@ -6,19 +6,19 @@ const SPAWN_POINTS := [Vector2(1010, 380), Vector2(640, 395), Vector2(640, 395)]
 const GONG_POINTS := [Vector2(1010, 430), Vector2(640, 570), Vector2(640, 570)]
 
 const TASK_POINTS_BY_MAP := [
-	[Vector2(300, 300), Vector2(650, 220), Vector2(1520, 285), Vector2(1720, 400), Vector2(1630, 535), Vector2(1030, 600), Vector2(540, 590), Vector2(850, 330)],
+	[Vector2(340, 360), Vector2(650, 220), Vector2(1600, 285), Vector2(1800, 400), Vector2(1630, 535), Vector2(930, 600), Vector2(540, 650), Vector2(930, 360)],
 	[Vector2(500, 590), Vector2(1100, 430), Vector2(430, 350), Vector2(650, 340), Vector2(180, 300), Vector2(960, 560), Vector2(900, 615), Vector2(1080, 620)],
 	[Vector2(270, 570), Vector2(520, 250), Vector2(1030, 600), Vector2(650, 330), Vector2(170, 360), Vector2(780, 310), Vector2(900, 245), Vector2(220, 610)]
 ]
 
 const NPC_POINTS_BY_MAP := [
-	[Vector2(640, 340), Vector2(1500, 410), Vector2(1740, 510), Vector2(750, 485)],
+	[Vector2(640, 300), Vector2(1600, 410), Vector2(1740, 510), Vector2(850, 360)],
 	[Vector2(420, 580), Vector2(800, 350), Vector2(1050, 490), Vector2(500, 410)],
 	[Vector2(410, 580), Vector2(810, 360), Vector2(1060, 490), Vector2(510, 410)]
 ]
 
 const CLUE_CANDIDATES_BY_MAP := [
-	[Vector2(300, 300), Vector2(650, 220), Vector2(1520, 285), Vector2(1720, 400), Vector2(1630, 535), Vector2(1030, 600), Vector2(540, 590), Vector2(850, 330), Vector2(1850, 540), Vector2(360, 600), Vector2(1200, 580), Vector2(1000, 235)],
+	[Vector2(340, 360), Vector2(650, 220), Vector2(1600, 285), Vector2(1800, 400), Vector2(1630, 535), Vector2(930, 600), Vector2(540, 650), Vector2(930, 360), Vector2(1850, 540), Vector2(360, 600), Vector2(1200, 580), Vector2(1000, 235)],
 	[Vector2(500, 590), Vector2(1100, 430), Vector2(370, 350), Vector2(650, 340), Vector2(180, 300), Vector2(960, 560), Vector2(900, 615), Vector2(1080, 620), Vector2(235, 560), Vector2(770, 590), Vector2(1120, 300), Vector2(650, 185)],
 	[Vector2(180, 520), Vector2(520, 250), Vector2(1030, 600), Vector2(650, 330), Vector2(170, 360), Vector2(780, 310), Vector2(900, 245), Vector2(220, 610), Vector2(1110, 570), Vector2(450, 610), Vector2(1000, 360), Vector2(620, 570)]
 ]
@@ -26,34 +26,73 @@ const CLUE_CANDIDATES_BY_MAP := [
 # Rectangles are hand-authored against the existing map artwork. They cover
 # large walls, furniture, water, trees and boundary fences; they are not
 # inferred from image colors.
-const OBSTACLES_BY_MAP := [
-	[
-		Rect2(0, 0, 2025, 18), Rect2(0, 0, 18, 720), Rect2(2007, 0, 18, 720), Rect2(0, 702, 2025, 18),
-		Rect2(430, 40, 1080, 34), Rect2(430, 40, 34, 480), Rect2(1476, 40, 34, 480),
-		Rect2(464, 486, 400, 34), Rect2(1080, 486, 396, 34),
-		Rect2(650, 130, 165, 75), Rect2(1050, 130, 165, 75),
-		Rect2(700, 290, 100, 96), Rect2(1155, 286, 100, 96),
-		Rect2(90, 90, 110, 100), Rect2(1800, 90, 110, 110)
-	],
-	[
-		Rect2(0, 0, 1280, 18), Rect2(0, 0, 18, 756), Rect2(1262, 0, 18, 756),
-		Rect2(0, 738, 500, 18), Rect2(760, 738, 520, 18),
-		Rect2(258, 42, 764, 34), Rect2(258, 42, 34, 450), Rect2(988, 42, 34, 450),
-		Rect2(292, 458, 270, 34), Rect2(748, 458, 240, 34),
-		Rect2(365, 108, 94, 62), Rect2(800, 108, 95, 62),
-		Rect2(535, 240, 185, 75), Rect2(314, 274, 76, 86), Rect2(895, 274, 72, 86),
-		Rect2(55, 74, 90, 92), Rect2(152, 84, 70, 84), Rect2(72, 378, 155, 90),
-		Rect2(1080, 93, 90, 105), Rect2(1135, 510, 88, 85)
-	],
-	[
-		Rect2(0, 0, 1280, 18), Rect2(0, 0, 18, 753), Rect2(1262, 0, 18, 753),
-		Rect2(0, 735, 500, 18), Rect2(760, 735, 520, 18),
-		Rect2(258, 42, 764, 34), Rect2(258, 42, 34, 450), Rect2(988, 42, 34, 450),
-		Rect2(292, 458, 270, 34), Rect2(748, 458, 240, 34),
-		Rect2(365, 108, 94, 62), Rect2(800, 108, 95, 62),
-		Rect2(535, 240, 185, 75), Rect2(314, 274, 76, 86), Rect2(895, 274, 72, 86),
-		Rect2(1040, 500, 120, 90), Rect2(80, 80, 90, 120)
-	]
+const PALACE_SOURCE_OBSTACLES := [
+	# Map-edge walls/fences. Room walls below include deliberate door gaps.
+	Rect2(0, 0, 1420, 12), Rect2(0, 0, 12, 505), Rect2(1408, 0, 12, 505), Rect2(0, 493, 1420, 12),
+	# The moat around the palace; leave the south bridge open.
+	Rect2(278, 55, 230, 55), Rect2(800, 55, 250, 55),
+	Rect2(250, 112, 30, 270), Rect2(1048, 112, 40, 270),
+	# Extend the south moat blockers through the full blue-water band in the
+	# palace artwork. The central bridge remains the only crossing.
+	Rect2(250, 382, 345, 80), Rect2(705, 382, 383, 80),
+	# Palace exterior walls. The main south entrance aligns with the bridge.
+	Rect2(280, 112, 14, 252), Rect2(1034, 112, 14, 252),
+	Rect2(280, 112, 240, 14), Rect2(790, 112, 258, 14),
+	Rect2(280, 364, 342, 14), Rect2(690, 364, 358, 14),
+	# Divider walls between Dewan Makan, Dapur, Bilik Tamu and Bilik Senjata.
+	Rect2(510, 126, 14, 44), Rect2(510, 198, 14, 96), Rect2(510, 320, 14, 44),
+	Rect2(790, 126, 14, 44), Rect2(790, 198, 14, 96), Rect2(790, 320, 14, 44),
+	Rect2(294, 235, 71, 14), Rect2(410, 235, 100, 14),
+	Rect2(804, 235, 91, 14), Rect2(940, 235, 94, 14),
+	# Balairung and Lobi walls; leave the centered passage between them.
+	Rect2(520, 112, 105, 14), Rect2(680, 112, 110, 14),
+	Rect2(520, 235, 105, 14), Rect2(680, 235, 110, 14),
+	# Garden pond and the fountain basin.
+	Rect2(28, 220, 190, 125), Rect2(1160, 205, 78, 100)
+]
+
+const PALACE_TREE_BLOCKERS_SOURCE := [
+	Rect2(181, 86, 18, 18), Rect2(1291, 146, 18, 18),
+	Rect2(26, 456, 18, 18), Rect2(136, 458, 18, 18), Rect2(1141, 454, 18, 18),
+	Rect2(1271, 457, 18, 18), Rect2(1361, 441, 18, 18)
+]
+
+# Blockers are authored against the corresponding artwork crop (not the
+# destination viewport), then scaled into world coordinates in obstacles().
+# Door and gate gaps are intentional walkways through each wall/fence.
+const PAK_KADUK_SOURCE_OBSTACLES := [
+	# World bounds and the compound fence; leave the front gate open.
+	Rect2(0, 0, 745, 8), Rect2(0, 0, 8, 440), Rect2(737, 0, 8, 440),
+	Rect2(8, 370, 302, 16), Rect2(375, 370, 362, 16), Rect2(8, 432, 729, 8),
+	# Raised house exterior and the two visible stair/door entrances.
+	Rect2(150, 26, 408, 22), Rect2(150, 40, 24, 266), Rect2(534, 40, 24, 266),
+	Rect2(174, 300, 54, 24), Rect2(274, 300, 28, 24), Rect2(356, 300, 178, 24),
+	# Interior room dividers. Door gaps align with the openings in the artwork.
+	Rect2(174, 154, 66, 18), Rect2(282, 154, 141, 18), Rect2(460, 154, 74, 18),
+	Rect2(298, 48, 18, 88), Rect2(298, 172, 18, 112),
+	Rect2(420, 48, 18, 88), Rect2(420, 172, 18, 112),
+	# Vegetable garden fence with its small entrance, plus solid props.
+	Rect2(52, 220, 124, 10), Rect2(52, 230, 10, 104), Rect2(166, 230, 10, 104),
+	Rect2(62, 334, 34, 10), Rect2(128, 334, 38, 10),
+	Rect2(138, 344, 22, 22), Rect2(632, 268, 48, 38), Rect2(692, 376, 28, 32)
+]
+
+const MAHSURI_SOURCE_OBSTACLES := [
+	# World bounds and compound fence; the southern entrance remains passable.
+	Rect2(0, 0, 748, 8), Rect2(0, 0, 8, 440), Rect2(740, 0, 8, 440),
+	Rect2(54, 386, 214, 14), Rect2(392, 386, 294, 14), Rect2(8, 432, 732, 8),
+	# Follow the irregular coast so the sandy footpath stays open but sea does not.
+	Rect2(700, 0, 48, 130), Rect2(665, 130, 83, 130),
+	Rect2(645, 260, 103, 80), Rect2(680, 340, 68, 92),
+	# House outer walls and front entrance stairs.
+	Rect2(134, 38, 468, 24), Rect2(134, 54, 26, 250), Rect2(576, 54, 26, 250),
+	Rect2(160, 288, 128, 24), Rect2(384, 288, 192, 24),
+	# Interior room dividers, keeping the pictured doorways open.
+	Rect2(160, 156, 52, 18), Rect2(292, 156, 84, 18), Rect2(482, 156, 94, 18),
+	Rect2(300, 62, 18, 60), Rect2(300, 206, 18, 74),
+	Rect2(426, 62, 18, 60), Rect2(426, 206, 18, 74),
+	# Block the well only; keep the garden edge and sandy walking lane open.
+	Rect2(38, 366, 30, 34)
 ]
 
 const AREA_REGIONS_BY_MAP := [
@@ -110,7 +149,28 @@ static func clue_candidates(map_index: int) -> Array:
 
 
 static func obstacles(map_index: int) -> Array:
-	return OBSTACLES_BY_MAP[clampi(map_index, 0, OBSTACLES_BY_MAP.size() - 1)]
+	var safe_index := clampi(map_index, 0, MAP_SIZES.size() - 1)
+	var source_obstacles: Array
+	var source_size: Vector2
+	if safe_index == 1:
+		source_obstacles = PAK_KADUK_SOURCE_OBSTACLES
+		source_size = Vector2(745.0, 440.0)
+	elif safe_index == 2:
+		source_obstacles = MAHSURI_SOURCE_OBSTACLES
+		source_size = Vector2(748.0, 440.0)
+	else:
+		var palace_scale := Vector2(MAP_SIZES[0].x / 1420.0, MAP_SIZES[0].y / 505.0)
+		var palace_scaled: Array[Rect2] = []
+		for source_rect in PALACE_SOURCE_OBSTACLES:
+			palace_scaled.append(Rect2(source_rect.position * palace_scale, source_rect.size * palace_scale))
+		for source_rect in PALACE_TREE_BLOCKERS_SOURCE:
+			palace_scaled.append(Rect2(source_rect.position * palace_scale, source_rect.size * palace_scale))
+		return palace_scaled
+	var scale := Vector2(MAP_SIZES[safe_index].x / source_size.x, MAP_SIZES[safe_index].y / source_size.y)
+	var scaled: Array[Rect2] = []
+	for source_rect in source_obstacles:
+		scaled.append(Rect2(source_rect.position * scale, source_rect.size * scale))
+	return scaled
 
 
 static func areas(map_index: int) -> Array:

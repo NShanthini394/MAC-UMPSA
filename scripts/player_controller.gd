@@ -1,7 +1,10 @@
 extends CharacterBody2D
 ## Physics-based player actor used by offline practice and online room views.
 
+const MapGeometry = preload("res://scripts/map_geometry.gd")
+
 @export var move_speed := 250.0
+@export var map_index := 0
 
 var is_local_player := true
 var is_network_driven := false
@@ -43,13 +46,29 @@ func _physics_process(_delta: float) -> void:
 	if not is_local_player or is_network_driven:
 		return
 	velocity = _move_direction * move_speed
+	# Static bodies provide physical wall collisions. This radius check also
+	# prevents a step into river or pond regions at map edges and wall corners.
+	var current := global_position
+	var candidate := current + velocity * _delta
+	if MapGeometry.is_position_blocked(map_index, candidate, 14.0):
+		var horizontal := Vector2(candidate.x, current.y)
+		var vertical := Vector2(current.x, candidate.y)
+		if MapGeometry.is_position_blocked(map_index, horizontal, 14.0):
+			velocity.x = 0.0
+		if MapGeometry.is_position_blocked(map_index, vertical, 14.0):
+			velocity.y = 0.0
 	move_and_slide()
+	if velocity.length_squared() > 1.0:
+		character_actor.call("set_facing_direction", velocity)
 	character_actor.call("set_running", velocity.length_squared() > 1.0)
 
 
 func _process(delta: float) -> void:
 	if not is_network_driven or not _has_network_target:
 		return
+	var travel_direction := _network_target - global_position
 	var distance := global_position.distance_to(_network_target)
+	if distance > 3.0:
+		character_actor.call("set_facing_direction", travel_direction)
 	character_actor.call("set_running", distance > 3.0)
 	global_position = global_position.lerp(_network_target, 1.0 - exp(-16.0 * delta))

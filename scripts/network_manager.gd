@@ -214,9 +214,9 @@ func cast_sleep_spell(target_id: int) -> void:
 		request_sleep_spell.rpc_id(1, target_id)
 
 
-func submit_task_answer(task_index: int, answer: int) -> void:
+func submit_task_action(task_index: int) -> void:
 	if not active_room_code.is_empty() and is_connected_to_room_server():
-		request_task_answer.rpc_id(1, task_index, answer)
+		request_task_action.rpc_id(1, task_index)
 
 
 func inspect_clue(clue_index: int) -> void:
@@ -730,7 +730,7 @@ func request_player_input(direction: Vector2) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_task_answer(task_index: int, answer: int) -> void:
+func request_task_action(task_index: int) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender := multiplayer.get_remote_sender_id()
@@ -755,12 +755,8 @@ func request_task_answer(task_index: int, answer: int) -> void:
 	if position.distance_to(MapGeometry.task_points(int(room["map_index"]))[task_index]) > 72.0:
 		_rpc_task_resolved.rpc_id(sender, task_index, false, int(room["task_progress"][task_index]), bool(room["completed_tasks"][task_index]))
 		return
-	var task: Dictionary = tasks[task_index]
 	if int(room["completed_tasks"][task_index]) == 1:
 		_rpc_task_resolved.rpc_id(sender, task_index, false, int(room["task_progress"][task_index]), true)
-		return
-	if answer != int(task["answer"]):
-		_rpc_task_resolved.rpc_id(sender, task_index, false, int(room["task_progress"][task_index]), false)
 		return
 	room["task_progress"][task_index] = int(room["task_progress"][task_index]) + 1
 	var required: int = GameData.TASK_STEPS[map_name][task_index]
@@ -787,14 +783,14 @@ func request_inspect_clue(clue_index: int) -> void:
 		return
 	var member: Dictionary = room["players"][sender]
 	if not NenekPowers.is_active(member) or str(member.get("role", "villager")) != "villager":
-		_rpc_room_error.rpc_id(sender, "Only awake Orang Kampung can inspect clues.")
+		_rpc_room_error.rpc_id(sender, "Hanya Orang Kampung yang sedar boleh memeriksa petunjuk.")
 		return
 	var positions: Array = room["clue_positions"]
 	if clue_index < 0 or clue_index >= positions.size() or clue_index in room["found_clues"]:
 		return
 	var position: Vector2 = member.get("position", Vector2.ZERO)
 	if position.distance_to(positions[clue_index]) > 72.0:
-		_rpc_room_error.rpc_id(sender, "Move closer to the clue to inspect it.")
+		_rpc_room_error.rpc_id(sender, "Dekati petunjuk untuk memeriksanya.")
 		return
 	room["found_clues"].append(clue_index)
 	var clue_name: String = room["clue_names"][clue_index]

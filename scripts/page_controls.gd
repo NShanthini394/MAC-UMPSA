@@ -25,6 +25,7 @@ var _help: Button
 var _slash: ColorRect
 var _styles: Dictionary = {}
 var _last_screen := ""
+var _last_task_modal := false
 var _last_muted := false
 var _dialog: ColorRect
 var _dialog_kind := ""
@@ -105,12 +106,14 @@ func refresh(force: bool = false) -> void:
 	var menu := screen == "menu"
 	var playing := screen in ["game", "meeting"]
 	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal"]
-	if force or screen != _last_screen:
+	var task_modal := playing and int(app.task_overlay_index) >= 0
+	if force or screen != _last_screen or task_modal != _last_task_modal:
 		_last_screen = screen
-		_back.visible = not menu and not playing and not quiet
-		_music.visible = not quiet
-		_settings.visible = not quiet
-		_help.visible = menu or playing
+		_last_task_modal = task_modal
+		_back.visible = not menu and not playing and not quiet and not task_modal
+		_music.visible = not quiet and not task_modal
+		_settings.visible = not quiet and not task_modal
+		_help.visible = (menu or playing) and not task_modal
 		for icon in _icons.values(): icon.visible = playing
 		if menu:
 			_music.text = ""; _settings.text = ""; _help.text = ""
@@ -160,13 +163,20 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 	_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dialog.z_index = 10
 	_root.add_child(_dialog)
-	return UI.make_panel(_dialog, rect, Color(0.12, 0.08, 0.06, 0.99))
+	var panel := UI.make_panel(_dialog, rect, Color(0.12, 0.08, 0.06, 0.99))
+	var close: Button = app.make_button(panel, "×", close_dialog, 42, 42)
+	close.name = "PopupCloseButton"
+	close.position = Vector2(rect.size.x - 52, 10)
+	close.add_theme_font_size_override("font_size", 25)
+	close.tooltip_text = "Tutup"
+	close.accessibility_name = "Tutup"
+	return panel
 
 
 func show_settings() -> void:
 	var panel := dialog_panel("settings", Rect2(375, 160, 530, 400))
 	panel.name = "SettingsOverlay"
-	UI.make_child_label(panel, "SETTINGS", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 480, 42))
+	UI.make_child_label(panel, "SETTINGS", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 420, 42))
 	var audio := UI.make_button(panel, "TURN AUDIO ON" if bool(app.audio_muted) else "MUTE AUDIO", Callable(app, "_toggle_audio"), 220, 42, true)
 	audio.name = "SettingsAudioButton"; audio.position = Vector2(155, 82)
 	var volume_label := UI.make_child_label(panel, "VOLUME · %d%%" % int(app.audio_volume), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 138, 460, 30))
@@ -178,22 +188,22 @@ func show_settings() -> void:
 	volume.value = app.audio_volume
 	volume.value_changed.connect(Callable(app, "_set_audio_volume"))
 	panel.add_child(volume)
-	UI.make_child_label(panel, "WASD / arrow keys or the touch pad to move.", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 217, 460, 36))
+	var test_sound := UI.make_button(panel, "TEST SOUND", Callable(app, "_test_audio"), 220, 38, true)
+	test_sound.name = "SettingsTestSoundButton"; test_sound.position = Vector2(155, 218)
+	UI.make_child_label(panel, "WASD / arrow keys or the touch pad to move.", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 260, 460, 26))
 	var help := UI.make_button(panel, "HOW TO PLAY", Callable(app, "show_how_to_play").bind(""), 200, 40)
-	help.position = Vector2(165, 264)
+	help.position = Vector2(165, 288)
 	var playing: bool = app.current_screen in ["game", "meeting"]
 	if playing:
 		var leave := UI.make_button(panel, "LEAVE GAME", Callable(app, "show_exit_confirmation"), 180, 40)
-		leave.name = "SettingsLeaveGameButton"; leave.position = Vector2(70, 332)
-	var close := UI.make_button(panel, "CLOSE", close_dialog, 180 if playing else 140, 40)
-	close.name = "SettingsBackButton"; close.position = Vector2(280 if playing else 195, 332)
+		leave.name = "SettingsLeaveGameButton"; leave.position = Vector2(70, 344)
 	refresh(true)
 
 
 func show_help() -> void:
 	var panel := dialog_panel("help", Rect2(325, 70, 630, 580))
 	panel.name = "HowToPlayOverlay"
-	UI.make_child_label(panel, "HOW TO PLAY", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 580, 42))
+	UI.make_child_label(panel, "HOW TO PLAY", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 520, 42))
 	var guide := RichTextLabel.new()
 	guide.name = "HowToPlayGuide"
 	guide.bbcode_enabled = true
@@ -206,14 +216,12 @@ func show_help() -> void:
 	guide.text = "[color=#f7c35a][b]Orang Kampung[/b][/color]\nFinish tasks, inspect clues, and vote at the gong.\n\n[color=#f7c35a][b]Jampi Tidur[/b][/color]\nVillagers sleep until the match ends. They can watch nearby events but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Kabus & Sumpahan Pintu[/b][/color]\nFog covers Nenek's nearby surroundings for 20 seconds. Door locking closes every entrance of her current section for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nMove with WASD, arrow keys, or the touch pad. Press E near a task."
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
-	var close := UI.make_button(panel, "BACK", close_dialog, 140, 42)
-	close.position = Vector2(245, 510)
 
 
 func confirm(title: String, message: String, callback: Callable) -> void:
 	var panel := dialog_panel("confirm", Rect2(390, 215, 500, 290))
 	panel.name = "LeaveConfirmation"
-	UI.make_child_label(panel, title, 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 22, 452, 44))
+	UI.make_child_label(panel, title, 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 22, 398, 44))
 	UI.make_child_label(panel, message, 17, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(42, 80, 416, 78))
 	var yes := UI.make_button(panel, "YES, LEAVE", func(): close_dialog(); callback.call(), 170, 46, true)
 	yes.name = "ConfirmLeaveButton"; yes.position = Vector2(62, 190)

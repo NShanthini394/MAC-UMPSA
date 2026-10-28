@@ -44,22 +44,25 @@ func build(app) -> void:
 	var header: Panel = app.make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	app._make_child_label(header, GameData.MAPS[app.selected_map]["name"], 19, GameData.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(18, 12, 440, 32))
 	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "ORANG KAMPUNG") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
-	var progress: Label = app._make_child_label(header, "TASKS  %d / 8    •    CLUES  %d / 3" % [app.completed_tasks.count(1), app.collected_clues.size()], 14, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(1010, 12, 225, 32))
+	var progress: Label = app._make_child_label(header, "TUGAS  %d / %d    •    PETUNJUK  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
 	progress.name = "ProgressLabel"
-	var task_panel_height := 421.0 if app.village_tasks_expanded else 56.0
+	var task_panel_height := 438.0 if app.village_tasks_expanded else 68.0
 	var task_panel: Panel = app.make_panel(Rect2(16, 86, 284, task_panel_height), Color(0.12, 0.09, 0.06, 0.91))
 	task_panel.name = "VillageTasksPanel"
 	task_panel.clip_contents = true
-	var toggle_text := "VILLAGE TASKS  −" if app.village_tasks_expanded else "VILLAGE TASKS  +"
-	var task_toggle: Button = app.make_button(task_panel, toggle_text, Callable(app, "toggle_village_tasks"), 252, 38, true)
+	task_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var toggle_text := "TUGAS KAMPUNG  −" if app.village_tasks_expanded else "TUGAS KAMPUNG  +"
+	var task_toggle: Button = app.make_button(task_panel, toggle_text, Callable(app, "toggle_village_tasks"), 260, 52, true)
 	task_toggle.name = "VillageTasksToggle"
-	task_toggle.position = Vector2(14, 8)
+	task_toggle.position = Vector2(12, 7)
+	task_toggle.mouse_filter = Control.MOUSE_FILTER_STOP
+	task_toggle.add_theme_font_size_override("font_size", 17)
 	var tasks: Array = GameData.TASKS[GameData.MAPS[app.selected_map]["name"]]
 	for i in tasks.size():
 		var count_text := "" if app.completed_tasks[i] == 1 else " (%d/%d)" % [app.task_progress[i], GameData.TASK_STEPS[GameData.MAPS[app.selected_map]["name"]][i]]
 		var task_text := ("✓ " if app.completed_tasks[i] == 1 else "◇ ") + str(tasks[i]["name"]) + count_text
 		task_text = _wrap_task_text(task_text, 30)
-		var label: Label = app._make_child_label(task_panel, task_text, 13, Color("d8edb2") if app.completed_tasks[i] == 1 else GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(16, 50 + i * 42, 254, 39))
+		var label: Label = app._make_child_label(task_panel, task_text, 13, Color("61f28a") if app.completed_tasks[i] == 1 else GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(16, 66 + i * 44, 254, 40))
 		label.name = "TaskEntry_%d" % i
 		label.visible = app.village_tasks_expanded
 		label.clip_text = true
@@ -241,7 +244,9 @@ func _add_world_marker(world: Node2D, position: Vector2, text: String, color: Co
 
 func build_control_bar(app) -> void:
 	var pad := Panel.new()
-	pad.name = "VirtualJoystick"; pad.position = Vector2(30, 540); pad.size = Vector2(148, 148)
+	pad.name = "VirtualJoystick"; pad.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	pad.offset_left = 24; pad.offset_top = -162; pad.offset_right = 172; pad.offset_bottom = -14
+	pad.size = Vector2(148, 148)
 	var pad_style := StyleBoxFlat.new(); pad_style.bg_color = Color(0.12, 0.09, 0.06, 0.70); pad_style.border_color = Color("d3a24e")
 	pad_style.set_border_width_all(2); pad_style.set_corner_radius_all(74); pad.add_theme_stylebox_override("panel", pad_style)
 	pad.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -251,25 +256,70 @@ func build_control_bar(app) -> void:
 	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE; pad.add_child(knob)
 	pad.gui_input.connect(Callable(app, "_on_joystick_input").bind(pad, knob))
 	app.game_hud.add_child(pad)
-	var interact: Button = app.make_button(app, "INTERACT  [E]", Callable(app, "interact_nearest"), 164, 46, true)
-	interact.name = "InteractButton"
-	interact.position = Vector2(1005, 605)
-	var inspect: Button = app.make_button(app, "INSPECT CLUE", Callable(app, "inspect_nearest_clue"), 164, 42)
-	inspect.name = "InspectClueButton"
-	inspect.position = Vector2(1005, 657)
-	var map_button: Button = app.make_button(app, "MAP", Callable(app, "show_map_overlay"), 120, 38)
-	map_button.name = "GameMapButton"
-	map_button.position = Vector2(824, 610)
-	var journal: Button = app.make_button(app, "CLUE JOURNAL", Callable(app, "show_journal"), 156, 38)
-	journal.name = "GameJournalButton"
-	journal.position = Vector2(824, 657)
+	# Map and journal sit high at the right edge; the action cluster stays low
+	# beside the player's right thumb without a large, opaque dock panel.
+	var navigation := VBoxContainer.new()
+	navigation.name = "NavigationButtons"
+	navigation.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	navigation.offset_left = -68; navigation.offset_top = 148
+	navigation.offset_right = -12; navigation.offset_bottom = 268
+	navigation.add_theme_constant_override("separation", 8)
+	app.game_hud.add_child(navigation)
+	_add_dock_button(app, navigation, "GameMapButton", "res://assets/ui/map_icon.svg", "Peta", Callable(app, "show_map_overlay"), false)
+	_add_dock_button(app, navigation, "GameJournalButton", "res://assets/ui/journal_icon.svg", "Jurnal petunjuk", Callable(app, "show_journal"), false)
+	var actions := Control.new()
+	actions.name = "GameActionButtons"
+	actions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# This transparent full-screen holder must not swallow taps meant for the
+	# task list, joystick, or other HUD controls behind its child buttons.
+	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	app.game_hud.add_child(actions)
+	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interaksi · E", Callable(app, "interact_nearest"), true, Vector2(76, 76))
+	interact.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	interact.offset_left = -102; interact.offset_top = -134
+	interact.offset_right = -26; interact.offset_bottom = -58
+	var inspect := _add_dock_button(app, actions, "InspectClueButton", "res://assets/ui/clue_icon.svg", "Periksa petunjuk", Callable(app, "inspect_nearest_clue"), false, Vector2(76, 76))
+	inspect.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	inspect.offset_left = -102; inspect.offset_top = -224
+	inspect.offset_right = -26; inspect.offset_bottom = -148
 	if app.player_is_impostor:
-		var sleep: Button = app.make_button(app, "JAMPI TIDUR", Callable(app, "cast_sleep_spell"), 132, 48, true)
-		sleep.name = "SleepSpellButton"; sleep.position = Vector2(410, 653)
-		var mist: Button = app.make_button(app, "KABUS", Callable(app, "cast_sabotage").bind("fog"), 100, 48, true)
-		mist.name = "FogButton"; mist.position = Vector2(548, 653)
-		var curse: Button = app.make_button(app, "SUMPAHAN PINTU", Callable(app, "cast_sabotage").bind("lock"), 166, 48, true)
-		curse.name = "DoorLockButton"; curse.position = Vector2(654, 653)
+		var powers := HBoxContainer.new()
+		powers.name = "PowerActionButtons"
+		powers.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+		powers.offset_left = -194; powers.offset_top = -292
+		powers.offset_right = -20; powers.offset_bottom = -236
+		powers.add_theme_constant_override("separation", 6)
+		app.game_hud.add_child(powers)
+		_add_dock_button(app, powers, "SleepSpellButton", "res://assets/ui/sleep_icon.svg", "Jampi tidur", Callable(app, "cast_sleep_spell"), true, Vector2(54, 54))
+		_add_dock_button(app, powers, "FogButton", "res://assets/ui/fog_icon.svg", "Kabus", Callable(app, "cast_sabotage").bind("fog"), true, Vector2(54, 54))
+		_add_dock_button(app, powers, "DoorLockButton", "res://assets/ui/lock_icon.svg", "Sumpahan pintu", Callable(app, "cast_sabotage").bind("lock"), true, Vector2(54, 54))
+	var direction_arrow := TextureRect.new()
+	direction_arrow.name = "TaskDirectionArrow"
+	direction_arrow.texture = load("res://assets/ui/direction_arrow.svg") as Texture2D
+	direction_arrow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	direction_arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	direction_arrow.size = Vector2(54, 54)
+	direction_arrow.visible = false
+	direction_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	app.game_hud.add_child(direction_arrow)
+
+
+func _add_dock_button(app, parent: Control, node_name: String, icon_path: String, hint: String, callback: Callable, highlighted: bool, button_size: Vector2 = Vector2(56, 56)) -> Button:
+	var button: Button = app.make_button(parent, "", callback, button_size.x, button_size.y, highlighted)
+	button.name = node_name
+	button.custom_minimum_size = button_size
+	button.icon = load(icon_path) as Texture2D
+	button.expand_icon = true
+	button.tooltip_text = hint
+	button.accessibility_name = hint
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.12, 0.09, 0.07, 0.82) if state != "hover" else Color(0.38, 0.24, 0.12, 0.96)
+		style.border_color = Color("e4b25b")
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(roundi(minf(button_size.x, button_size.y) * 0.5))
+		button.add_theme_stylebox_override(state, style)
+	return button
 
 
 func refresh_power_effects(app) -> void:

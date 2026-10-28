@@ -52,17 +52,17 @@ const CHARACTER_AVATARS := {
 }
 
 const CHARACTER_CLUES := {
-	"Puteri Gunung Ledang": ["Golden jewelry box", "Purple silk cloth", "Floral medallion"],
-	"Pak Kaduk": ["Rooster feather", "Old playing cards", "Muddy footprints"],
-	"Badang": ["Small monkey", "Headband cloth", "Scratched boulder"],
-	"Mahsuri": ["White dove feather", "Torn handwritten letter", "Perfume bottle"],
-	"Pak Pandir": ["Village frog", "Worn fishing net", "Small muddy footprints"],
-	"Bawang Putih": ["Garlic bulb", "White handkerchief", "Flower-shaped locket"],
-	"Bawang Merah": ["Red onion", "Red cloth", "Cracked mirror"],
-	"Raja Bersiung": ["Fang", "Blood-stained cloth", "Carved crown"],
-	"Nenek Kebayan": ["Old rattan basket", "Jasmine flower", "Delicate footprints"],
-	"Orang Kampung Lelaki": ["Straw hat", "Wooden pipe", "Rice and vegetables"],
-	"Orang Kampung Perempuan": ["Vegetable basket", "Floral batik handkerchief", "Muddy sandals"]
+	"Puteri Gunung Ledang": ["Peti emas", "Kain sutera ungu", "Loket bermotif bunga"],
+	"Pak Kaduk": ["Bulu ayam", "Kad permainan lama", "Jejak kaki berlumpur"],
+	"Badang": ["Monyet kecil", "Kain ikat kepala", "Batu besar bercalar"],
+	"Mahsuri": ["Bulu merpati putih", "Surat koyak", "Botol minyak wangi"],
+	"Pak Pandir": ["Katak kampung", "Jala usang", "Jejak kaki kecil berlumpur"],
+	"Bawang Putih": ["Bawang putih", "Sapu tangan putih", "Loket berbentuk bunga"],
+	"Bawang Merah": ["Bawang merah", "Kain merah", "Cermin retak"],
+	"Raja Bersiung": ["Taring", "Kain berlumuran darah", "Mahkota berukir"],
+	"Nenek Kebayan": ["Bakul rotan lama", "Bunga melur", "Jejak kaki halus"],
+	"Orang Kampung Lelaki": ["Topi mengkuang", "Pipa kayu", "Beras dan sayur"],
+	"Orang Kampung Perempuan": ["Bakul sayur", "Sapu tangan batik bunga", "Selipar berlumpur"]
 }
 
 const MAPS := [
@@ -73,34 +73,34 @@ const MAPS := [
 
 const TASKS := {
 	"Rumah Mahsuri": [
-		{"name":"Gather five story clues", "place":"Village path", "prompt":"Which item belongs in the evidence box?", "choices":["Torn letter", "Iron anchor", "Snow globe"], "answer":0},
-		{"name":"Hear three village stories", "place":"Village elder", "prompt":"Which detail should you ask the villagers about?", "choices":["Mahsuri's story", "A space launch", "A desert caravan"], "answer":0},
-		{"name":"Collect healer's medicine", "place":"Healer's house", "prompt":"Choose the healer's supplies.", "choices":["Herbal medicine", "Silver coins", "A royal crown"], "answer":0},
-		{"name":"Deliver medicine to the family", "place":"Mahsuri's house", "prompt":"Who needs the medicine delivery?", "choices":["Mahsuri's family", "The palace guards", "The rooster"], "answer":0},
-		{"name":"Collect six white flowers", "place":"Flower garden", "prompt":"Which flowers belong at the tomb?", "choices":["White jasmine", "Red hibiscus", "Blue orchids"], "answer":0},
-		{"name":"Match belongings to their owners", "place":"Gathering hall", "prompt":"Match the misplaced letter to its owner.", "choices":["Mahsuri", "Badang", "Pak Kaduk"], "answer":0},
-		{"name":"Find the key and unlock the chest", "place":"Storage room", "prompt":"The small brass key fits which object?", "choices":["Locked chest", "Garden gate", "Water well"], "answer":0},
-		{"name":"Place flowers at Mahsuri's tomb", "place":"Mahsuri's tomb", "prompt":"Complete the remembrance ritual.", "choices":["Lay down the flowers", "Take the flowers home", "Hide the flowers"], "answer":0}
+		{"name":"Cari 5 petunjuk di sekitar kampung", "place":"Jalan kampung", "prompt":"Cari dan kutip petunjuk yang bertaburan di sekitar kampung.", "minigame":"collect", "items":["Surat Mahsuri", "Bulu merpati", "Botol minyak wangi", "Kain batik", "Loket bunga"]},
+		{"name":"Bercakap dengan 3 orang penduduk", "place":"Balai kampung", "prompt":"Berbual dengan penduduk untuk mengumpulkan kisah tentang Mahsuri.", "minigame":"talk", "people":["Pak Pandir", "Bawang Putih", "Badang"]},
+		{"name":"Ambil bekalan ubat dari rumah tabib", "place":"Rumah tabib", "prompt":"Ambil bekalan ubat tradisional daripada tabib.", "minigame":"collect", "items":["Bekalan ubat"]},
+		{"name":"Hantar ubat kepada keluarga Mahsuri", "place":"Rumah Mahsuri", "prompt":"Seret bungkusan ubat kepada keluarga Mahsuri.", "minigame":"drag", "drag_from":"Bungkusan ubat", "drag_to":"Keluarga Mahsuri", "drag_id":"ubat"},
+		{"name":"Cari dan kutip 6 bunga putih", "place":"Taman bunga", "prompt":"Kutip bunga putih yang tumbuh di sekitar kampung.", "minigame":"collect", "items":["Bunga putih", "Bunga melur", "Bunga tanjung", "Bunga cempaka", "Bunga kenanga", "Bunga raya putih"]},
+		{"name":"Padankan barang dengan pemiliknya", "place":"Balai perhimpunan", "prompt":"Seret setiap barang kepada pemilik yang betul.", "minigame":"matching", "pairs":[{"id":"surat","item":"Surat koyak","owner":"Mahsuri"},{"id":"batu","item":"Batu bercalar","owner":"Badang"},{"id":"kad","item":"Kad lama","owner":"Pak Kaduk"}], "owners":["Mahsuri", "Badang", "Pak Kaduk"]},
+		{"name":"Buka peti berkunci", "place":"Stor simpanan", "prompt":"Cari kunci di kawasan berhampiran, kemudian buka peti.", "minigame":"search_key", "drag_from":"Kunci peti", "drag_to":"Peti berkunci", "drag_id":"kunci"},
+		{"name":"Letakkan bunga di makam Mahsuri", "place":"Makam Mahsuri", "prompt":"Seret bunga ke makam Mahsuri untuk melengkapkan misi.", "minigame":"drag", "drag_from":"Bunga putih", "drag_to":"Makam Mahsuri", "drag_id":"bunga"}
 	],
 	"Rumah Pak Kaduk": [
-		{"name":"Find five food pieces", "place":"Village yard", "prompt":"Choose food for the rooster.", "choices":["Grain", "A glass marble", "A flower pot"], "answer":0},
-		{"name":"Feed Pak Kaduk's rooster", "place":"Chicken coop", "prompt":"What should you give the rooster?", "choices":["The grain you collected", "A playing card", "A lantern"], "answer":0},
-		{"name":"Find three clothing repair items", "place":"House storage", "prompt":"Choose a useful repair item.", "choices":["Thread and cloth", "A cooking pot", "A compass"], "answer":0},
-		{"name":"Repair Pak Kaduk's clothes", "place":"Main house", "prompt":"Where does this cloth patch belong?", "choices":["The torn sleeve", "The roof", "The chicken coop"], "answer":0},
-		{"name":"Collect five rooster feathers", "place":"Paddy path", "prompt":"Follow the feather trail.", "choices":["Feather by the paddy", "Shell by the river", "Leaf by the gate"], "answer":0},
-		{"name":"Find the rooster at the arena", "place":"Competition arena", "prompt":"Listen for the rooster near the arena.", "choices":["Call the rooster", "Ring the palace bell", "Open the tomb"], "answer":0},
-		{"name":"Complete the arena timing challenge", "place":"Arena gate", "prompt":"Pick the steady moment to enter.", "choices":["When the marker reaches the center", "Before the count begins", "After the arena closes"], "answer":0},
-		{"name":"Collect the scattered arena coins", "place":"Arena floor", "prompt":"Gather the coins left after the competition.", "choices":["Pick up the coins", "Leave the arena", "Give them to the rooster"], "answer":0}
+		{"name":"Cari 5 cebisan makanan untuk ayam Pak Kaduk", "place":"Laman kampung", "prompt":"Cari dan kutip cebisan makanan yang bertaburan.", "minigame":"collect", "items":["Beras", "Jagung", "Padi", "Dedak", "Kacang"]},
+		{"name":"Beri makan ayam Pak Kaduk", "place":"Kandang ayam", "prompt":"Tekan butang interaksi untuk memberi makanan kepada ayam.", "minigame":"interact", "interact_caption":"Bekas makanan sudah tersedia. Tekan untuk memberi makan ayam.", "interact_label":"BERI MAKAN AYAM"},
+		{"name":"Cari 3 barang untuk membaiki baju", "place":"Stor rumah", "prompt":"Kutip barang jahitan yang diperlukan.", "minigame":"collect", "items":["Benang", "Jarum", "Cebisan kain"]},
+		{"name":"Baiki baju Pak Kaduk", "place":"Rumah utama", "prompt":"Seret cebisan kain ke bahagian baju yang koyak.", "minigame":"drag", "drag_from":"Cebisan kain", "drag_to":"Bahagian baju koyak", "drag_id":"kain"},
+		{"name":"Ikut jejak ayam dengan mengutip 5 bulu", "place":"Laluan bendang", "prompt":"Kutip bulu ayam untuk menjejaki laluannya.", "minigame":"collect", "items":["Bulu ayam", "Bulu ayam", "Bulu ayam", "Bulu ayam", "Bulu ayam"]},
+		{"name":"Cari ayam Pak Kaduk di sekitar gelanggang", "place":"Gelanggang pertandingan", "prompt":"Periksa kawasan gelanggang dan cari ayam Pak Kaduk.", "minigame":"find_rooster"},
+		{"name":"Sertai cabaran masa di gelanggang", "place":"Pintu gelanggang", "prompt":"Tekan apabila penanda berada di zon hijau.", "minigame":"timing"},
+		{"name":"Kutip syiling selepas pertandingan", "place":"Lantai gelanggang", "prompt":"Kutip syiling yang bertaburan di gelanggang.", "minigame":"collect", "items":["Syiling emas", "Syiling perak", "Syiling tembaga", "Syiling emas", "Syiling perak"]}
 	],
 	"Istana Puteri Gunung Ledang": [
-		{"name":"Find five route markers", "place":"Palace garden", "prompt":"Which marker points toward the mountain?", "choices":["The carved trail marker", "A kitchen spoon", "A playing card"], "answer":0},
-		{"name":"Gather food and water", "place":"Palace kitchen", "prompt":"Choose a travel supply.", "choices":["Food and water", "A silk curtain", "An empty chest"], "answer":0},
-		{"name":"Navigate the forest crossroads", "place":"Forest crossing", "prompt":"Follow the marked path at the fork.", "choices":["Take the marked mountain trail", "Walk into the river", "Return to the kitchen"], "answer":0},
-		{"name":"Find seven golden trays", "place":"Royal hall", "prompt":"Which tray is part of the royal request?", "choices":["Golden serving tray", "Wooden fishing net", "Clay flower pot"], "answer":0},
-		{"name":"Catch seven glowing fireflies", "place":"Lantern garden", "prompt":"Tap the firefly while it glows.", "choices":["Catch the glowing firefly", "Chase the shadow", "Wait for sunrise"], "answer":0},
-		{"name":"Collect the requested symbolic materials", "place":"Princess's chamber", "prompt":"Which object is one of the Princess's symbols?", "choices":["Floral medallion", "Iron shovel", "Fishing basket"], "answer":0},
-		{"name":"Deliver the proposal letter", "place":"Sultan's camp", "prompt":"Take the letter to the meeting place.", "choices":["Deliver the sealed letter", "Leave it in the forest", "Give it to the cook"], "answer":0},
-		{"name":"Follow the markers to the Princess", "place":"Mountain overlook", "prompt":"Complete the final conversation.", "choices":["Speak with Puteri Gunung Ledang", "Return to the arena", "Hide the route markers"], "answer":0}
+		{"name":"Cari 5 penanda laluan ke kaki gunung", "place":"Taman istana", "prompt":"Cari dan kutip penanda laluan untuk membuka jalan ke kaki gunung.", "minigame":"collect", "items":["Penanda kayu", "Pita merah", "Batu tanda", "Bendera kecil", "Ukiran laluan"]},
+		{"name":"Kumpulkan bekalan perjalanan", "place":"Dapur istana", "prompt":"Ambil air dan makanan untuk perjalanan.", "minigame":"supplies", "items":["Bekas air", "Bungkusan makanan"]},
+		{"name":"Cari jalan di persimpangan hutan", "place":"Persimpangan hutan", "prompt":"Ikut turutan penanda untuk mencari jalan yang betul.", "minigame":"route", "route":["↑", "→", "↑"]},
+		{"name":"Cari 7 dulang emas", "place":"Balai diraja", "prompt":"Cari dulang emas di lokasi yang ditandakan pada peta.", "minigame":"collect", "items":["Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas"]},
+		{"name":"Tangkap 7 ikon hati nyamuk", "place":"Taman tanglung", "prompt":"Tekan ketika ikon berada di zon hijau untuk menangkapnya.", "minigame":"timing"},
+		{"name":"Kumpul bahan simbolik untuk Puteri", "place":"Bilik Puteri", "prompt":"Kutip bahan simbolik yang diperlukan Puteri.", "minigame":"collect", "items":["Bunga melur", "Kain sutera", "Loket bunga"]},
+		{"name":"Bawa surat pinangan ke kawasan pertemuan", "place":"Kem Sultan", "prompt":"Seret surat pinangan dari kem Sultan ke kawasan pertemuan.", "minigame":"drag", "drag_from":"Surat pinangan", "drag_to":"Kawasan pertemuan", "drag_id":"surat"},
+		{"name":"Temui Puteri dan selesaikan perbualan", "place":"Puncak gunung", "prompt":"Ikut penanda ke lokasi Puteri, kemudian berbual dengannya.", "minigame":"final_route"}
 	]
 }
 
@@ -108,7 +108,7 @@ const TASK_POINTS := [Vector2(370, 235), Vector2(530, 235), Vector2(880, 245), V
 const TASK_STEPS := {
 	"Rumah Mahsuri": [5, 3, 1, 1, 6, 3, 1, 1],
 	"Rumah Pak Kaduk": [5, 1, 3, 1, 5, 1, 1, 1],
-	"Istana Puteri Gunung Ledang": [5, 1, 1, 7, 7, 1, 1, 1]
+	"Istana Puteri Gunung Ledang": [5, 1, 1, 7, 7, 3, 1, 1]
 }
 const NPC_NAMES := ["Pak Pandir", "Bawang Putih", "Badang", "Mahsuri"]
 const NPC_POINTS := [Vector2(430, 330), Vector2(760, 300), Vector2(990, 475), Vector2(520, 460)]

@@ -121,7 +121,7 @@ func start_server(port: int = PORT) -> Error:
 		return result
 	server_port = port
 	multiplayer.multiplayer_peer = peer
-	print("Kampung Legenda room server listening on UDP %d" % port)
+	print("Nenek Kebayan room server listening on UDP %d" % port)
 	return OK
 
 

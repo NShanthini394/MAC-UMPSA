@@ -1,4 +1,4 @@
-KAMPUNG LEGENDA - WINDOWS WI-FI TEST
+NENEK KEBAYAN: SIAPA PENGKHIANAT? - WINDOWS WI-FI TEST
 
 WHAT YOU NEED
 - Windows 10/11 computers on the same private Wi-Fi, or Ethernet on the same router.

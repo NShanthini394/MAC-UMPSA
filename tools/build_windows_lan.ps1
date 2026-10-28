@@ -19,7 +19,7 @@ if ($build.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $packPath) -or (Selec
 }
 # Private test bundle: use the project's engine, avoiding export-template setup.
 Copy-Item -LiteralPath $GodotPath -Destination (Join-Path $outputDirectory 'KampungLegenda.exe') -Force
-$launcher = "@echo off`r`nstart `"Kampung Legenda`" `"%~dp0KampungLegenda.exe`" --main-pack `"%~dp0KampungLegenda.pck`"`r`n"
+$launcher = "@echo off`r`nstart `"Nenek Kebayan`" `"%~dp0KampungLegenda.exe`" --main-pack `"%~dp0KampungLegenda.pck`"`r`n"
 [System.IO.File]::WriteAllText((Join-Path $outputDirectory 'Play.cmd'), $launcher, [System.Text.Encoding]::ASCII)
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/WINDOWS_LAN_TEST.md') -Destination (Join-Path $outputDirectory 'READ_ME_FIRST.txt') -Force
 $archive = Join-Path $projectRoot 'builds/KampungLegenda-Windows-LAN.zip'

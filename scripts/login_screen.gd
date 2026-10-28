@@ -63,8 +63,8 @@ static func build(app: Control) -> void:
 	hero_image.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	hero_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.add_child(hero_image)
-	UI.make_child_label(hero, "KAMPUNG LEGENDA", 20, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 199, 760, 28))
-	UI.make_child_label(hero, "Misteri Tiga Rumah", 12, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 228, 760, 18))
+	UI.make_child_label(hero, "Nenek Kebayan:", 20, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 199, 760, 28))
+	UI.make_child_label(hero, "Siapa Pengkhianat?", 12, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 228, 760, 18))
 	var form := Control.new()
 	form.name = "LoginPanel"
 	form.position = Vector2(365, 278); form.size = Vector2(550, 356)

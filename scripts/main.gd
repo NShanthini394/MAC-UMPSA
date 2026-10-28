@@ -1,5 +1,5 @@
 extends Control
-## Playable local practice build for Kampung Legenda: Misteri Tiga Rumah.
+## Nenek Kebayan: Siapa Pengkhianat? game controller.
 
 const GameData = preload("res://scripts/game_data.gd")
 const GameUI = preload("res://scripts/game_ui.gd")
@@ -249,7 +249,7 @@ func navigate_back() -> void:
 			if overlay_name == "TaskOverlay": task_overlay_index = -1
 			return
 	match current_screen:
-		"login": page_controls.call("confirm", "EXIT GAME?", "Close Kampung Legenda?", Callable(get_tree(), "quit"))
+		"login": page_controls.call("confirm", "EXIT GAME?", "Close Nenek Kebayan?", Callable(get_tree(), "quit"))
 		"menu": build_login_screen()
 		"map_select":
 			if room_code.is_empty(): build_menu()
@@ -459,14 +459,13 @@ func build_menu() -> void:
 	await clear_screen("menu")
 	add_background(load(MENU_ART))
 	add_color_overlay(Color(0.05, 0.07, 0.08, 0.32))
-	# The menu artwork already contains the full title plaque and subtitle. Avoid
-	# drawing a second title label, which was clipped against the bottom edge.
-	var menu_panel := make_panel(Rect2(465, 238, 350, 350), Color(0.13, 0.075, 0.045, 1.0))
+	# Keep the original title artwork as the menu header.
+	var menu_panel := make_panel(Rect2(480, 270, 320, 340), Color(0.13, 0.075, 0.045, 1.0))
 	menu_panel.name = "MainMenuPanel"
 	var menu_buttons := ["PLAY", "JOIN ROOM", "EXIT"]
 	for i in menu_buttons.size():
-		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 300, 54, i == 0)
-		btn.position = Vector2(25, 70 + i * 78)
+		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 280, 48, i == 0)
+		btn.position = Vector2(20, 82 + i * 64)
 		btn.name = "MenuAction_%d" % i
 	var badge := make_label("PLAY WITH FRIENDS ON THE SAME WI-FI  •  OR PRACTICE OFFLINE", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
 	badge.name = "MenuStatusBadge"
@@ -503,7 +502,7 @@ func _menu_action(index: int) -> void:
 			room_is_host = false
 			build_map_select()
 		1: show_join_room()
-		2: page_controls.call("confirm", "EXIT GAME?", "Close Kampung Legenda?", Callable(get_tree(), "quit"))
+		2: page_controls.call("confirm", "EXIT GAME?", "Close Nenek Kebayan?", Callable(get_tree(), "quit"))
 
 
 func show_join_room() -> void:
@@ -570,7 +569,7 @@ func _return_after_connection_loss(message: String) -> void:
 
 
 func _copy_created_room_code() -> void:
-	DisplayServer.clipboard_set("Kampung Legenda\nRoom code: " + room_code + "\nHost Wi-Fi address: " + _lan_address_text() + "\nPort: %d\nJoin on the same Wi-Fi." % network_manager.server_port)
+	DisplayServer.clipboard_set(GameData.GAME_TITLE + "\nRoom code: " + room_code + "\nHost Wi-Fi address: " + _lan_address_text() + "\nPort: %d\nJoin on the same Wi-Fi." % network_manager.server_port)
 	var copy := find_child("CopyCreatedRoomCodeButton", true, false) as Button
 	if copy: copy.text = "INVITE COPIED"
 

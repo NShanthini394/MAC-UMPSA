@@ -131,6 +131,7 @@ func snapshot_sleeping(slot: int, peer_id: int) -> bool:
 
 func network_checks() -> void:
 	var server = manager_branch("PowerServer")
+	server.force_host_nenek_for_testing = true
 	check(server.start_server(17763) == OK, "Local ENet server starts")
 	for i in 5:
 		var client = manager_branch("PowerClient%d" % i)

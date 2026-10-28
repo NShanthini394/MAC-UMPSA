@@ -3,7 +3,11 @@ extends RefCounted
 
 static func make_child_label(parent: Control, text: String, font_size: int, color: Color, align: HorizontalAlignment, rect: Rect2) -> Label:
 	var label := Label.new()
-	label.text = text; label.position = rect.position; label.size = rect.size
+	# Enable wrapping before assigning long text so its unwrapped minimum width
+	# cannot expand the control beyond the requested panel bounds.
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.position = rect.position; label.size = rect.size
+	label.text = text
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
@@ -12,6 +16,7 @@ static func make_child_label(parent: Control, text: String, font_size: int, colo
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
+	label.position = rect.position; label.size = rect.size
 	return label
 
 

@@ -1,0 +1,92 @@
+extends RefCounted
+## LAN hosting and joining screens; no provider account is needed for a guest.
+const UI = preload("res://scripts/game_ui.gd")
+const Data = preload("res://scripts/game_data.gd")
+
+
+static func field(parent: Control, node_name: String, value: String, placeholder: String, rect: Rect2) -> LineEdit:
+	var entry := LineEdit.new()
+	entry.name = node_name; entry.text = value; entry.placeholder_text = placeholder
+	entry.add_theme_font_size_override("font_size", 16)
+	entry.position = rect.position; entry.size = rect.size
+	parent.add_child(entry)
+	return entry
+
+
+static func show_join(app: Control) -> void:
+	var shade := ColorRect.new()
+	shade.name = "JoinRoomCodeOverlay"
+	shade.color = Color(0, 0, 0, 0.65)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(shade)
+	var panel := UI.make_panel(shade, Rect2(360, 80, 560, 560), Color("24180f"))
+	UI.make_child_label(panel, "JOIN A WI-FI ROOM", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 18, 510, 42))
+	UI.make_child_label(panel, "Use the same Wi-Fi as the host.\nAsk the host for their Wi-Fi address and room code.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 64, 490, 48))
+	UI.make_child_label(panel, "Player name", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 122, 460, 22))
+	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(50, 148, 460, 36)).max_length = 20
+	UI.make_child_label(panel, "Host Wi-Fi address", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 198, 460, 22))
+	field(panel, "ServerAddressEntry", app.server_address, "Example: 192.168.1.23", Rect2(50, 224, 460, 36))
+	UI.make_child_label(panel, "Room code", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 274, 460, 22))
+	var code := field(panel, "JoinCodeEntry", "", "5-CHARACTER CODE", Rect2(50, 300, 460, 42))
+	code.max_length = 5; code.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	code.text_submitted.connect(func(_value: String): app.call("_join_room_with_code"))
+	var status := UI.make_child_label(panel, "Use 127.0.0.1 only when joining on this same computer.\nPort: %d" % app.network_manager.server_port, 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 354, 490, 84))
+	status.name = "JoinRoomStatusLabel"
+	var join := UI.make_button(panel, "JOIN ROOM", Callable(app, "_join_room_with_code"), 205, 46, true)
+	join.name = "JoinOnlineRoomButton"; join.position = Vector2(55, 468)
+	var close := UI.make_button(panel, "CANCEL", Callable(app, "_cancel_join_room"), 205, 46)
+	close.position = Vector2(300, 468)
+
+
+static func build_host(app: Control) -> void:
+	app.add_background(load(Data.MENU_ART))
+	app.add_color_overlay(Color(0.04, 0.05, 0.055, 0.78))
+	var panel := UI.make_panel(app, Rect2(280, 90, 720, 540), Color("24180f"))
+	panel.name = "MultiplayerHostPanel"
+	UI.make_child_label(panel, "PLAY WITH FRIENDS", 28, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(45, 18, 630, 42))
+	var close := UI.make_button(panel, "×", Callable(app, "navigate_back"), 42, 42)
+	close.name = "HostSetupCloseButton"; close.position = Vector2(662, 14)
+	var preview := TextureRect.new()
+	preview.texture = UI.make_map_texture(load(Data.MAP_ART), Data.MAPS[app.selected_map]["region"])
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	preview.position = Vector2(35, 92); preview.size = Vector2(300, 210)
+	panel.add_child(preview)
+	UI.make_child_label(panel, Data.MAPS[app.selected_map]["name"], 18, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 309, 300, 62))
+	UI.make_child_label(panel, "Player name", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 100, 310, 26))
+	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(370, 136, 310, 38)).max_length = 20
+	UI.make_child_label(panel, "This computer will host the room.\nFriends join using your Wi-Fi address\nand the room code.\n\n5–10 players · one secret Nenek Kebayan\nKeep the host's game open.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 194, 310, 186))
+	var status := UI.make_child_label(panel, "No Google or Huawei account is required for this test.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 382, 650, 56))
+	status.name = "CreateRoomStatusLabel"
+	var host := UI.make_button(panel, "HOST WI-FI ROOM", Callable(app, "_host_lan_room"), 300, 48, true)
+	host.name = "CreateOnlineRoomButton"; host.position = Vector2(40, 458)
+	var practice := UI.make_button(panel, "PRACTICE OFFLINE", Callable(app, "_start_local_practice_lobby"), 300, 48)
+	practice.name = "PracticeOfflineButton"; practice.position = Vector2(380, 458)
+
+
+static func show_created(app: Control, addresses: String) -> void:
+	var shade := ColorRect.new()
+	shade.name = "CreateRoomOverlay"
+	shade.color = Color(0, 0, 0, 0.65)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(shade)
+	var panel := UI.make_panel(shade, Rect2(350, 135, 580, 450), Color("24180f"))
+	UI.make_child_label(panel, "WI-FI ROOM CREATED", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 530, 42))
+	UI.make_child_label(panel, "Share these details with friends on the same Wi-Fi.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 70, 510, 36))
+	UI.make_child_label(panel, app.room_code, 38, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 114, 510, 54))
+	var address_label := UI.make_child_label(panel, "Host Wi-Fi address: " + addresses + "\nPort: %d" % app.network_manager.server_port, 17, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 184, 510, 76))
+	address_label.name = "CreatedRoomAddress"
+	UI.make_child_label(panel, "Allow the game on Private networks if Windows asks.\nKeep the host's game open. Matches require 5–10 players.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 277, 510, 58))
+	var copy := UI.make_button(panel, "COPY INVITE", Callable(app, "_copy_created_room_code"), 205, 48)
+	copy.name = "CopyCreatedRoomCodeButton"; copy.position = Vector2(55, 362)
+	var enter := UI.make_button(panel, "ENTER WAITING ROOM", Callable(app, "_enter_waiting_room"), 245, 48, true)
+	enter.name = "EnterWaitingRoomButton"; enter.position = Vector2(280, 362)
+
+
+static func show_disconnected(app: Control, message: String) -> void:
+	var panel := UI.make_panel(app, Rect2(360, 205, 560, 310), Color("24180f"))
+	panel.name = "ConnectionLostOverlay"
+	UI.make_child_label(panel, "CONNECTION LOST", 25, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 510, 42))
+	UI.make_child_label(panel, message, 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(40, 88, 480, 100))
+	var close := UI.make_button(panel, "OK", func(): panel.queue_free(), 160, 44, true)
+	close.position = Vector2(200, 225)

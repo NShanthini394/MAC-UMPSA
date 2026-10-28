@@ -104,7 +104,7 @@ func refresh(force: bool = false) -> void:
 	var screen: String = app.current_screen
 	var menu := screen == "menu"
 	var playing := screen in ["game", "meeting"]
-	var quiet := screen in ["login", "map_select", "waiting_room", "role_reveal"]
+	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal"]
 	if force or screen != _last_screen:
 		_last_screen = screen
 		_back.visible = not menu and not playing and not quiet

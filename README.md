@@ -1,42 +1,38 @@
 # Kampung Legenda: Misteri Tiga Rumah
 
-Godot 4.7 landscape project. The game is currently **offline-first**: Play opens map selection and selecting a map enters the local practice lobby. Join Room explains that online multiplayer is coming later. The ENet room code remains in the project but is not exposed in the player flow until it is ready.
+Godot 4.7 landscape game with guest LAN multiplayer and offline practice.
 
-## Run the client
+## Windows / same Wi-Fi
 
-Open the folder in Godot 4.7 or later and run `res://scenes/main.tscn` (F6/F5). Choose **Play**, select a map and character, then enter the local practice match. Online room creation and joining are intentionally unavailable from the game menus for now.
+Run `tools/build_windows_lan.ps1` to create `builds/KampungLegenda-Windows-LAN.zip`. Extract that bundle on every PC and launch `Play.cmd`. See [the full LAN guide](docs/WINDOWS_LAN_TEST.md).
 
-Controls: WASD/arrow keys or the on-screen joystick; E or INTERACT near tasks and the gong; INSPECT CLUE and CLUE JOURNAL for evidence.
+Host: Guest -> Play -> map -> Host Wi-Fi Room. Friends: Guest -> Join Room -> host IPv4 address and room code. The game runs an embedded ENet server; no separate server process or provider login is required. Keep the hosting app open. Windows may ask to allow the executable on Private networks (UDP 7000). The project does not change firewall rules.
 
-## Run a local room server
+Matches require 5-10 actual player windows. Extra windows on the host PC can use 127.0.0.1. Other computers use the host's Wi-Fi/Ethernet address. Public internet hosting is not configured; LAN room codes alone cannot connect different networks.
 
-With Godot on PATH, start the dedicated headless server from this project folder:
+## Development
+
+Run scenes/main.tscn. Play leads to map selection, then host or offline practice. Online roles are randomized with exactly one Nenek Kebayan. The offline Nenek testing override remains enabled. Google/Huawei login and persistent accounts are not connected.
+
+Movement/collisions, characters, readiness, permanent sleep, fog/locks, task progress, clues, meetings, votes and outcomes are server controlled. WASD/arrows or joystick move; E interacts. Sleeping villagers only watch nearby events.
+
+Optional dedicated server (Godot on PATH):
 
 ```powershell
-godot --headless --path . -- --server --port 7000
+godot --headless --path . res://scenes/server.tscn -- --server --port 7000
 ```
 
-Keep the server running. Start clients on the same computer with server address `127.0.0.1`. For a different device, use the host's LAN address. Internet play needs a publicly reachable server and UDP port 7000 allowed through its firewall/router. No public server is bundled or hosted by this repository.
+## Validation
 
-Rooms use server-generated five-character codes, have a ten-player cap, reserve characters on the server, synchronize readiness and movement, privately assign one Nenek Kebayan role, and handle shared task progress, clue collection, meetings, votes, eliminations, and outcomes on the server. A room needs five players to start; at ten players it starts automatically when everyone is Ready.
+```powershell
+godot --headless --path . --script res://tests/nenek_powers_validation.gd
+godot --headless --path . --script res://tests/lan_multiplayer_validation.gd
+```
 
-## Assets and content
+The first covers game/power rules and five localhost clients. The second exercises complete app screens with the embedded host, retries, readiness, private roles, movement, fog, cancellation and host-loss recovery. tests/lan_process_smoke.gd also validates five separate game processes. Localhost checks do not prove that another physical computer can connect through Wi-Fi/firewall settings; use the bundle to perform that test.
 
-The supplied menu, map atlas, portraits, and character assets remain under `assets/`. The three maps, eleven visual characters, and eight task entries per map are currently defined in `scripts/game_data.gd`. Task content still comes from the existing project data: the referenced task PDF has not yet been supplied, so it has not been used to validate or replace those entries.
+## Remaining release work
 
-## Known limits / verification status
+Physical multi-computer testing, public internet hosting, provider authentication and persistent profiles, Android/iOS builds/device testing, production audio, final task content, security/load review, and signed public packaging remain separate release tasks.
 
-- A Godot executable/editor is not installed or discoverable in this workspace, so GDScript parsing, scene launch, and actual multi-client play have not been verified here.
-- The ENet server and separate client flow are implemented for local/LAN testing, but no public endpoint is configured or tested.
-- Gameplay uses the existing cropped composite map art and screen-space positions. There are no collision-backed connected paths, door transitions, or animated player sprites yet; online players use the supplied portrait assets as markers.
-- Task challenges use the current choice prompts and shared counters. Unique minigame mechanics and the PDF's exact eight tasks per map remain pending the original task PDF.
-- The waiting room has a synchronized 10-slot player list; avatar movement inside that lobby is not implemented.
-- Android/iOS export presets, mobile device testing, and production audio are not included.
-
-## Project layout
-
-- `scenes/main.tscn` — unchanged game entry scene.
-- `scenes/server.tscn` — additive headless room-server scene.
-- `scripts/main.gd` — existing screen flow with network UI integration.
-- `scripts/network_manager.gd` — ENet room authority and RPC handlers.
-- `scripts/game_data.gd`, `scripts/game_ui.gd`, `scripts/game_screen.gd` — shared content and modular UI/gameplay helpers.
+[Godot networking documentation](https://docs.godotengine.org/en/4.7/tutorials/networking/high_level_multiplayer.html)

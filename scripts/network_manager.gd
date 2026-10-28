@@ -20,7 +20,7 @@ signal ability_feedback(message: String)
 const PORT := 7000
 const MAX_PLAYERS_PER_ROOM := 10
 const MAX_SERVER_CLIENTS := 100
-const DEBUG_FORCE_NENEK_FOR_TESTING := true
+var force_host_nenek_for_testing := false
 const GameData = preload("res://scripts/game_data.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
@@ -43,6 +43,8 @@ var local_role_character := ""
 var _pending_action: Dictionary = {}
 var _server_random := RandomNumberGenerator.new()
 var _position_broadcast_timer := 0.0
+var connection_pending := false
+var _connection_deadline := 0
 
 
 func _ready() -> void:
@@ -63,6 +65,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if connection_pending and Time.get_ticks_msec() >= _connection_deadline:
+		_on_connection_failed()
 	if not multiplayer.is_server(): return
 	_position_broadcast_timer += delta
 	var now := Time.get_ticks_msec() / 1000.0
@@ -107,6 +111,10 @@ func _process(delta: float) -> void:
 func start_server(port: int = PORT) -> Error:
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
 		return ERR_ALREADY_IN_USE
+	# All gameplay travels through this server. Clients do not need direct peer
+	# relays, including relay notifications racing simultaneous disconnects.
+	var scene_api := multiplayer as SceneMultiplayer
+	if scene_api: scene_api.server_relay = false
 	var peer := ENetMultiplayerPeer.new()
 	var result := peer.create_server(port, MAX_SERVER_CLIENTS)
 	if result != OK:
@@ -118,19 +126,20 @@ func start_server(port: int = PORT) -> Error:
 
 
 func connect_to_server(address: String, port: int = PORT) -> Error:
-	server_address = address.strip_edges()
-	server_port = port
-	if server_address.is_empty():
+	var destination := address.strip_edges()
+	if destination.is_empty() or port < 1 or port > 65535:
 		return ERR_INVALID_PARAMETER
-	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
-		if multiplayer.get_multiplayer_peer() is ENetMultiplayerPeer:
-			return OK
-		multiplayer.multiplayer_peer.close()
+	if is_connected_to_room_server() and destination == server_address and port == server_port: return OK
+	_disconnect_peer()
+	server_address = destination
+	server_port = port
 	var peer := ENetMultiplayerPeer.new()
 	var result := peer.create_client(server_address, server_port)
 	if result != OK:
 		return result
 	multiplayer.multiplayer_peer = peer
+	connection_pending = true
+	_connection_deadline = Time.get_ticks_msec() + 8000
 	connection_changed.emit(false, "Connecting to room server…")
 	return OK
 
@@ -146,19 +155,23 @@ func create_room(map_index: int, player_name: String, address: String = "") -> E
 func join_room(code: String, player_name: String, address: String = "") -> Error:
 	local_player_name = _clean_player_name(player_name)
 	_pending_action = {"kind": "join", "code": code.strip_edges().to_upper()}
-	if str(_pending_action["code"]).is_empty():
+	var normalized := str(_pending_action["code"])
+	if normalized.length() != 5:
 		_pending_action.clear()
 		return ERR_INVALID_PARAMETER
+	for character in normalized:
+		if character not in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789":
+			_pending_action.clear()
+			return ERR_INVALID_PARAMETER
 	return _connect_for_pending_action(address)
 
 
 func _connect_for_pending_action(address: String) -> Error:
-	if not address.strip_edges().is_empty():
-		server_address = address.strip_edges()
-	if is_connected_to_room_server():
+	var destination := address.strip_edges() if not address.strip_edges().is_empty() else server_address
+	if is_connected_to_room_server() and destination == server_address:
 		_send_pending_action()
 		return OK
-	return connect_to_server(server_address, server_port)
+	return connect_to_server(destination, server_port)
 
 
 func _send_pending_action() -> void:
@@ -236,17 +249,22 @@ func leave_room() -> void:
 		request_leave_room.rpc_id(1)
 	active_room_code = ""
 	local_character = ""
+	local_player_role = ""
+	local_secret_character = ""
+	local_role_character = ""
 	_pending_action.clear()
 	_disconnect_peer()
 
 
 func _disconnect_peer() -> void:
+	connection_pending = false
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 
 
 func _on_connected_to_server() -> void:
+	connection_pending = false
 	connection_changed.emit(true, "Connected to room server.")
 	_send_pending_action()
 
@@ -263,8 +281,7 @@ func is_connected_to_room_server() -> bool:
 func _on_connection_failed() -> void:
 	_pending_action.clear()
 	_disconnect_peer()
-	connection_changed.emit(false, "Connection failed. Check the server address and try again.")
-	room_error.emit("Connection Failed")
+	connection_changed.emit(false, "Cannot reach the host. Check its Wi-Fi address, keep its game open, and allow the game through the Windows firewall on Private networks.")
 
 
 func _on_server_disconnected() -> void:
@@ -276,7 +293,6 @@ func _on_server_disconnected() -> void:
 	_pending_action.clear()
 	_disconnect_peer()
 	connection_changed.emit(false, "The room server disconnected.")
-	room_error.emit("Connection Failed")
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -342,7 +358,16 @@ func _send_room_state(code: String) -> void:
 	var room: Dictionary = rooms[code]
 	var members := _room_members(room)
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_room_state.rpc_id(int(peer_id), code, int(room["map_index"]), int(room["host_id"]), members)
+
+
+func _can_send_to(peer_id: int) -> bool:
+	if peer_id not in multiplayer.get_peers(): return false
+	var transport := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if transport == null: return false
+	var peer := transport.get_peer(peer_id)
+	return peer != null and peer.is_active() and peer.get_state() == ENetPacketPeer.STATE_CONNECTED
 
 
 func _broadcast_positions(code: String, reliable: bool = false) -> void:
@@ -354,6 +379,7 @@ func _broadcast_positions(code: String, reliable: bool = false) -> void:
 	for member in room["players"].values():
 		positions.append({"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))})
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		var receiver_state := positions.duplicate(true)
 		var power_state := NenekPowers.snapshot(room, room["players"][peer_id], now)
 		if str(room["players"][peer_id].get("role", "")) != "nenek_kebayan":
@@ -366,6 +392,7 @@ func _broadcast_positions(code: String, reliable: bool = false) -> void:
 func _broadcast_task_state(code: String) -> void:
 	var room: Dictionary = rooms.get(code, {})
 	for peer_id in room.get("players", {}).keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_task_state.rpc_id(int(peer_id), room["completed_tasks"], room["task_progress"])
 
 
@@ -384,6 +411,7 @@ func _broadcast_meeting_state(code: String) -> void:
 	var votes_cast: int = room.get("votes", {}).size()
 	var alive_count := _alive_player_ids(room).size()
 	for peer_id in room.get("players", {}).keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_meeting_state.rpc_id(int(peer_id), str(room.get("meeting_state", "")), seconds_left, members, votes_cast, alive_count)
 
 
@@ -395,6 +423,7 @@ func _finish_game(code: String, winner: String, message: String) -> void:
 		return
 	room["finished"] = true
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_game_finished.rpc_id(int(peer_id), winner, message)
 
 
@@ -448,6 +477,7 @@ func _resolve_vote(code: String) -> void:
 	room["votes"] = {}
 	_broadcast_positions(code, true)
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_meeting_result.rpc_id(int(peer_id), eliminated_id, result_message, winner)
 	if not winner.is_empty():
 		_finish_game(code, winner, result_message)
@@ -476,7 +506,7 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["started"] = true
 	var members: Array = room["players"].values()
 	var role_player_index := _server_random.randi_range(0, members.size() - 1)
-	if DEBUG_FORCE_NENEK_FOR_TESTING:
+	if force_host_nenek_for_testing:
 		for i in members.size():
 			if int(members[i].get("id", -1)) == int(room["host_id"]):
 				role_player_index = i
@@ -521,8 +551,9 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 			villager_character_index += 1
 		room["players"][int(member["id"])]["role"] = role
 		room["players"][int(member["id"])]["role_character"] = role_character
-		_rpc_private_role.rpc_id(int(member["id"]), role, secret_character if role == "nenek_kebayan" else "", role_character)
+		if _can_send_to(player_id): _rpc_private_role.rpc_id(player_id, role, secret_character if role == "nenek_kebayan" else "", role_character)
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_match_started.rpc_id(int(peer_id), int(room["map_index"]), room["clue_positions"])
 	_send_room_state(code)
 	_broadcast_task_state(code)
@@ -768,6 +799,7 @@ func request_inspect_clue(clue_index: int) -> void:
 	room["found_clues"].append(clue_index)
 	var clue_name: String = room["clue_names"][clue_index]
 	for peer_id in room["players"].keys():
+		if not _can_send_to(int(peer_id)): continue
 		_rpc_clue_found.rpc_id(int(peer_id), clue_index, clue_name, sender)
 
 

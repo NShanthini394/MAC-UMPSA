@@ -1,8 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/network_manager.gd" id="1_network"]
+[ext_resource type="Script" path="res://scripts/server_runner.gd" id="1_network"]
 
 [node name="KampungLegenda" type="Node"]
-
-[node name="NetworkManager" type="Node" parent="."]
 script = ExtResource("1_network")

@@ -9,6 +9,8 @@ const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
 const PageControls = preload("res://scripts/page_controls.gd")
 const LoginScreen = preload("res://scripts/login_screen.gd")
+const MultiplayerSetup = preload("res://scripts/multiplayer_setup.gd")
+const LanHost = preload("res://scripts/lan_host.gd")
 const MENU_ART := GameData.MENU_ART
 const WAITING_ROOM_ART := GameData.WAITING_ROOM_ART
 const MAP_ART := GameData.MAP_ART
@@ -76,6 +78,8 @@ var game_hud: CanvasLayer
 var player_body: CharacterBody2D
 var current_area_name := ""
 var network_manager = null
+var lan_host: Node
+var _lobby_refresh_queued := false
 var server_address := "127.0.0.1"
 var clue_points: Array = []
 var network_found_clues: Array[int] = []
@@ -91,6 +95,8 @@ var network_vote_submitted := false
 
 func _ready() -> void:
 	rng.randomize()
+	# Client and optional LAN server run separate APIs with identical relative RPC paths.
+	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), get_path())
 	var audio_bus := AudioServer.get_bus_index("Master")
 	if audio_bus >= 0:
 		audio_muted = AudioServer.is_bus_mute(audio_bus)
@@ -100,6 +106,12 @@ func _ready() -> void:
 	network_manager.name = "NetworkManager"
 	network_manager.server_port = int(ProjectSettings.get_setting("network/server_port", 7000))
 	add_child(network_manager)
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		return
+	lan_host = LanHost.new()
+	lan_host.name = "LanServer"
+	add_child(lan_host)
 	network_manager.connection_changed.connect(_on_network_connection_changed)
 	network_manager.room_opened.connect(_on_network_room_opened)
 	network_manager.room_changed.connect(_on_network_room_changed)
@@ -226,7 +238,10 @@ func navigate_back() -> void:
 	if not room_code.is_empty() and find_child("CreateRoomOverlay", true, false) != null:
 		show_leave_room_confirmation()
 		return
-	for overlay_name in ["CreateAccountOverlay", "CharacterConfirmOverlay", "TaskOverlay", "MapOverlay", "JournalOverlay", "ClueOverlay", "VoteOverlay", "JoinRoomCodeOverlay", "JoinRoomChoiceOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay", "CreateRoomOverlay"]:
+	if find_child("JoinRoomCodeOverlay", true, false) != null:
+		_cancel_join_room()
+		return
+	for overlay_name in ["CreateAccountOverlay", "ConnectionLostOverlay", "CharacterConfirmOverlay", "TaskOverlay", "MapOverlay", "JournalOverlay", "ClueOverlay", "VoteOverlay", "JoinRoomChoiceOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay", "CreateRoomOverlay"]:
 		var overlay := find_child(overlay_name, true, false)
 		if overlay:
 			overlay.get_parent().remove_child(overlay)
@@ -239,6 +254,9 @@ func navigate_back() -> void:
 		"map_select":
 			if room_code.is_empty(): build_menu()
 			else: show_leave_room_confirmation()
+		"create_room":
+			network_manager.leave_room()
+			build_map_select()
 		"character_select": build_waiting_room()
 		"waiting_room": show_leave_room_confirmation()
 		"game", "meeting", "role_reveal": show_exit_confirmation()
@@ -412,7 +430,7 @@ func clear_screen(screen_name: String) -> void:
 	player_body = null
 	current_area_name = ""
 	for child in get_children():
-		if child != network_manager and child != page_controls: child.queue_free()
+		if child != network_manager and child != page_controls and child != lan_host: child.queue_free()
 	await get_tree().process_frame
 
 
@@ -450,7 +468,7 @@ func build_menu() -> void:
 		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 300, 54, i == 0)
 		btn.position = Vector2(25, 70 + i * 78)
 		btn.name = "MenuAction_%d" % i
-	var badge := make_label("OFFLINE PRACTICE  •  ONLINE MULTIPLAYER COMING LATER", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
+	var badge := make_label("PLAY WITH FRIENDS ON THE SAME WI-FI  •  OR PRACTICE OFFLINE", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
 	badge.name = "MenuStatusBadge"
 	badge.position = Vector2(300, 680); badge.size = Vector2(680, 24)
 	var menu_notice := make_label("", 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
@@ -466,7 +484,7 @@ func _toggle_audio() -> void:
 
 func _close_menu_popups() -> void:
 	if is_instance_valid(page_controls): page_controls.call("close_dialog")
-	for popup_name in ["JoinRoomChoiceOverlay", "JoinRoomCodeOverlay", "CreateRoomOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay"]:
+	for popup_name in ["ConnectionLostOverlay", "JoinRoomChoiceOverlay", "JoinRoomCodeOverlay", "CreateRoomOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay"]:
 		var popup := find_child(popup_name, true, false)
 		if popup:
 			popup.get_parent().remove_child(popup)
@@ -490,24 +508,71 @@ func _menu_action(index: int) -> void:
 
 func show_join_room() -> void:
 	_close_menu_popups()
-	var overlay := make_panel(Rect2(390, 200, 500, 320), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "OnlineUnavailableOverlay"
-	_make_child_label(overlay, "ONLINE MULTIPLAYER", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 24, 452, 42))
-	var message := _make_child_label(overlay, "Online rooms are temporarily unavailable.\n\nUse Play for offline practice.\nMultiplayer is being prepared.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(54, 82, 392, 132))
-	message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	message.clip_text = true
-	var close := make_button(overlay, "OK", func(): overlay.queue_free(), 150, 44, true)
-	close.position = Vector2(175, 244)
+	MultiplayerSetup.show_join(self)
 
 
 func _create_room_code() -> void:
 	_create_online_room()
 
 
+func _host_lan_room() -> void:
+	if network_manager.connection_pending: return
+	var status := find_child("CreateRoomStatusLabel", true, false) as Label
+	var result: Error = lan_host.call("start", network_manager.server_port)
+	if result != OK:
+		if status: status.text = "Cannot host on port %d. Another copy may already be hosting; use Join Room instead." % network_manager.server_port
+		return
+	server_address = "127.0.0.1"
+	_set_connection_busy(true)
+	_create_online_room()
+
+
+func _set_connection_busy(busy: bool) -> void:
+	for button_name in ["CreateOnlineRoomButton", "JoinOnlineRoomButton", "PracticeOfflineButton"]:
+		var button := find_child(button_name, true, false) as Button
+		if button: button.disabled = busy
+
+
+func _cancel_join_room() -> void:
+	if room_code.is_empty(): network_manager.leave_room()
+	_close_menu_popups()
+
+
+func _lan_address_text() -> String:
+	var addresses := LanHost.addresses()
+	return ", ".join(addresses) if not addresses.is_empty() else "No Wi-Fi address found; check your network connection."
+
+
+func _queue_network_lobby_refresh() -> void:
+	if _lobby_refresh_queued: return
+	_lobby_refresh_queued = true
+	_refresh_network_lobby.call_deferred()
+
+
+func _refresh_network_lobby() -> void:
+	if not room_code.is_empty():
+		if current_screen == "character_select": await build_character_select()
+		elif current_screen not in ["role_reveal", "game", "meeting", "result"]: await build_waiting_room()
+	_lobby_refresh_queued = false
+
+
+func _return_after_connection_loss(message: String) -> void:
+	_reset_power_state()
+	room_code = ""
+	room_is_host = false
+	lobby_players.clear()
+	character_reservations.clear()
+	player_is_impostor = false
+	network_meeting_state = ""
+	page_controls.call("close_dialog")
+	await build_menu()
+	MultiplayerSetup.show_disconnected(self, message)
+
+
 func _copy_created_room_code() -> void:
-	DisplayServer.clipboard_set(room_code)
+	DisplayServer.clipboard_set("Kampung Legenda\nRoom code: " + room_code + "\nHost Wi-Fi address: " + _lan_address_text() + "\nPort: %d\nJoin on the same Wi-Fi." % network_manager.server_port)
 	var copy := find_child("CopyCreatedRoomCodeButton", true, false) as Button
-	if copy: copy.text = "COPIED  " + room_code
+	if copy: copy.text = "INVITE COPIED"
 
 
 func _continue_to_room_map() -> void:
@@ -516,85 +581,35 @@ func _continue_to_room_map() -> void:
 
 
 func _open_room_code_entry() -> void:
-	_close_menu_popups()
-	var overlay := make_panel(Rect2(390, 130, 500, 460), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "JoinRoomCodeOverlay"
-	_make_child_label(overlay, "JOIN ROOM", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 20, 452, 42))
-	_make_child_label(overlay, "Player Name", 14, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(70, 70, 360, 24))
-	var name_entry := LineEdit.new()
-	name_entry.name = "LobbyPlayerNameEntry"; name_entry.text = lobby_player_name; name_entry.max_length = 20
-	name_entry.position = Vector2(70, 95); name_entry.size = Vector2(360, 34); name_entry.add_theme_font_size_override("font_size", 14)
-	overlay.add_child(name_entry)
-	_make_child_label(overlay, "Server Address", 15, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(70, 137, 360, 26))
-	var server_entry := LineEdit.new()
-	server_entry.name = "ServerAddressEntry"; server_entry.text = server_address; server_entry.placeholder_text = "127.0.0.1 or public IP / hostname"
-	server_entry.position = Vector2(70, 164); server_entry.size = Vector2(360, 36); server_entry.add_theme_font_size_override("font_size", 14)
-	overlay.add_child(server_entry)
-	_make_child_label(overlay, "Enter Room Code", 16, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(70, 208, 360, 28))
-	var code_entry := LineEdit.new()
-	code_entry.name = "JoinCodeEntry"; code_entry.placeholder_text = "5-CHARACTER CODE"
-	code_entry.position = Vector2(70, 238); code_entry.size = Vector2(360, 44)
-	code_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER; code_entry.max_length = 5
-	code_entry.add_theme_font_size_override("font_size", 20)
-	overlay.add_child(code_entry)
-	var status := _make_child_label(overlay, "Enter the code shared by the room host.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 288, 444, 32))
-	status.name = "JoinRoomStatusLabel"
-	var join := make_button(overlay, "JOIN ROOM", Callable(self, "_join_room_with_code"), 150, 42, true)
-	join.position = Vector2(82, 350)
-	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 150, 42)
-	close.position = Vector2(268, 350)
+	show_join_room()
 
 
 func _join_room_with_code() -> void:
+	if network_manager.connection_pending: return
+	var join_button := find_child("JoinOnlineRoomButton", true, false) as Button
+	if join_button and join_button.disabled: return
 	var entry := find_child("JoinCodeEntry", true, false) as LineEdit
 	var status := find_child("JoinRoomStatusLabel", true, false) as Label
 	if not entry or not status: return
+	if entry.text.strip_edges().length() != 5:
+		status.text = "Enter the five-character code shown on the host's screen."
+		return
 	status.text = "Connecting to room server…"
 	var name_entry := find_child("LobbyPlayerNameEntry", true, false) as LineEdit
 	if name_entry and not name_entry.text.strip_edges().is_empty(): lobby_player_name = name_entry.text.strip_edges().substr(0, 20)
 	var address_entry := find_child("ServerAddressEntry", true, false) as LineEdit
 	var address := address_entry.text.strip_edges() if address_entry else server_address
 	if not address.is_empty(): server_address = address
+	_set_connection_busy(true)
 	var result: Error = network_manager.join_room(entry.text, lobby_player_name, address)
 	if result != OK:
-		status.text = "Invalid Room Code" if entry.text.strip_edges().length() != 5 else "Connection Failed"
+		_set_connection_busy(false)
+		status.text = "Check the room code and host Wi-Fi address, then try again."
 
 
 func _open_create_room() -> void:
 	await clear_screen("create_room")
-	add_background(load(MENU_ART))
-	add_color_overlay(Color(0.04, 0.07, 0.08, 0.76))
-	var panel := make_panel(Rect2(310, 90, 660, 540), Color(0.12, 0.08, 0.055, 0.98))
-	_make_child_label(panel, "CREATE ROOM", 30, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 18, 610, 45))
-	_make_child_label(panel, "Selected Map", 16, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(42, 82, 260, 30))
-	var atlas := load(MAP_ART) as Texture2D
-	var preview := TextureRect.new()
-	preview.texture = make_map_texture(atlas, MAPS[selected_map]["region"])
-	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	preview.position = Vector2(42, 120); preview.size = Vector2(235, 150)
-	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(preview)
-	_make_child_label(panel, MAPS[selected_map]["name"], 20, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(305, 126, 310, 52))
-	_make_child_label(panel, "Room code is generated by the server.\nMaximum players: 10", 16, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(305, 195, 310, 60))
-	_make_child_label(panel, "Player Name", 14, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(305, 252, 310, 24))
-	var name_entry := LineEdit.new()
-	name_entry.name = "LobbyPlayerNameEntry"; name_entry.text = lobby_player_name; name_entry.max_length = 20
-	name_entry.position = Vector2(305, 278); name_entry.size = Vector2(310, 32); name_entry.add_theme_font_size_override("font_size", 13)
-	panel.add_child(name_entry)
-	_make_child_label(panel, "Server Address  •  UDP Port 7000", 13, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(305, 310, 310, 24))
-	var server_entry := LineEdit.new()
-	server_entry.name = "ServerAddressEntry"; server_entry.text = server_address; server_entry.placeholder_text = "127.0.0.1 or public IP / hostname"
-	server_entry.position = Vector2(305, 336); server_entry.size = Vector2(310, 34); server_entry.add_theme_font_size_override("font_size", 13)
-	panel.add_child(server_entry)
-	var status := _make_child_label(panel, "Connect to the room server to create an online room.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(38, 374, 584, 34))
-	status.name = "CreateRoomStatusLabel"
-	var create := make_button(panel, "CREATE ROOM", Callable(self, "_create_online_room"), 230, 50, true)
-	create.name = "CreateOnlineRoomButton"; create.position = Vector2(215, 410)
-	var offline := make_button(panel, "PRACTICE OFFLINE", Callable(self, "_start_local_practice_lobby"), 230, 44)
-	offline.position = Vector2(215, 466)
-	var back := make_button(panel, "BACK TO MAPS", Callable(self, "build_map_select"), 170, 38)
-	back.position = Vector2(245, 515)
+	MultiplayerSetup.build_host(self)
 
 
 func _create_online_room() -> void:
@@ -607,10 +622,13 @@ func _create_online_room() -> void:
 	if not address.is_empty(): server_address = address
 	var result: Error = network_manager.create_room(selected_map, lobby_player_name, address)
 	if result != OK and status:
+		_set_connection_busy(false)
 		status.text = "Room creation failed. Check the selected map and server address."
 
 
 func _start_local_practice_lobby() -> void:
+	var name_entry := find_child("LobbyPlayerNameEntry", true, false) as LineEdit
+	if name_entry and not name_entry.text.strip_edges().is_empty(): lobby_player_name = name_entry.text.strip_edges().substr(0, 20)
 	if network_manager != null:
 		network_manager.leave_room()
 	character_reservations.clear()
@@ -633,21 +651,11 @@ func _random_available_character() -> String:
 
 
 func _show_created_room() -> void:
-	var overlay := make_panel(Rect2(390, 195, 500, 330), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "CreateRoomOverlay"
-	_make_child_label(overlay, "ROOM CREATED", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 22, 452, 42))
-	_make_child_label(overlay, "Share this room code with your players.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 82, 444, 36))
-	_make_child_label(overlay, room_code, 36, Color("fff0cf"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(60, 126, 380, 58))
-	_make_child_label(overlay, "MAX PLAYERS: 10", 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(60, 184, 380, 28))
-	var copy := make_button(overlay, "COPY CODE", Callable(self, "_copy_created_room_code"), 175, 44)
-	copy.name = "CopyCreatedRoomCodeButton"; copy.position = Vector2(54, 240)
-	var enter := make_button(overlay, "ENTER WAITING ROOM", Callable(self, "_enter_waiting_room"), 220, 44, true)
-	enter.position = Vector2(250, 240)
+	MultiplayerSetup.show_created(self, _lan_address_text())
 
 
 func _enter_waiting_room() -> void:
-	var overlay := get_node_or_null("CreateRoomOverlay")
-	if overlay: overlay.queue_free()
+	_close_menu_popups()
 	build_waiting_room()
 
 
@@ -677,6 +685,7 @@ func build_map_select() -> void:
 		var description := _make_child_label(card, MAPS[i]["description"], 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(26, 298, 328, 66))
 		description.clip_contents = true
 		var choose := make_button(card, "SELECT", Callable(self, "_choose_map").bind(i), 316, 50, true)
+		choose.name = "MapSelect_%d" % i
 		choose.position = Vector2(32, 422)
 
 
@@ -686,11 +695,15 @@ func _choose_map(index: int) -> void:
 	character_reservations.clear()
 	waiting_elapsed = 0.0
 	auto_start_triggered = false
-	_start_local_practice_lobby()
+	_open_create_room()
 
 
 func _on_network_connection_changed(connected: bool, message: String) -> void:
 	if connected:
+		return
+	_set_connection_busy(false)
+	if not room_code.is_empty() and not network_manager.is_connected_to_room_server():
+		_return_after_connection_loss(message)
 		return
 	var create_status := find_child("CreateRoomStatusLabel", true, false) as Label
 	var join_status := find_child("JoinRoomStatusLabel", true, false) as Label
@@ -703,8 +716,12 @@ func _on_network_room_opened(code: String, map_index: int, members: Array, is_ho
 	room_code = code
 	room_is_host = is_host
 	lobby_players = members.duplicate(true)
+	_set_connection_busy(false)
 	if is_host:
 		_show_created_room()
+	else:
+		_close_menu_popups()
+		_queue_network_lobby_refresh()
 	# The server follows this with a room_state RPC containing the authoritative
 	# player list; the join flow builds from that update to avoid a duplicate screen.
 
@@ -723,11 +740,11 @@ func _on_network_room_changed(code: String, map_index: int, host_id: int, member
 	var local_index := _local_player_index()
 	if local_index >= 0:
 		selected_character = str(lobby_players[local_index].get("character", ""))
-	if current_screen == "waiting_room": build_waiting_room()
-	elif current_screen == "character_select": build_character_select()
+	if current_screen in ["waiting_room", "character_select"]: _queue_network_lobby_refresh()
 
 
 func _on_network_room_error(message: String) -> void:
+	_set_connection_busy(false)
 	var create_status := find_child("CreateRoomStatusLabel", true, false) as Label
 	var join_status := find_child("JoinRoomStatusLabel", true, false) as Label
 	if create_status: create_status.text = message
@@ -1072,6 +1089,7 @@ func _show_role_reveal() -> void:
 	var countdown := _make_child_label(card, "", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 376, 472, 50))
 	countdown.name = "RoleRevealCountdown"
 	for turn in 7:
+		if not is_instance_valid(card) or current_screen != "role_reveal": return
 		var shuffle_tween := create_tween()
 		shuffle_tween.set_parallel(true)
 		for i in shuffle_cards.size():
@@ -1088,6 +1106,7 @@ func _show_role_reveal() -> void:
 	var reveal_tween := create_tween()
 	reveal_tween.tween_property(shuffle_row, "scale", Vector2(0.05, 1.0), 0.16)
 	await reveal_tween.finished
+	if not is_instance_valid(card) or current_screen != "role_reveal": return
 	shuffle_row.visible = false
 	revealed.visible = true
 	revealed.scale = Vector2(0.05, 1.0)
@@ -1168,6 +1187,7 @@ func build_waiting_room() -> void:
 				name_entry.add_theme_stylebox_override("normal", field_style)
 				name_entry.add_theme_stylebox_override("focus", field_style)
 				name_entry.text_changed.connect(_on_lobby_name_changed)
+				name_entry.editable = not network_room
 				slot.add_child(name_entry)
 				var host_status := _make_child_label(slot, ("HOST  •  " if is_host else "YOU  •  ") + ("READY" if is_ready else "WAITING"), 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 				host_status.name = "LocalReadyStatusLabel"
@@ -1196,7 +1216,7 @@ func build_waiting_room() -> void:
 	start_button.name = "LobbyStartButton"; start_button.position = Vector2(1015, 610)
 	start_button.visible = not network_room or room_is_host
 	start_button.disabled = not _all_lobby_players_ready() or lobby_players.size() >= 10 or (network_room and lobby_players.size() < 5)
-	var lobby_note := _make_child_label(self, "Online room" if network_room else "Offline practice lobby", 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(760, 578, 465, 24))
+	var lobby_note := _make_child_label(self, ("Wi-Fi room · host " + (_lan_address_text() if is_instance_valid(lan_host.service) else server_address)) if network_room else "Offline practice lobby", 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(650, 578, 575, 24))
 	lobby_note.clip_text = true
 
 

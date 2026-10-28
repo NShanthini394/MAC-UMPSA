@@ -14,14 +14,16 @@ signal clue_found(index: int, clue_name: String, found_by: int)
 signal meeting_changed(state: String, seconds_left: int, members: Array, votes_cast: int, alive_count: int)
 signal chat_received(peer_id: int, player_name: String, message: String)
 signal meeting_result(target_id: int, message: String, winner: String)
-signal player_eliminated(peer_id: int, message: String, winner: String)
 signal match_finished(winner: String, message: String)
+signal ability_feedback(message: String)
 
 const PORT := 7000
 const MAX_PLAYERS_PER_ROOM := 10
 const MAX_SERVER_CLIENTS := 100
+const DEBUG_FORCE_NENEK_FOR_TESTING := true
 const GameData = preload("res://scripts/game_data.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
+const NenekPowers = preload("res://scripts/nenek_powers.gd")
 const CLUE_CANDIDATE_POINTS := [
 	Vector2(370, 235), Vector2(530, 235), Vector2(880, 245), Vector2(1050, 370),
 	Vector2(880, 530), Vector2(625, 555), Vector2(350, 520), Vector2(340, 390),
@@ -61,13 +63,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server():
-		return
+	if not multiplayer.is_server(): return
 	_position_broadcast_timer += delta
+	var now := Time.get_ticks_msec() / 1000.0
 	for code in rooms.keys():
 		var room: Dictionary = rooms[code]
-		if not bool(room.get("started", false)) or bool(room.get("finished", false)):
-			continue
+		if not bool(room.get("started", false)) or bool(room.get("finished", false)): continue
+		if NenekPowers.expire_sabotage(room, now): _broadcast_positions(str(code), true)
 		if str(room.get("meeting_state", "")) != "":
 			room["meeting_timer"] = maxf(0.0, float(room.get("meeting_timer", 0.0)) - delta)
 			if room["meeting_timer"] <= 0.0:
@@ -76,37 +78,31 @@ func _process(delta: float) -> void:
 					room["meeting_timer"] = 30.0
 					room["votes"] = {}
 					_broadcast_meeting_state(str(code))
-				else:
-					_resolve_vote(str(code))
+				else: _resolve_vote(str(code))
 			continue
-		for peer_id in room["players"].keys():
-			var player: Dictionary = room["players"][peer_id]
-			if not bool(player.get("alive", true)):
-				continue
+		var entrances := NenekPowers.locked_doors(room, now)
+		var map_index := int(room.get("map_index", 0))
+		var bounds := MapGeometry.world_size(map_index)
+		for player in room["players"].values():
+			if not NenekPowers.is_active(player): continue
 			var direction: Vector2 = player.get("direction", Vector2.ZERO)
-			if direction == Vector2.ZERO:
-				continue
-			var map_index := int(room.get("map_index", 0))
-			var world_size: Vector2 = MapGeometry.world_size(map_index)
-			var position: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
-			var candidate := position + direction * delta * 250.0
-			candidate.x = clampf(candidate.x, 12.0, world_size.x - 12.0)
-			candidate.y = clampf(candidate.y, 12.0, world_size.y - 12.0)
-			if not MapGeometry.is_position_blocked(map_index, candidate, 14.0):
-				position = candidate
+			if direction == Vector2.ZERO: continue
+			var origin: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
+			var candidate := origin + direction * minf(delta, 0.1) * 250.0
+			candidate = candidate.clamp(Vector2(14, 14), bounds - Vector2(14, 14))
+			if not MapGeometry.is_step_blocked(map_index, origin, candidate, 14.0, entrances):
+				origin = candidate
 			else:
-				var horizontal := Vector2(candidate.x, position.y)
-				var vertical := Vector2(position.x, candidate.y)
-				if not MapGeometry.is_position_blocked(map_index, horizontal, 14.0): position.x = horizontal.x
-				if not MapGeometry.is_position_blocked(map_index, vertical, 14.0): position.y = vertical.y
-			player["position"] = position
+				var horizontal := Vector2(candidate.x, origin.y)
+				if not MapGeometry.is_step_blocked(map_index, origin, horizontal, 14.0, entrances): origin.x = horizontal.x
+				var vertical := Vector2(origin.x, candidate.y)
+				if not MapGeometry.is_step_blocked(map_index, origin, vertical, 14.0, entrances): origin.y = vertical.y
+			player["position"] = origin
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
 		for code in rooms.keys():
 			var room: Dictionary = rooms[code]
-			if bool(room.get("started", false)) and not bool(room.get("finished", false)):
-				_broadcast_positions(str(code))
-
+			if bool(room.get("started", false)) and not bool(room.get("finished", false)): _broadcast_positions(str(code))
 
 func start_server(port: int = PORT) -> Error:
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
@@ -200,6 +196,11 @@ func send_player_input(direction: Vector2) -> void:
 	request_player_input.rpc_id(1, direction)
 
 
+func cast_sleep_spell(target_id: int) -> void:
+	if not active_room_code.is_empty() and is_connected_to_room_server():
+		request_sleep_spell.rpc_id(1, target_id)
+
+
 func submit_task_answer(task_index: int, answer: int) -> void:
 	if not active_room_code.is_empty() and is_connected_to_room_server():
 		request_task_answer.rpc_id(1, task_index, answer)
@@ -225,9 +226,9 @@ func cast_vote(target_id: int) -> void:
 		request_cast_vote.rpc_id(1, target_id)
 
 
-func eliminate_player(target_id: int) -> void:
+func cast_sabotage(kind: String) -> void:
 	if not active_room_code.is_empty() and is_connected_to_room_server():
-		request_eliminate_player.rpc_id(1, target_id)
+		request_sabotage.rpc_id(1, kind)
 
 
 func leave_room() -> void:
@@ -306,8 +307,21 @@ func _find_room_code() -> String:
 	return ""
 
 
-func _make_player(peer_id: int, player_name: String, is_host: bool = false) -> Dictionary:
-	return {"id": peer_id, "name": _clean_player_name(player_name), "character": "", "ready": false, "host": is_host, "alive": true, "position": Vector2(640, 390), "direction": Vector2.ZERO, "role": "villager", "role_character": ""}
+func _make_player(peer_id: int, player_name: String, is_host: bool = false, character: String = "") -> Dictionary:
+	return {"id": peer_id, "name": _clean_player_name(player_name), "character": character, "ready": false, "host": is_host, "alive": true, "sleeping": false, "position": Vector2(640, 390), "direction": Vector2.ZERO, "role": "villager", "role_character": "", "sleep_ready_at": 0.0}
+
+func _random_available_character(players: Dictionary) -> String:
+	var available: Array[String] = []
+	for character in GameData.CHARACTERS:
+		var taken := false
+		for member in players.values():
+			if str(member.get("character", "")) == character:
+				taken = true
+				break
+		if not taken:
+			available.append(character)
+	if available.is_empty(): return ""
+	return available[_server_random.randi_range(0, available.size() - 1)]
 
 
 func _room_members(room: Dictionary) -> Array:
@@ -317,6 +331,7 @@ func _room_members(room: Dictionary) -> Array:
 		visible_member.erase("role")
 		visible_member.erase("role_character")
 		visible_member.erase("direction")
+		visible_member.erase("sleep_ready_at")
 		members.append(visible_member)
 	return members
 
@@ -330,16 +345,23 @@ func _send_room_state(code: String) -> void:
 		_rpc_room_state.rpc_id(int(peer_id), code, int(room["map_index"]), int(room["host_id"]), members)
 
 
-func _broadcast_positions(code: String) -> void:
-	if not rooms.has(code):
-		return
+func _broadcast_positions(code: String, reliable: bool = false) -> void:
+	if not rooms.has(code): return
 	var room: Dictionary = rooms[code]
+	var now := Time.get_ticks_msec() / 1000.0
+	room["state_sequence"] = int(room.get("state_sequence", 0)) + 1
 	var positions: Array = []
 	for member in room["players"].values():
-		positions.append({"id": member["id"], "position": member["position"], "alive": member["alive"]})
+		positions.append({"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))})
 	for peer_id in room["players"].keys():
-		_rpc_player_positions.rpc_id(int(peer_id), positions)
-
+		var receiver_state := positions.duplicate(true)
+		var power_state := NenekPowers.snapshot(room, room["players"][peer_id], now)
+		if str(room["players"][peer_id].get("role", "")) != "nenek_kebayan":
+			power_state["sleep_cooldown"] = 0.0
+			power_state["sabotage_cooldown"] = 0.0
+		receiver_state.append({"powers": power_state, "revision": room["state_sequence"]})
+		if reliable: _rpc_power_snapshot.rpc_id(int(peer_id), receiver_state)
+		else: _rpc_player_positions.rpc_id(int(peer_id), receiver_state)
 
 func _broadcast_task_state(code: String) -> void:
 	var room: Dictionary = rooms.get(code, {})
@@ -350,7 +372,7 @@ func _broadcast_task_state(code: String) -> void:
 func _alive_player_ids(room: Dictionary) -> Array[int]:
 	var result: Array[int] = []
 	for peer_id in room["players"].keys():
-		if bool(room["players"][peer_id].get("alive", true)):
+		if NenekPowers.is_active(room["players"][peer_id]):
 			result.append(int(peer_id))
 	return result
 
@@ -402,7 +424,7 @@ func _resolve_vote(code: String) -> void:
 	var eliminated_id := -1
 	if leaders.size() == 1 and highest > skip_count:
 		eliminated_id = leaders[0]
-	var result_message := "No player was eliminated."
+	var result_message := "No player was voted out."
 	var winner := ""
 	if eliminated_id >= 0 and room["players"].has(eliminated_id):
 		var eliminated: Dictionary = room["players"][eliminated_id]
@@ -412,18 +434,19 @@ func _resolve_vote(code: String) -> void:
 			result_message = eliminated_name + " was Nenek Kebayan. The Villagers win!"
 			winner = "villagers"
 		else:
-			result_message = eliminated_name + " has been eliminated. Nenek Kebayan is still among you."
+			result_message = eliminated_name + " was voted out. Nenek Kebayan is still among you."
 			var any_villager_alive := false
 			for member in room["players"].values():
-				if str(member.get("role", "villager")) == "villager" and bool(member.get("alive", true)):
+				if str(member.get("role", "villager")) == "villager" and NenekPowers.is_active(member):
 					any_villager_alive = true
 					break
 			if not any_villager_alive:
 				winner = "nenek_kebayan"
-				result_message = "All Villagers have been eliminated. Nenek Kebayan wins!"
+				result_message = "No awake Orang Kampung remain. Nenek Kebayan wins!"
 	room["meeting_state"] = ""
 	room["meeting_timer"] = 0.0
 	room["votes"] = {}
+	_broadcast_positions(code, true)
 	for peer_id in room["players"].keys():
 		_rpc_meeting_result.rpc_id(int(peer_id), eliminated_id, result_message, winner)
 	if not winner.is_empty():
@@ -453,6 +476,11 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["started"] = true
 	var members: Array = room["players"].values()
 	var role_player_index := _server_random.randi_range(0, members.size() - 1)
+	if DEBUG_FORCE_NENEK_FOR_TESTING:
+		for i in members.size():
+			if int(members[i].get("id", -1)) == int(room["host_id"]):
+				role_player_index = i
+				break
 	var secret_character := str(members[role_player_index].get("character", ""))
 	var villager_role_characters: Array[String] = []
 	for i in members.size():
@@ -479,6 +507,7 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["meeting_timer"] = 0.0
 	room["votes"] = {}
 	room["secret_character"] = secret_character
+	NenekPowers.reset_match(room, Time.get_ticks_msec() / 1000.0)
 	var villager_character_index := 0
 	for i in members.size():
 		var member: Dictionary = members[i]
@@ -525,13 +554,13 @@ func _remove_player(peer_id: int) -> void:
 		var living_villagers := 0
 		var living_kebayan := 0
 		for member in room["players"].values():
-			if not bool(member.get("alive", true)): continue
+			if not NenekPowers.is_active(member): continue
 			if str(member.get("role", "villager")) == "nenek_kebayan": living_kebayan += 1
 			else: living_villagers += 1
 		if living_kebayan == 0:
 			_finish_game(code, "villagers", "Nenek Kebayan left the room. The Villagers win!")
 		elif living_villagers == 0:
-			_finish_game(code, "nenek_kebayan", "All Villagers have been eliminated. Nenek Kebayan wins!")
+			_finish_game(code, "nenek_kebayan", "No awake Orang Kampung remain. Nenek Kebayan wins!")
 	if str(room.get("meeting_state", "")) == "voting" and room["votes"].size() >= _alive_player_ids(room).size():
 		_resolve_vote(code)
 
@@ -551,7 +580,7 @@ func request_create_room(map_index: int, player_name: String) -> void:
 	if code.is_empty():
 		_rpc_room_error.rpc_id(sender, "Room creation failed. Try again.")
 		return
-	var host := _make_player(sender, player_name, true)
+	var host := _make_player(sender, player_name, true, _random_available_character({}))
 	rooms[code] = {"map_index": map_index, "host_id": sender, "players": {sender: host}, "started": false, "selected_characters": {}}
 	peer_room_codes[sender] = code
 	_rpc_room_opened.rpc_id(sender, code, map_index, _room_members(rooms[code]), true)
@@ -584,7 +613,7 @@ func request_join_room(code: String, player_name: String) -> void:
 	if room["players"].size() >= MAX_PLAYERS_PER_ROOM:
 		_rpc_room_error.rpc_id(sender, "Room Is Full")
 		return
-	room["players"][sender] = _make_player(sender, player_name)
+	room["players"][sender] = _make_player(sender, player_name, false, _random_available_character(room["players"]))
 	peer_room_codes[sender] = normalized_code
 	_rpc_room_opened.rpc_id(sender, normalized_code, int(room["map_index"]), _room_members(room), false)
 	_send_room_state(normalized_code)
@@ -662,7 +691,7 @@ func request_player_input(direction: Vector2) -> void:
 	var room: Dictionary = rooms.get(peer_room_codes[sender], {})
 	if not bool(room.get("started", false)) or bool(room.get("finished", false)) or str(room.get("meeting_state", "")) != "":
 		return
-	if not room["players"].has(sender) or not bool(room["players"][sender].get("alive", true)):
+	if not room["players"].has(sender) or not NenekPowers.is_active(room["players"][sender]):
 		return
 	if direction.length() > 1.25:
 		return
@@ -683,7 +712,7 @@ func request_task_answer(task_index: int, answer: int) -> void:
 	if not room["players"].has(sender):
 		return
 	var member: Dictionary = room["players"][sender]
-	if not bool(member.get("alive", true)) or str(member.get("role", "villager")) != "villager":
+	if not NenekPowers.is_active(member) or str(member.get("role", "villager")) != "villager":
 		_rpc_task_resolved.rpc_id(sender, task_index, false, 0, false)
 		return
 	var map_name: String = GameData.MAPS[int(room["map_index"])]["name"]
@@ -726,8 +755,8 @@ func request_inspect_clue(clue_index: int) -> void:
 	if not room["players"].has(sender):
 		return
 	var member: Dictionary = room["players"][sender]
-	if not bool(member.get("alive", true)) or str(member.get("role", "villager")) != "villager":
-		_rpc_room_error.rpc_id(sender, "Only living Villagers can inspect clues.")
+	if not NenekPowers.is_active(member) or str(member.get("role", "villager")) != "villager":
+		_rpc_room_error.rpc_id(sender, "Only awake Orang Kampung can inspect clues.")
 		return
 	var positions: Array = room["clue_positions"]
 	if clue_index < 0 or clue_index >= positions.size() or clue_index in room["found_clues"]:
@@ -753,7 +782,7 @@ func request_call_meeting() -> void:
 	var room: Dictionary = rooms.get(code, {})
 	if not bool(room.get("started", false)) or bool(room.get("finished", false)) or str(room.get("meeting_state", "")) != "":
 		return
-	if not room["players"].has(sender) or not bool(room["players"][sender].get("alive", true)):
+	if not room["players"].has(sender) or not NenekPowers.is_active(room["players"][sender]):
 		return
 	var position: Vector2 = room["players"][sender].get("position", Vector2.ZERO)
 	if position.distance_to(MapGeometry.gong_point(int(room["map_index"]))) > 78.0:
@@ -776,14 +805,15 @@ func request_send_chat(message: String) -> void:
 		return
 	var code: String = peer_room_codes[sender]
 	var room: Dictionary = rooms.get(code, {})
-	if str(room.get("meeting_state", "")) != "discussion" or not room["players"].has(sender) or not bool(room["players"][sender].get("alive", true)):
+	if str(room.get("meeting_state", "")) != "discussion" or not room["players"].has(sender) or not NenekPowers.is_active(room["players"][sender]):
 		return
 	var clean_message := message.strip_edges().substr(0, 200)
 	if clean_message.is_empty():
 		return
 	var player_name := str(room["players"][sender].get("name", "Player"))
 	for peer_id in room["players"].keys():
-		_rpc_chat_message.rpc_id(int(peer_id), sender, player_name, clean_message)
+		if NenekPowers.is_active(room["players"][peer_id]):
+			_rpc_chat_message.rpc_id(int(peer_id), sender, player_name, clean_message)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -795,12 +825,12 @@ func request_cast_vote(target_id: int) -> void:
 		return
 	var code: String = peer_room_codes[sender]
 	var room: Dictionary = rooms.get(code, {})
-	if str(room.get("meeting_state", "")) != "voting" or not room["players"].has(sender) or not bool(room["players"][sender].get("alive", true)):
+	if str(room.get("meeting_state", "")) != "voting" or not room["players"].has(sender) or not NenekPowers.is_active(room["players"][sender]):
 		return
 	if room["votes"].has(sender):
 		_rpc_room_error.rpc_id(sender, "You have already voted.")
 		return
-	if target_id >= 0 and (not room["players"].has(target_id) or not bool(room["players"][target_id].get("alive", true))):
+	if target_id >= 0 and (not room["players"].has(target_id) or not NenekPowers.is_active(room["players"][target_id])):
 		return
 	room["votes"][sender] = target_id
 	_broadcast_meeting_state(code)
@@ -808,44 +838,55 @@ func request_cast_vote(target_id: int) -> void:
 		_resolve_vote(code)
 
 
-@rpc("any_peer", "call_remote", "reliable")
-func request_eliminate_player(target_id: int) -> void:
-	if not multiplayer.is_server():
-		return
-	var sender := multiplayer.get_remote_sender_id()
+func _ability_room_for_sender(sender: int) -> Dictionary:
 	if not peer_room_codes.has(sender):
-		return
+		return {}
 	var code: String = peer_room_codes[sender]
 	var room: Dictionary = rooms.get(code, {})
-	if not bool(room.get("started", false)) or bool(room.get("finished", false)) or str(room.get("meeting_state", "")) != "":
+	var players: Dictionary = room.get("players", {})
+	if not bool(room.get("started", false)) or bool(room.get("finished", false)) or str(room.get("meeting_state", "")) != "" or not players.has(sender):
+		return {}
+	return {"code": code, "room": room, "player": room["players"][sender]}
+
+
+func _ability_error(sender: int, message: String) -> void:
+	_rpc_room_error.rpc_id(sender, message)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_sleep_spell(target_id: int) -> void:
+	if not multiplayer.is_server(): return
+	var sender := multiplayer.get_remote_sender_id()
+	var context := _ability_room_for_sender(sender)
+	if context.is_empty(): return
+	var room: Dictionary = context["room"]
+	var error := NenekPowers.try_sleep(room, sender, target_id, Time.get_ticks_msec() / 1000.0)
+	if not error.is_empty():
+		_ability_error(sender, error)
 		return
-	if not room["players"].has(sender) or str(room["players"][sender].get("role", "villager")) != "nenek_kebayan":
+	_rpc_ability_feedback.rpc_id(sender, "Jampi Tidur cast. That villager is asleep for the rest of this match.")
+	_broadcast_positions(str(context["code"]), true)
+	_send_room_state(str(context["code"]))
+	if NenekPowers.winner(room) == "nenek_kebayan":
+		_finish_game(str(context["code"]), "nenek_kebayan", "No awake Orang Kampung remain. Nenek Kebayan wins!")
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_sabotage(kind: String) -> void:
+	if not multiplayer.is_server(): return
+	var sender := multiplayer.get_remote_sender_id()
+	var context := _ability_room_for_sender(sender)
+	if context.is_empty(): return
+	var room: Dictionary = context["room"]
+	var error := NenekPowers.try_sabotage(room, sender, kind, Time.get_ticks_msec() / 1000.0)
+	if not error.is_empty():
+		_ability_error(sender, error)
 		return
-	if not room["players"].has(target_id):
-		return
-	var attacker: Dictionary = room["players"][sender]
-	var target: Dictionary = room["players"][target_id]
-	if not bool(attacker.get("alive", true)) or not bool(target.get("alive", true)) or str(target.get("role", "villager")) != "villager":
-		return
-	var attacker_position: Vector2 = attacker.get("position", Vector2.ZERO)
-	var target_position: Vector2 = target.get("position", Vector2.ZERO)
-	if attacker_position.distance_to(target_position) > 90.0:
-		return
-	target["alive"] = false
-	var living_villagers := 0
-	for member in room["players"].values():
-		if str(member.get("role", "villager")) == "villager" and bool(member.get("alive", true)):
-			living_villagers += 1
-	var message := str(target.get("name", "A Villager")) + " has been eliminated."
-	var winner := ""
-	if living_villagers == 0:
-		winner = "nenek_kebayan"
-		message = "All Villagers have been eliminated. Nenek Kebayan wins!"
-	for peer_id in room["players"].keys():
-		_rpc_player_eliminated.rpc_id(int(peer_id), target_id, message, winner)
-	_send_room_state(code)
-	if not winner.is_empty():
-		_finish_game(code, winner, message)
+	var areas := MapGeometry.sabotage_areas(int(room["map_index"]))
+	var area_index := int(room.get("sabotage_area", -1))
+	var area_name := str(areas[area_index]["name"]) if area_index >= 0 else "your surroundings"
+	_rpc_ability_feedback.rpc_id(sender, ("Fog covers " if kind == "fog" else "Entrances locked: ") + area_name)
+	_broadcast_positions(str(context["code"]), true)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -872,6 +913,11 @@ func _rpc_room_error(message: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
+func _rpc_ability_feedback(message: String) -> void:
+	ability_feedback.emit(message)
+
+
+@rpc("authority", "call_remote", "reliable")
 func _rpc_private_role(role: String, secret_character: String, role_character: String) -> void:
 	local_player_role = role
 	local_secret_character = secret_character
@@ -882,6 +928,11 @@ func _rpc_private_role(role: String, secret_character: String, role_character: S
 @rpc("authority", "call_remote", "reliable")
 func _rpc_match_started(map_index: int, clue_positions: Array) -> void:
 	match_started.emit(map_index, clue_positions)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_power_snapshot(members: Array) -> void:
+	positions_changed.emit(members)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -917,11 +968,6 @@ func _rpc_chat_message(peer_id: int, player_name: String, message: String) -> vo
 @rpc("authority", "call_remote", "reliable")
 func _rpc_meeting_result(target_id: int, message: String, winner: String) -> void:
 	meeting_result.emit(target_id, message, winner)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_player_eliminated(peer_id: int, message: String, winner: String) -> void:
-	player_eliminated.emit(peer_id, message, winner)
 
 
 @rpc("authority", "call_remote", "reliable")

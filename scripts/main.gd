@@ -6,6 +6,9 @@ const GameUI = preload("res://scripts/game_ui.gd")
 const GameScreen = preload("res://scripts/game_screen.gd")
 const NetworkManagerScript = preload("res://scripts/network_manager.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
+const NenekPowers = preload("res://scripts/nenek_powers.gd")
+const PageControls = preload("res://scripts/page_controls.gd")
+const LoginScreen = preload("res://scripts/login_screen.gd")
 const MENU_ART := GameData.MENU_ART
 const WAITING_ROOM_ART := GameData.WAITING_ROOM_ART
 const MAP_ART := GameData.MAP_ART
@@ -25,6 +28,7 @@ const TASK_POINTS := GameData.TASK_POINTS
 const TASK_STEPS := GameData.TASK_STEPS
 const NPC_NAMES := GameData.NPC_NAMES
 const NPC_POINTS := GameData.NPC_POINTS
+const DEBUG_FORCE_NENEK_FOR_TESTING := true
 var current_screen := "menu"
 var selected_map := 0
 var lobby_player_name := "Player 1"
@@ -40,6 +44,17 @@ var auto_start_triggered := false
 var impostor_character := ""
 var assigned_role_character := ""
 var player_is_impostor := false
+var player_sleeping := false
+var player_voted_out := false
+var active_power_kind := ""
+var active_power_area := -1
+var active_power_until := 0.0
+var sleep_ready_at := 0.0
+var sabotage_ready_at := 0.0
+var practice_power_room: Dictionary = {}
+var active_fog_origin := Vector2.ZERO
+var active_fog_radius := NenekPowers.FOG_RADIUS
+var last_power_sequence := 0
 var village_tasks_expanded := false
 var player_position := Vector2(640, 390)
 var move_vector := Vector2.ZERO
@@ -50,6 +65,8 @@ var task_overlay_index := -1
 var last_notice := ""
 var last_notice_time := 0.0
 var audio_muted := false
+var audio_volume := 100.0
+var page_controls: CanvasLayer
 var dead_npcs: Array[String] = []
 var rng := RandomNumberGenerator.new()
 var map_image: Texture2D
@@ -74,6 +91,10 @@ var network_vote_submitted := false
 
 func _ready() -> void:
 	rng.randomize()
+	var audio_bus := AudioServer.get_bus_index("Master")
+	if audio_bus >= 0:
+		audio_muted = AudioServer.is_bus_mute(audio_bus)
+		audio_volume = clampf(db_to_linear(AudioServer.get_bus_volume_db(audio_bus)) * 100.0, 0.0, 100.0)
 	server_address = str(ProjectSettings.get_setting("network/server_address", "127.0.0.1"))
 	network_manager = NetworkManagerScript.new()
 	network_manager.name = "NetworkManager"
@@ -92,13 +113,26 @@ func _ready() -> void:
 	network_manager.meeting_changed.connect(_on_network_meeting_changed)
 	network_manager.chat_received.connect(_on_network_chat_received)
 	network_manager.meeting_result.connect(_on_network_meeting_result)
-	network_manager.player_eliminated.connect(_on_network_player_eliminated)
 	network_manager.match_finished.connect(_on_network_match_finished)
-	build_menu()
+	network_manager.ability_feedback.connect(show_notice)
+	page_controls = PageControls.new()
+	add_child(page_controls)
+	page_controls.call("configure", self)
+	build_login_screen()
 
 
 func _process(delta: float) -> void:
+	if is_instance_valid(page_controls): page_controls.call("refresh")
 	var now := Time.get_ticks_msec() / 1000.0
+	if active_power_kind != "" and now >= active_power_until:
+		active_power_kind = ""
+		active_power_area = -1
+		game_screen.refresh_power_effects(self)
+	if room_code.is_empty() and not practice_power_room.is_empty():
+		NenekPowers.expire_sabotage(practice_power_room, now)
+	if current_screen in ["game", "meeting"]:
+		_update_power_view()
+		_update_power_hud()
 	if now - last_notice_time > 2.4:
 		var notice_label := find_child("NoticeLabel", true, false) as Label
 		if notice_label: notice_label.text = ""
@@ -126,7 +160,9 @@ func _process(delta: float) -> void:
 			timer_label.text = "%d / 10 PLAYERS   •   READY %d/%d   •   %s" % [player_count, ready_count, player_count, wait_text]
 		var ready_button := find_child("LobbyReadyButton", true, false) as Button
 		if ready_button:
-			ready_button.text = "READY ✓" if _local_player_is_ready() else "NOT READY"
+			var is_ready := _local_player_is_ready()
+			ready_button.text = "READY ✓" if is_ready else "NOT READY"
+			_apply_ready_button_color(ready_button, is_ready)
 			ready_button.disabled = selected_character.is_empty()
 		var start_button := find_child("LobbyStartButton", true, false) as Button
 		var all_ready := _all_lobby_players_ready()
@@ -139,7 +175,7 @@ func _process(delta: float) -> void:
 			auto_start_triggered = true
 			_start_from_lobby()
 		return
-	if current_screen != "game" or task_overlay_index >= 0:
+	if current_screen != "game" or task_overlay_index >= 0 or not can_local_act() or _utility_dialog_open():
 		return
 	var direction := move_vector
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): direction.x -= 1.0
@@ -168,6 +204,150 @@ func _process(delta: float) -> void:
 			route_line.visible = false
 	else:
 		if route_line: route_line.visible = false
+
+
+func _utility_dialog_open() -> bool:
+	return is_instance_valid(page_controls) and bool(page_controls.call("dialog_open"))
+
+
+func _set_audio_volume(percent: float) -> void:
+	audio_volume = clampf(percent, 0.0, 100.0)
+	var audio_bus := AudioServer.get_bus_index("Master")
+	if audio_bus >= 0:
+		AudioServer.set_bus_volume_db(audio_bus, linear_to_db(maxf(0.0001, audio_volume / 100.0)))
+	var label := find_child("SettingsVolumeLabel", true, false) as Label
+	if label: label.text = "VOLUME · %d%%" % int(audio_volume)
+
+
+func navigate_back() -> void:
+	if _utility_dialog_open():
+		page_controls.call("close_dialog")
+		return
+	if not room_code.is_empty() and find_child("CreateRoomOverlay", true, false) != null:
+		show_leave_room_confirmation()
+		return
+	for overlay_name in ["CreateAccountOverlay", "CharacterConfirmOverlay", "TaskOverlay", "MapOverlay", "JournalOverlay", "ClueOverlay", "VoteOverlay", "JoinRoomCodeOverlay", "JoinRoomChoiceOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay", "CreateRoomOverlay"]:
+		var overlay := find_child(overlay_name, true, false)
+		if overlay:
+			overlay.get_parent().remove_child(overlay)
+			overlay.queue_free()
+			if overlay_name == "TaskOverlay": task_overlay_index = -1
+			return
+	match current_screen:
+		"login": page_controls.call("confirm", "EXIT GAME?", "Close Kampung Legenda?", Callable(get_tree(), "quit"))
+		"menu": build_login_screen()
+		"map_select":
+			if room_code.is_empty(): build_menu()
+			else: show_leave_room_confirmation()
+		"character_select": build_waiting_room()
+		"waiting_room": show_leave_room_confirmation()
+		"game", "meeting", "role_reveal": show_exit_confirmation()
+		"result": _return_to_menu_cleanly()
+
+
+func can_local_act() -> bool:
+	return not player_sleeping and not player_voted_out
+
+
+func _reset_power_state() -> void:
+	last_power_sequence = 0
+	player_sleeping = false
+	player_voted_out = false
+	active_power_kind = ""
+	active_power_area = -1
+	active_power_until = 0.0
+	sleep_ready_at = 0.0
+	sabotage_ready_at = 0.0
+	practice_power_room.clear()
+	active_fog_origin = Vector2.ZERO
+	active_fog_radius = NenekPowers.FOG_RADIUS
+
+
+func _apply_power_state(state: Dictionary) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var next_kind := str(state.get("kind", ""))
+	var next_area := int(state.get("area", -1))
+	var remaining := maxf(0.0, float(state.get("seconds_left", 0.0)))
+	if remaining <= 0.0: next_kind = ""
+	var next_origin: Vector2 = state.get("fog_origin", player_position)
+	var changed := next_kind != active_power_kind or next_area != active_power_area or next_origin != active_fog_origin
+	active_fog_origin = next_origin
+	active_fog_radius = maxf(1.0, float(state.get("fog_radius", NenekPowers.FOG_RADIUS)))
+	active_power_kind = next_kind
+	active_power_area = next_area
+	active_power_until = now + remaining
+	sleep_ready_at = now + maxf(0.0, float(state.get("sleep_cooldown", 0.0)))
+	sabotage_ready_at = now + maxf(0.0, float(state.get("sabotage_cooldown", 0.0)))
+	if changed: game_screen.refresh_power_effects(self)
+	_update_power_view()
+	_update_power_hud()
+
+
+func locked_entrances() -> Array:
+	if active_power_kind != "lock" or Time.get_ticks_msec() / 1000.0 >= active_power_until: return []
+	return MapGeometry.area_doors(selected_map, active_power_area)
+
+
+func _update_power_view() -> void:
+	if not is_instance_valid(player_body): return
+	var entrances := locked_entrances()
+	player_body.set("locked_entrances", entrances)
+	player_body.set_meta("locked_entrances", entrances)
+	var fogged := active_power_kind == "fog" and not player_is_impostor and player_body.global_position.distance_to(active_fog_origin) < active_fog_radius and (active_power_area < 0 or MapGeometry.point_in_area(selected_map, active_power_area, player_body.global_position))
+	player_body.set_meta("sight_radius", NenekPowers.FOG_VILLAGER_SIGHT if fogged else 160.0)
+	var light := player_body.get_node_or_null("LocalVisionLight") as PointLight2D
+	if light: light.texture_scale = 0.45 if fogged else 1.7
+
+
+func _update_power_hud() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var watching := not can_local_act()
+	for button_name in ["InteractButton", "InspectClueButton", "GameMapButton", "GameJournalButton", "VillageTasksToggle"]:
+		var button := find_child(button_name, true, false) as Button
+		if button and watching: button.disabled = true
+	var pad := find_child("VirtualJoystick", true, false) as Control
+	if pad: pad.visible = not watching
+	var sleep_button := find_child("SleepSpellButton", true, false) as Button
+	var sleep_seconds := ceili(maxf(0.0, sleep_ready_at - now))
+	if sleep_button:
+		sleep_button.visible = not watching
+		sleep_button.text = "JAMPI TIDUR" + ("\n%ds" % sleep_seconds if sleep_seconds > 0 else "")
+		sleep_button.disabled = watching or sleep_seconds > 0 or current_screen != "game"
+		sleep_button.add_theme_font_size_override("font_size", 14)
+	var sabotage_seconds := ceili(maxf(0.0, sabotage_ready_at - now))
+	for info in [["FogButton", "KABUS"], ["DoorLockButton", "SUMPAHAN PINTU"]]:
+		var button := find_child(info[0], true, false) as Button
+		if button:
+			button.visible = not watching
+			button.text = info[1] + ("\n%ds" % sabotage_seconds if sabotage_seconds > 0 else "")
+			button.disabled = watching or sabotage_seconds > 0 or current_screen != "game"
+			button.add_theme_font_size_override("font_size", 14)
+	var banner := find_child("WatchingLabel", true, false) as Label
+	if banner:
+		banner.text = ("ASLEEP · WATCHING ONLY\nYou cannot act until the next match." if player_sleeping else "VOTED OUT · WATCHING ONLY") if watching else ""
+	var status := find_child("PowerStatusLabel", true, false) as Label
+	if status:
+		status.text = ""
+		var areas := MapGeometry.sabotage_areas(selected_map)
+		if active_power_kind != "":
+			var section_name := str(areas[active_power_area]["name"]) if active_power_area >= 0 and active_power_area < areas.size() else "Nearby surroundings"
+			status.text = ("KABUS · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
+
+
+func _enter_watch_mode() -> void:
+	_stop_move()
+	task_overlay_index = -1
+	for overlay_name in ["TaskOverlay", "MapOverlay", "JournalOverlay", "ClueOverlay", "VoteOverlay", "MeetingOverlay"]:
+		var overlay := find_child(overlay_name, true, false)
+		if overlay:
+			overlay.get_parent().remove_child(overlay)
+			overlay.queue_free()
+	if current_screen == "meeting": current_screen = "game"
+	if is_instance_valid(player_body):
+		player_body.set("inactive", player_voted_out)
+		player_body.call("set_sleeping", player_sleeping)
+	_update_power_hud()
+	_update_interaction_prompt()
 
 
 func _update_area_indicator() -> void:
@@ -201,7 +381,6 @@ func _update_interaction_prompt() -> void:
 	inspect.disabled = not clue_available
 	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	var gong_near := player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0
-	var npc_index := _nearest_index(MapGeometry.npc_points(selected_map), 78.0)
 	if clue_available:
 		prompt.text = "A clue is nearby • tap INSPECT CLUE"
 		interact.disabled = false
@@ -212,16 +391,17 @@ func _update_interaction_prompt() -> void:
 	elif gong_near:
 		prompt.text = "Emergency meeting gong • tap INTERACT"
 		interact.disabled = false
-	elif npc_index >= 0:
-		prompt.text = "Villager nearby • tap INTERACT"
-		interact.disabled = false
 	else:
 		prompt.text = ""
 		interact.disabled = false
+	if not can_local_act():
+		prompt.text = "Asleep until the match ends • watching only" if player_sleeping else "Voted out • watching only"
+		inspect.disabled = true
+		interact.disabled = true
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if current_screen == "game" and task_overlay_index < 0 and event is InputEventKey and event.pressed and event.keycode == KEY_E:
+	if current_screen == "game" and can_local_act() and task_overlay_index < 0 and not _utility_dialog_open() and event is InputEventKey and event.pressed and event.keycode == KEY_E:
 		interact_nearest()
 
 
@@ -232,8 +412,29 @@ func clear_screen(screen_name: String) -> void:
 	player_body = null
 	current_area_name = ""
 	for child in get_children():
-		if child != network_manager: child.queue_free()
+		if child != network_manager and child != page_controls: child.queue_free()
 	await get_tree().process_frame
+
+
+func build_login_screen() -> void:
+	await clear_screen("login")
+	LoginScreen.build(self)
+	if is_instance_valid(page_controls): page_controls.call("refresh", true)
+
+
+func show_create_account() -> void:
+	LoginScreen.show_create_account(self)
+
+
+func _login_provider_unavailable(provider: String) -> void:
+	var notice := find_child("LoginNoticeLabel", true, false) as Label
+	if notice: notice.text = provider + " sign-in needs provider setup. You can play as a guest for now."
+
+
+func _continue_as_guest() -> void:
+	room_code = ""
+	room_is_host = false
+	build_menu()
 
 
 func build_menu() -> void:
@@ -242,73 +443,34 @@ func build_menu() -> void:
 	add_color_overlay(Color(0.05, 0.07, 0.08, 0.32))
 	# The menu artwork already contains the full title plaque and subtitle. Avoid
 	# drawing a second title label, which was clipped against the bottom edge.
-	var menu_panel := make_panel(Rect2(465, 255, 350, 320), Color(0.13, 0.075, 0.045, 1.0))
+	var menu_panel := make_panel(Rect2(465, 238, 350, 350), Color(0.13, 0.075, 0.045, 1.0))
+	menu_panel.name = "MainMenuPanel"
 	var menu_buttons := ["PLAY", "JOIN ROOM", "EXIT"]
 	for i in menu_buttons.size():
 		var btn := make_button(menu_panel, menu_buttons[i], Callable(self, "_menu_action").bind(i), 300, 54, i == 0)
-		btn.position = Vector2(25, 45 + i * 88)
+		btn.position = Vector2(25, 70 + i * 78)
+		btn.name = "MenuAction_%d" % i
 	var badge := make_label("OFFLINE PRACTICE  •  ONLINE MULTIPLAYER COMING LATER", 14, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_CENTER)
+	badge.name = "MenuStatusBadge"
 	badge.position = Vector2(300, 680); badge.size = Vector2(680, 24)
 	var menu_notice := make_label("", 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	menu_notice.name = "MenuNoticeLabel"; menu_notice.position = Vector2(900, 78); menu_notice.size = Vector2(350, 28)
-	build_menu_icon_buttons()
-
-
-func build_menu_icon_buttons() -> void:
-	_make_art_icon_button(Rect2(1072, 22, 54, 54), "Settings", Callable(self, "show_settings").bind("menu"))
-	var music := _make_art_icon_button(Rect2(1137, 22, 52, 54), "Toggle music and sound", Callable(self, "_toggle_audio"))
-	music.name = "MenuMusicButton"
-	var mute_slash := ColorRect.new()
-	mute_slash.name = "AudioMutedSlash"
-	mute_slash.color = Color("ff5b50")
-	mute_slash.position = Vector2(9, 24); mute_slash.size = Vector2(34, 5)
-	mute_slash.pivot_offset = mute_slash.size / 2; mute_slash.rotation_degrees = -45
-	mute_slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mute_slash.visible = audio_muted
-	music.add_child(mute_slash)
-	_make_art_icon_button(Rect2(1200, 22, 54, 54), "How to play", Callable(self, "show_how_to_play").bind("menu"))
-
-
-func _make_art_icon_button(rect: Rect2, hint: String, callback: Callable) -> Button:
-	var button := Button.new()
-	button.position = rect.position; button.size = rect.size
-	button.focus_mode = Control.FOCUS_NONE
-	button.tooltip_text = hint
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	for state in ["normal", "pressed", "hover", "disabled", "focus"]:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0, 0, 0, 0)
-		style.border_color = Color(0, 0, 0, 0)
-		if state == "hover": style.bg_color = Color(1, 0.82, 0.42, 0.18)
-		if state == "pressed": style.bg_color = Color(1, 0.82, 0.42, 0.28)
-		button.add_theme_stylebox_override(state, style)
-	button.pressed.connect(callback)
-	add_child(button)
-	return button
+	if is_instance_valid(page_controls): page_controls.call("refresh", true)
 
 
 func _toggle_audio() -> void:
-	_close_menu_popups()
 	audio_muted = not audio_muted
-	var master_bus := AudioServer.get_bus_index("Master")
-	if master_bus >= 0: AudioServer.set_bus_mute(master_bus, audio_muted)
-	var music_button := get_node_or_null("MenuMusicButton") as Button
-	if music_button: music_button.tooltip_text = "Turn music and sound on" if audio_muted else "Turn music and sound off"
-	var mute_slash := get_node_or_null("MenuMusicButton/AudioMutedSlash") as ColorRect
-	if mute_slash: mute_slash.visible = audio_muted
-	var settings_audio := get_node_or_null("SettingsAudioButton") as Button
-	if settings_audio: settings_audio.text = "UNMUTE AUDIO" if audio_muted else "MUTE AUDIO"
-	if current_screen == "menu": show_menu_notice("Music and sound muted." if audio_muted else "Music and sound enabled.")
-
+	var audio_bus := AudioServer.get_bus_index("Master")
+	if audio_bus >= 0: AudioServer.set_bus_mute(audio_bus, audio_muted)
+	if is_instance_valid(page_controls): page_controls.call("refresh", true)
 
 func _close_menu_popups() -> void:
-	var popup_names := ["SettingsOverlay", "HowToPlayOverlay", "JoinRoomChoiceOverlay", "JoinRoomCodeOverlay", "CreateRoomOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay"]
-	for popup_name in popup_names:
-		var popup := get_node_or_null(popup_name)
+	if is_instance_valid(page_controls): page_controls.call("close_dialog")
+	for popup_name in ["JoinRoomChoiceOverlay", "JoinRoomCodeOverlay", "CreateRoomOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay"]:
+		var popup := find_child(popup_name, true, false)
 		if popup:
-			remove_child(popup)
+			popup.get_parent().remove_child(popup)
 			popup.queue_free()
-
 
 func show_menu_notice(message: String) -> void:
 	last_notice_time = Time.get_ticks_msec() / 1000.0
@@ -323,7 +485,7 @@ func _menu_action(index: int) -> void:
 			room_is_host = false
 			build_map_select()
 		1: show_join_room()
-		2: get_tree().quit()
+		2: page_controls.call("confirm", "EXIT GAME?", "Close Kampung Legenda?", Callable(get_tree(), "quit"))
 
 
 func show_join_room() -> void:
@@ -451,14 +613,23 @@ func _create_online_room() -> void:
 func _start_local_practice_lobby() -> void:
 	if network_manager != null:
 		network_manager.leave_room()
-	selected_character = ""
 	character_reservations.clear()
+	selected_character = _random_available_character()
 	waiting_elapsed = 0.0
 	auto_start_triggered = false
 	room_code = ""
 	room_is_host = true
-	lobby_players = [{"id": "local", "name": lobby_player_name, "character": "", "ready": false, "host": true}]
+	lobby_players = [{"id": "local", "name": lobby_player_name, "character": selected_character, "ready": false, "host": true}]
 	build_waiting_room()
+
+
+func _random_available_character() -> String:
+	var available: Array[String] = []
+	for character in CHARACTERS:
+		if not character_reservations.has(character):
+			available.append(character)
+	if available.is_empty(): return ""
+	return available[rng.randi_range(0, available.size() - 1)]
 
 
 func _show_created_room() -> void:
@@ -484,8 +655,14 @@ func build_map_select() -> void:
 	await clear_screen("map_select")
 	add_background(load(MENU_ART))
 	add_color_overlay(Color(0.04, 0.07, 0.08, 0.76))
-	var title := make_label("Choose a Map", 42, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(250, 35); title.size = Vector2(780, 58)
+	var heading := make_panel(Rect2(24, 18, 1232, 90), Color(0.12, 0.09, 0.07, 1.0))
+	heading.name = "MapSelectionHeading"
+	_make_child_label(heading, "Choose a Map", 36, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(80, 16, 1072, 58))
+	var close := make_button(heading, "×", Callable(self, "navigate_back"), 48, 48)
+	close.name = "MapSelectionCloseButton"
+	close.position = Vector2(1168, 21)
+	close.tooltip_text = "Close map selection"
+	close.add_theme_font_size_override("font_size", 30)
 	var atlas := load(MAP_ART) as Texture2D
 	for i in MAPS.size():
 		var card := make_panel(Rect2(40 + i * 400, 120, 380, 500), Color(0.12, 0.09, 0.07, 0.97))
@@ -501,8 +678,6 @@ func build_map_select() -> void:
 		description.clip_contents = true
 		var choose := make_button(card, "SELECT", Callable(self, "_choose_map").bind(i), 316, 50, true)
 		choose.position = Vector2(32, 422)
-	var back := make_button(self, "BACK", Callable(self, "build_menu"), 125, 44)
-	back.position = Vector2(36, 34)
 
 
 func _choose_map(index: int) -> void:
@@ -575,6 +750,7 @@ func _on_network_match_started(map_index: int, new_clue_points: Array) -> void:
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
 	village_tasks_expanded = false
 	network_found_clues.clear()
+	_reset_power_state()
 	task_progress.clear()
 	player_position = MapGeometry.spawn_point(selected_map)
 	for i in lobby_players.size():
@@ -587,24 +763,45 @@ func _on_network_match_started(map_index: int, new_clue_points: Array) -> void:
 
 
 func _on_network_positions_changed(members: Array) -> void:
-	for position_data in members:
-		var peer_id := int(position_data.get("id", -1))
-		var position: Vector2 = position_data.get("position", Vector2.ZERO)
-		for i in lobby_players.size():
-			if int(lobby_players[i].get("id", -1)) == peer_id:
-				lobby_players[i]["position"] = position
-				lobby_players[i]["alive"] = bool(position_data.get("alive", true))
-				break
-		if network_manager.local_peer_id() == peer_id:
-			player_position = position
-		var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
-		if actor: actor.call("set_network_target", position)
-		if network_manager.local_peer_id() == peer_id and is_instance_valid(player_body):
-			player_body.call("set_network_target", position)
+	for data in members:
+		if not data.has("revision"): continue
+		var revision := int(data["revision"])
+		if revision <= last_power_sequence: return
+		last_power_sequence = revision
+	var was_watching := not can_local_act()
+	for data in members:
+		if data.has("powers"):
+			_apply_power_state(data["powers"])
+			continue
+		var peer_id := int(data.get("id", -1))
+		if peer_id < 0: continue
+		var point: Vector2 = data.get("position", Vector2.ZERO)
+		var sleeping := bool(data.get("sleeping", false))
+		var alive := bool(data.get("alive", true))
+		for member in lobby_players:
+			if int(member.get("id", -1)) != peer_id: continue
+			member["position"] = point
+			member["sleeping"] = sleeping
+			member["alive"] = alive
+			break
+		var is_local: bool = network_manager.local_peer_id() == peer_id
+		if is_local:
+			player_position = point
+			player_sleeping = sleeping
+			player_voted_out = not alive
+		var actor: Node = game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
+		if actor:
+			if not alive and not is_local:
+				actor.queue_free()
+			else:
+				actor.call("set_network_target", point)
+				actor.call("set_sleeping", sleeping)
+				actor.set("inactive", not alive)
+	if not was_watching and not can_local_act(): _enter_watch_mode()
 	if current_screen == "game":
 		_update_area_indicator()
 		_update_interaction_prompt()
-
+	_update_power_hud()
 
 func _on_network_task_state_changed(completed: Array, progress: Array) -> void:
 	completed_tasks.clear(); task_progress.clear()
@@ -619,7 +816,7 @@ func _on_network_task_state_changed(completed: Array, progress: Array) -> void:
 			row.text = ("✓ " if completed_tasks[i] == 1 else "◇ ") + str(tasks[i]["name"]) + count_text
 
 
-func _on_network_task_resolved(task_index: int, success: bool, progress: int, complete: bool) -> void:
+func _on_network_task_resolved(_task_index: int, success: bool, progress: int, complete: bool) -> void:
 	task_overlay_index = -1
 	var overlay := find_child("TaskOverlay", true, false)
 	if overlay: overlay.queue_free()
@@ -652,6 +849,9 @@ func _on_network_meeting_changed(state: String, seconds_left: int, members: Arra
 	network_votes_cast = votes_cast
 	network_alive_count = alive_count
 	if not state.is_empty(): _stop_move()
+	if not can_local_act():
+		_enter_watch_mode()
+		return
 	if state == "discussion" and previous_state != "discussion":
 		network_chat_lines.clear()
 		_show_network_discussion()
@@ -682,18 +882,13 @@ func _on_network_meeting_result(target_id: int, message: String, _winner: String
 			if int(lobby_players[i].get("id", -1)) == target_id:
 				lobby_players[i]["alive"] = false
 		var actor := game_world.get_node_or_null("PlayerActor_%d" % target_id) if is_instance_valid(game_world) else null
-		if actor: actor.queue_free()
+		if target_id == network_manager.local_peer_id():
+			player_voted_out = true
+			if actor: actor.set("inactive", true)
+			_enter_watch_mode()
+		elif actor: actor.queue_free()
 	show_notice(message)
 	if current_screen == "meeting": current_screen = "game"
-
-
-func _on_network_player_eliminated(peer_id: int, message: String, _winner: String) -> void:
-	for i in lobby_players.size():
-		if int(lobby_players[i].get("id", -1)) == peer_id:
-			lobby_players[i]["alive"] = false
-	var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
-	if actor: actor.queue_free()
-	show_notice(message)
 
 
 func _on_network_match_finished(winner: String, message: String) -> void:
@@ -713,7 +908,7 @@ func _show_network_discussion() -> void:
 	timer.name = "MeetingTimerLabel"
 	for i in mini(lobby_players.size(), 10):
 		var member: Dictionary = lobby_players[i]
-		if not bool(member.get("alive", true)): continue
+		if not NenekPowers.is_active(member): continue
 		var avatar := TextureRect.new()
 		var character := str(member.get("character", ""))
 		if CHARACTER_AVATARS.has(character): avatar.texture = load(CHARACTER_AVATARS[character])
@@ -733,6 +928,7 @@ func _show_network_discussion() -> void:
 
 
 func _send_meeting_chat() -> void:
+	if not can_local_act(): return
 	var input := find_child("MeetingChatInput", true, false) as LineEdit
 	if input == null or input.text.strip_edges().is_empty(): return
 	network_manager.send_chat(input.text)
@@ -756,7 +952,7 @@ func _show_network_voting(members: Array) -> void:
 	votes.name = "VotesCastLabel"
 	var alive_members: Array = []
 	for member in members:
-		if bool(member.get("alive", true)): alive_members.append(member)
+		if NenekPowers.is_active(member): alive_members.append(member)
 	for i in alive_members.size():
 		var member: Dictionary = alive_members[i]
 		var peer_id := int(member.get("id", -1))
@@ -775,10 +971,11 @@ func _show_network_voting(members: Array) -> void:
 	skip.position = Vector2(164, 438)
 	var confirm := make_button(overlay, "CONFIRM VOTE", Callable(self, "_submit_network_vote").bind(-2), 210, 42, true)
 	confirm.name = "ConfirmNetworkVote"; confirm.position = Vector2(432, 438); confirm.disabled = true
-	_make_child_label(overlay, "Select one living player, then confirm. You may vote only once.", 12, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(60, 496, 690, 22))
+	_make_child_label(overlay, "Select one awake player, then confirm. You may vote only once.", 12, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(60, 496, 690, 22))
 
 
 func _select_network_vote(peer_id: int) -> void:
+	if not can_local_act(): return
 	if network_vote_submitted: return
 	network_vote_selection = peer_id
 	var confirm := find_child("ConfirmNetworkVote", true, false) as Button
@@ -789,6 +986,7 @@ func _select_network_vote(peer_id: int) -> void:
 
 
 func _submit_network_vote(target_id: int) -> void:
+	if not can_local_act(): return
 	if network_vote_submitted: return
 	var selected_id := target_id
 	if target_id == -2:
@@ -863,8 +1061,10 @@ func _show_role_reveal() -> void:
 	lobby_pick_label.clip_text = true
 	var role_character_label := _make_child_label(revealed, "Shuffled character:\n" + card_character, 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 114, 266, 42))
 	role_character_label.clip_text = true
-	var role_copy := "Eliminate Orang Kampung\nwithout being caught." if player_is_impostor else "Complete tasks and clues\nto discover Nenek Kebayan."
-	var role_copy_label := _make_child_label(revealed, role_copy, 13, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 162, 266, 52))
+	var role_copy := "Complete tasks and clues\nto discover Nenek Kebayan."
+	if player_is_impostor:
+		role_copy = "Sleep villagers permanently.\nFog your surroundings or lock\nall exits of your current section."
+	var role_copy_label := _make_child_label(revealed, role_copy, 12, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 162, 266, 64))
 	role_copy_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	role_copy_label.clip_text = true
 	var footer := _make_child_label(card, "Only you can see this role. Other players see their own reveal.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 342, 472, 28))
@@ -932,7 +1132,7 @@ func build_waiting_room() -> void:
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
 	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_panel.add_child(map_preview)
-	_make_child_label(map_panel, "Choose a character to update your avatar.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
+	_make_child_label(map_panel, "Selected character: " + (selected_character if not selected_character.is_empty() else "None") + "\nUse Choose Character to switch.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
 	_make_child_label(map_panel, "Room code is server-generated." if network_room else "No online room was created.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 358, 372, 34))
 
 	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
@@ -991,6 +1191,7 @@ func build_waiting_room() -> void:
 		leave_room.position = Vector2(780, 610)
 	var ready_button := make_button(self, "NOT READY", Callable(self, "_toggle_lobby_ready"), 185, 48, true)
 	ready_button.name = "LobbyReadyButton"; ready_button.position = Vector2(560, 610); ready_button.disabled = selected_character.is_empty()
+	_apply_ready_button_color(ready_button, _local_player_is_ready())
 	var start_button := make_button(self, "START GAME", Callable(self, "_start_from_lobby"), 210, 48, true)
 	start_button.name = "LobbyStartButton"; start_button.position = Vector2(1015, 610)
 	start_button.visible = not network_room or room_is_host
@@ -1000,6 +1201,7 @@ func build_waiting_room() -> void:
 
 
 func _leave_room_to_menu() -> void:
+	page_controls.call("close_dialog")
 	if network_manager != null and not room_code.is_empty():
 		network_manager.leave_room()
 	room_code = ""
@@ -1010,16 +1212,7 @@ func _leave_room_to_menu() -> void:
 
 
 func show_leave_room_confirmation() -> void:
-	if get_node_or_null("LeaveRoomConfirmation") != null: return
-	var overlay := make_panel(Rect2(390, 215, 500, 290), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "LeaveRoomConfirmation"
-	_make_child_label(overlay, "LEAVE ROOM?", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 24, 452, 42))
-	_make_child_label(overlay, "Are you sure you want to leave this room?\nYou will return to the main menu.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(42, 82, 416, 70))
-	var yes := make_button(overlay, "YES, LEAVE", Callable(self, "_leave_room_to_menu"), 170, 46, true)
-	yes.position = Vector2(62, 190)
-	var no := make_button(overlay, "NO, STAY", func(): overlay.queue_free(), 170, 46)
-	no.position = Vector2(268, 190)
-
+	page_controls.call("confirm", "LEAVE ROOM?", "Leave this room and return to the main menu?", Callable(self, "_leave_room_to_menu"))
 
 func _copy_room_code() -> void:
 	DisplayServer.clipboard_set(room_code)
@@ -1058,6 +1251,35 @@ func _toggle_lobby_ready() -> void:
 	lobby_players[index]["ready"] = not bool(lobby_players[index].get("ready", false))
 	var host_status := find_child("LocalReadyStatusLabel", true, false) as Label
 	if host_status: host_status.text = "HOST  •  " + ("READY" if _local_player_is_ready() else "WAITING")
+
+
+func _apply_ready_button_color(button: Button, is_ready: bool) -> void:
+	var state := "ready" if is_ready else "not_ready"
+	if button.has_meta("ready_color_state") and str(button.get_meta("ready_color_state")) == state:
+		return
+	button.set_meta("ready_color_state", state)
+	var base_color := Color("3d7848") if is_ready else Color("9b342d")
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = base_color
+	normal.border_color = Color("e4b25b")
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(10)
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color("4d9658") if is_ready else Color("b94439")
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color("2d5b37") if is_ready else Color("762721")
+	var disabled := normal.duplicate() as StyleBoxFlat
+	disabled.bg_color = base_color.darkened(0.38)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_color", Color.WHITE)
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+	button.add_theme_color_override("font_pressed_color", Color("fff0cf"))
+	button.add_theme_color_override("font_disabled_color", Color("d0c1a8"))
 
 
 func _start_from_lobby() -> void:
@@ -1239,6 +1461,7 @@ func _character_sigil(index: int) -> String:
 
 
 func start_practice() -> void:
+	_reset_power_state()
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
 	village_tasks_expanded = false
 	task_progress.clear()
@@ -1252,7 +1475,7 @@ func start_practice() -> void:
 	for i in tasks.size():
 		completed_tasks.append(0)
 		task_progress.append(0)
-	player_is_impostor = rng.randi_range(0, 4) == 0
+	player_is_impostor = DEBUG_FORCE_NENEK_FOR_TESTING or rng.randi_range(0, 4) == 0
 	if player_is_impostor:
 		impostor_character = selected_character
 		assigned_role_character = selected_character
@@ -1261,30 +1484,75 @@ func start_practice() -> void:
 		impostor_character = available[rng.randi_range(0, available.size() - 1)]
 		var role_characters := CHARACTERS.filter(func(c: String) -> bool: return c != selected_character)
 		assigned_role_character = role_characters[rng.randi_range(0, role_characters.size() - 1)]
+	practice_power_room = {"map_index": selected_map, "started": true, "finished": false, "meeting_state": "", "players": {1: {"id": 1, "role": "nenek_kebayan" if player_is_impostor else "villager", "alive": true, "sleeping": false, "position": player_position}}}
+	NenekPowers.reset_match(practice_power_room, Time.get_ticks_msec() / 1000.0)
 	_show_role_reveal()
 
 
 func build_game() -> void:
 	await game_screen.build(self)
-
+	game_screen.refresh_power_effects(self)
+	_update_power_view()
+	_update_power_hud()
+	if not can_local_act(): _enter_watch_mode()
 
 func build_control_bar() -> void:
 	game_screen.build_control_bar(self)
 
 
 func interact_nearest() -> void:
+	if _utility_dialog_open(): return
+	if not can_local_act(): return
 	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	if task_index >= 0:
 		if completed_tasks[task_index] == 1: show_notice("That task is already complete."); return
 		open_task(task_index); return
 	if player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0:
 		call_meeting(); return
-	if _nearest_index(MapGeometry.npc_points(selected_map), 78.0) >= 0:
-		show_notice("The villagers look uneasy. Check the clue journal before accusing anyone."); return
-	show_notice("Move closer to a marked task, villager or gong.")
+	show_notice("Move closer to a marked task or gong.")
+
+
+func cast_sleep_spell() -> void:
+	if _utility_dialog_open(): return
+	if not player_is_impostor or not can_local_act(): return
+	if Time.get_ticks_msec() / 1000.0 < sleep_ready_at:
+		show_notice("Jampi Tidur is still recharging."); return
+	if room_code.is_empty() or network_manager == null or not network_manager.is_connected_to_room_server():
+		show_notice("Jampi Tidur needs another player in an online room."); return
+	var nearest_peer := -1
+	var nearest_distance := NenekPowers.SLEEP_RANGE + 0.01
+	for member in lobby_players:
+		var peer_id := int(member.get("id", -1))
+		if peer_id == network_manager.local_peer_id() or not NenekPowers.is_active(member): continue
+		var point: Vector2 = member.get("position", Vector2.ZERO)
+		var distance := player_position.distance_to(point)
+		if distance < nearest_distance and MapGeometry.has_clear_path(selected_map, player_position, point, locked_entrances()):
+			nearest_distance = distance
+			nearest_peer = peer_id
+	if nearest_peer < 0:
+		show_notice("Find an awake villager nearby with no wall or locked entrance between you."); return
+	network_manager.cast_sleep_spell(nearest_peer)
+
+
+func cast_sabotage(kind: String) -> void:
+	if not player_is_impostor or not can_local_act() or current_screen != "game" or _utility_dialog_open(): return
+	if Time.get_ticks_msec() / 1000.0 < sabotage_ready_at:
+		show_notice("Fog and door locking share a two-minute recharge."); return
+	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
+		network_manager.cast_sabotage(kind)
+	else:
+		var now := Time.get_ticks_msec() / 1000.0
+		practice_power_room["players"][1]["position"] = player_position
+		var error := NenekPowers.try_sabotage(practice_power_room, 1, kind, now)
+		if not error.is_empty(): show_notice(error); return
+		player_position = practice_power_room["players"][1]["position"]
+		if is_instance_valid(player_body): player_body.global_position = player_position
+		_apply_power_state(NenekPowers.snapshot(practice_power_room, practice_power_room["players"][1], now))
+		show_notice("Fog surrounds your current location." if kind == "fog" else "All entrances to this section are locked for 10 seconds.")
 
 
 func open_task(index: int) -> void:
+	if not can_local_act(): return
 	task_overlay_index = index
 	_stop_move()
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
@@ -1304,6 +1572,7 @@ func open_task(index: int) -> void:
 
 
 func _answer_task(task_index: int, answer: int) -> void:
+	if not can_local_act(): return
 	var task: Dictionary = TASKS[MAPS[selected_map]["name"]][task_index]
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		network_manager.submit_task_answer(task_index, answer)
@@ -1337,6 +1606,7 @@ func _close_task() -> void:
 
 
 func inspect_nearest_clue() -> void:
+	if not can_local_act(): return
 	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	var clue_points_local: Array = clue_points if clue_points.size() == 3 else MapGeometry.clue_candidates(selected_map).slice(0, 3)
 	var nearest := _nearest_index(clue_points_local, 72.0)
@@ -1356,8 +1626,10 @@ func inspect_nearest_clue() -> void:
 
 
 func show_clue_panel(clue_name: String, character: String) -> void:
+	if not can_local_act(): return
 	_stop_move()
 	var overlay := make_panel(Rect2(370, 190, 540, 300), Color(0.12, 0.08, 0.06, 0.98))
+	overlay.name = "ClueOverlay"
 	var title := make_label("CLUE RECORDED", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(25, 24); title.size = Vector2(490, 40); title.reparent(overlay, false)
 	var copy := make_label("Found: " + clue_name + "\n\nThis evidence is linked to the visual character " + character + ". A character's appearance does not prove their role.", 18, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1367,8 +1639,10 @@ func show_clue_panel(clue_name: String, character: String) -> void:
 
 
 func show_journal() -> void:
+	if not can_local_act(): return
 	_stop_move()
 	var overlay := make_panel(Rect2(320, 115, 640, 480), Color(0.12, 0.08, 0.06, 0.98))
+	overlay.name = "JournalOverlay"
 	var title := make_label("CLUE JOURNAL", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(20, 18); title.size = Vector2(600, 40); title.reparent(overlay, false)
 	var intro := make_label("Evidence is separate from task progress. The visual character is not the secret role.", 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1382,6 +1656,7 @@ func show_journal() -> void:
 
 
 func show_map_overlay() -> void:
+	if not can_local_act(): return
 	if find_child("MapOverlay", true, false) != null: return
 	_stop_move()
 	var overlay := make_panel(Rect2(250, 110, 780, 500), Color(0.12, 0.08, 0.06, 0.99))
@@ -1399,6 +1674,7 @@ func show_map_overlay() -> void:
 
 
 func call_meeting() -> void:
+	if not can_local_act(): return
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		network_manager.call_meeting()
 		return
@@ -1408,6 +1684,7 @@ func call_meeting() -> void:
 
 
 func show_vote_panel() -> void:
+	if not can_local_act(): return
 	_stop_move()
 	var overlay := make_panel(Rect2(300, 120, 680, 480), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "VoteOverlay"
@@ -1425,6 +1702,7 @@ func show_vote_panel() -> void:
 
 
 func _cast_vote(suspect: String) -> void:
+	if not can_local_act(): return
 	if suspect.is_empty():
 		var skipped_overlay := find_child("VoteOverlay", true, false)
 		if skipped_overlay: skipped_overlay.queue_free()
@@ -1439,56 +1717,35 @@ func _cast_vote(suspect: String) -> void:
 		build_game(); show_notice("" if suspect.is_empty() else suspect + " was a Villager. The investigation continues.")
 
 
-func eliminate_nearest() -> void:
-	if not player_is_impostor: return
-	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
-		var nearest_peer := -1
-		var nearest_distance := 90.0
-		for member in lobby_players:
-			var peer_id := int(member.get("id", -1))
-			if peer_id == network_manager.local_peer_id() or not bool(member.get("alive", true)): continue
-			var candidate: float = player_position.distance_to(member.get("position", Vector2.ZERO))
-			if candidate < nearest_distance: nearest_distance = candidate; nearest_peer = peer_id
-		if nearest_peer < 0: show_notice("Move closer to a living player."); return
-		network_manager.eliminate_player(nearest_peer)
-		return
-	var nearest := _nearest_index(MapGeometry.npc_points(selected_map), 78.0)
-	if nearest < 0: show_notice("Move close to a player to eliminate them."); return
-	var victim: String = NPC_NAMES[nearest]
-	if victim == impostor_character: show_notice("Your secret identity is tied to a different visual character."); return
-	if not dead_npcs.has(victim): dead_npcs.append(victim)
-	if dead_npcs.size() >= NPC_NAMES.size(): show_result(false, "Every Villager has been eliminated. Nenek Kebayan wins!")
-	else: build_game(); show_notice(victim + " was eliminated. Stay out of sight.")
-
-
 func show_result(villagers_win: bool, message: String) -> void:
 	_stop_move()
+	page_controls.call("close_dialog")
+	var meeting_overlay := find_child("MeetingOverlay", true, false)
+	if meeting_overlay:
+		meeting_overlay.get_parent().remove_child(meeting_overlay)
+		meeting_overlay.queue_free()
 	current_screen = "result"
-	for child in get_children():
-		if child is Control: child.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var overlay := make_panel(Rect2(310, 200, 660, 330), Color(0.1, 0.07, 0.04, 0.98))
-	var title := make_label("VILLAGERS WIN!" if villagers_win else "NENEK KEBAYAN WINS!", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	title.position = Vector2(30, 26); title.size = Vector2(600, 52); title.reparent(overlay, false)
-	var summary := make_label(message + ("\n\nSecret role character: " + impostor_character if not impostor_character.is_empty() else ""), 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	summary.position = Vector2(45, 105); summary.size = Vector2(570, 90); summary.reparent(overlay, false)
-	var again := make_button(overlay, "RETURN TO MENU", Callable(self, "_return_to_menu_cleanly"), 220, 48, true)
+	var backdrop := ColorRect.new()
+	backdrop.name = "ResultOverlay"
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0, 0, 0, 0.45)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_screen_ui_parent().add_child(backdrop)
+	var panel := GameUI.make_panel(backdrop, Rect2(310, 200, 660, 330), Color(0.1, 0.07, 0.04, 0.98))
+	panel.name = "ResultPanel"
+	var title := _make_child_label(panel, "VILLAGERS WIN!" if villagers_win else "NENEK KEBAYAN WINS!", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 26, 600, 52))
+	title.name = "ResultTitle"
+	_make_child_label(panel, message + ("\n\nSecret role character: " + impostor_character if not impostor_character.is_empty() else ""), 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(45, 105, 570, 90))
+	var again := make_button(panel, "RETURN TO MENU", Callable(self, "_return_to_menu_cleanly"), 220, 48, true)
 	again.position = Vector2(220, 240)
 
 
 func show_exit_confirmation() -> void:
-	if find_child("ExitConfirmation", true, false) != null: return
-	_stop_move()
-	var overlay := make_panel(Rect2(390, 220, 500, 280), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "ExitConfirmation"
-	_make_child_label(overlay, "LEAVE GAME?", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 24, 452, 42))
-	_make_child_label(overlay, "Are you sure you want to return to the main menu?", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(42, 82, 416, 64))
-	var yes := make_button(overlay, "YES", Callable(self, "_return_to_menu_cleanly"), 150, 46, true)
-	yes.position = Vector2(78, 180)
-	var no := make_button(overlay, "NO", func(): overlay.queue_free(), 150, 46)
-	no.position = Vector2(272, 180)
-
+	page_controls.call("confirm", "LEAVE GAME?", "Leave the current match and return to the main menu?", Callable(self, "_return_to_menu_cleanly"))
 
 func _return_to_menu_cleanly() -> void:
+	page_controls.call("close_dialog")
+	_reset_power_state()
 	if network_manager != null and not room_code.is_empty(): network_manager.leave_room()
 	room_code = ""
 	room_is_host = false
@@ -1513,17 +1770,8 @@ func _travel_clue(index: int) -> void:
 	if index >= 0 and index < route_points.size(): _set_route(route_points[index], "Follow the route to the clue and press INSPECT CLUE.")
 
 
-func _request_eliminate_player(peer_id: int) -> void:
-	if network_manager == null or not player_is_impostor: return
-	var actor := game_world.get_node_or_null("PlayerActor_%d" % peer_id) if is_instance_valid(game_world) else null
-	if actor == null: return
-	var target_position := (actor as Node2D).global_position
-	if player_position.distance_to(target_position) > 85.0:
-		show_notice("Move closer to that player."); return
-	network_manager.eliminate_player(peer_id)
-
-
 func _set_route(target: Vector2, message: String) -> void:
+	if not can_local_act(): return
 	route_target = target
 	route_active = true
 	var route_line: Line2D = null
@@ -1545,10 +1793,14 @@ func _nearest_index(points: Array, max_distance: float) -> int:
 
 
 func _set_move(direction: Vector2) -> void:
+	if _utility_dialog_open(): return
+	if not can_local_act(): return
 	move_vector = direction
 
 
 func _on_joystick_input(event: InputEvent, pad: Control, knob: Control) -> void:
+	if _utility_dialog_open(): return
+	if not can_local_act(): return
 	var active := false
 	var local_position := Vector2.ZERO
 	if event is InputEventScreenTouch:
@@ -1578,6 +1830,7 @@ func _on_joystick_input(event: InputEvent, pad: Control, knob: Control) -> void:
 
 func _stop_move() -> void:
 	move_vector = Vector2.ZERO
+	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server(): network_manager.send_player_input(Vector2.ZERO)
 	if is_instance_valid(player_body): player_body.call("set_input_direction", Vector2.ZERO)
 
 
@@ -1599,31 +1852,11 @@ func show_notice(message: String) -> void:
 	room_notice.text = message
 
 
-func show_how_to_play(return_screen: String) -> void:
-	_close_menu_popups()
-	var overlay := make_panel(Rect2(325, 115, 630, 490), Color(0.12, 0.08, 0.06, 0.98))
-	overlay.name = "HowToPlayOverlay"
-	_make_child_label(overlay, "HOW TO PLAY", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 580, 42))
-	var help_body := _make_child_label(overlay, "Choose a map and a folklore character.\n\nVillagers: complete map tasks, inspect clues,\nand call the gong to vote.\n\nNenek Kebayan: keep your role secret and eliminate\nthe villagers.\n\nMove with WASD, arrow keys or the on-screen pad.\nPress E near a task. Inspect glowing markers for clues.", 18, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(48, 82, 535, 320))
-	help_body.autowrap_mode = TextServer.AUTOWRAP_WORD
-	help_body.clip_text = true
-	help_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 140, 42)
-	close.position = Vector2(245, 420)
-	if return_screen == "menu": pass
+func show_how_to_play(_return_screen: String = "") -> void:
+	page_controls.call("show_help")
 
-
-func show_settings(_return_screen: String) -> void:
-	_close_menu_popups()
-	var overlay := make_panel(Rect2(375, 200, 530, 320), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "SettingsOverlay"
-	_make_child_label(overlay, "SETTINGS", 26, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 22, 480, 42))
-	_make_child_label(overlay, "Landscape layout is enabled.\nTouch and keyboard movement are supported.\nAudio controls apply to all game sound.", 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 78, 460, 84))
-	var audio := make_button(overlay, "UNMUTE AUDIO" if audio_muted else "MUTE AUDIO", Callable(self, "_toggle_audio"), 210, 42, true)
-	audio.name = "SettingsAudioButton"; audio.position = Vector2(150, 174)
-	var close := make_button(overlay, "CLOSE", func(): overlay.queue_free(), 140, 42)
-	close.position = Vector2(195, 232)
-
+func show_settings(_return_screen: String = "") -> void:
+	page_controls.call("show_settings")
 
 func _make_child_label(parent: Control, text: String, font_size: int, color: Color, align: HorizontalAlignment, rect: Rect2) -> Label:
 	return GameUI.make_child_label(parent, text, font_size, color, align, rect)

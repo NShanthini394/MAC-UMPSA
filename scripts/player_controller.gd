@@ -5,6 +5,10 @@ const MapGeometry = preload("res://scripts/map_geometry.gd")
 
 @export var move_speed := 250.0
 @export var map_index := 0
+var locked_entrances: Array = []
+var sleeping := false
+var inactive := false
+var _sleep_badge: Label
 
 var is_local_player := true
 var is_network_driven := false
@@ -27,7 +31,32 @@ func configure(character: String, player_name: String, local_player: bool, netwo
 
 
 func set_input_direction(direction: Vector2) -> void:
-	_move_direction = direction.limit_length(1.0)
+	_move_direction = Vector2.ZERO if inactive or sleeping else direction.limit_length(1.0)
+
+
+func set_sleeping(value: bool) -> void:
+	if sleeping == value and _sleep_badge != null: return
+	sleeping = value
+	if sleeping:
+		_move_direction = Vector2.ZERO
+		velocity = Vector2.ZERO
+		if _has_network_target: global_position = _network_target
+	character_actor.call("set_sleeping", sleeping)
+	if _sleep_badge == null:
+		_sleep_badge = Label.new()
+		_sleep_badge.text = "Z z z"
+		_sleep_badge.position = Vector2(-23, -120)
+		_sleep_badge.add_theme_font_size_override("font_size", 18)
+		_sleep_badge.add_theme_color_override("font_color", Color("b8ddff"))
+		_sleep_badge.add_theme_color_override("font_shadow_color", Color.BLACK)
+		_sleep_badge.add_theme_constant_override("shadow_offset_x", 2)
+		_sleep_badge.add_theme_constant_override("shadow_offset_y", 2)
+		_sleep_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var badge_material := CanvasItemMaterial.new()
+		badge_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		_sleep_badge.material = badge_material
+		add_child(_sleep_badge)
+	_sleep_badge.visible = sleeping
 
 
 func set_network_target(target: Vector2) -> void:
@@ -45,17 +74,21 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if not is_local_player or is_network_driven:
 		return
+	if sleeping or inactive:
+		velocity = Vector2.ZERO
+		character_actor.call("set_running", false)
+		return
 	velocity = _move_direction * move_speed
 	# Static bodies provide physical wall collisions. This radius check also
 	# prevents a step into river or pond regions at map edges and wall corners.
 	var current := global_position
 	var candidate := current + velocity * _delta
-	if MapGeometry.is_position_blocked(map_index, candidate, 14.0):
+	if MapGeometry.is_step_blocked(map_index, current, candidate, 14.0, locked_entrances):
 		var horizontal := Vector2(candidate.x, current.y)
 		var vertical := Vector2(current.x, candidate.y)
-		if MapGeometry.is_position_blocked(map_index, horizontal, 14.0):
+		if MapGeometry.is_step_blocked(map_index, current, horizontal, 14.0, locked_entrances):
 			velocity.x = 0.0
-		if MapGeometry.is_position_blocked(map_index, vertical, 14.0):
+		if MapGeometry.is_step_blocked(map_index, current, vertical, 14.0, locked_entrances):
 			velocity.y = 0.0
 	move_and_slide()
 	if velocity.length_squared() > 1.0:
@@ -65,6 +98,10 @@ func _physics_process(_delta: float) -> void:
 
 func _process(delta: float) -> void:
 	if not is_network_driven or not _has_network_target:
+		return
+	if sleeping or inactive:
+		global_position = _network_target
+		character_actor.call("set_running", false)
 		return
 	var travel_direction := _network_target - global_position
 	var distance := global_position.distance_to(_network_target)

@@ -29,7 +29,7 @@ static func make_map_texture(atlas: Texture2D, region: Rect2) -> Texture2D:
 
 
 static func make_label(parent: Node, text: String, font_size: int, color: Color, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	var label := Label.new(); label.text = text; label.add_theme_font_size_override("font_size", font_size); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75)); label.add_theme_constant_override("shadow_offset_x", 1); label.add_theme_constant_override("shadow_offset_y", 2); label.horizontal_alignment = align; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; parent.add_child(label); return label
+	var label := Label.new(); label.text = text; label.add_theme_font_size_override("font_size", font_size); label.add_theme_color_override("font_color", color); label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75)); label.add_theme_constant_override("shadow_offset_x", 1); label.add_theme_constant_override("shadow_offset_y", 2); label.horizontal_alignment = align; label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; label.size = Vector2(1280, 32); parent.add_child(label); return label
 
 
 static func make_panel(parent: Node, rect: Rect2, color: Color) -> Panel:

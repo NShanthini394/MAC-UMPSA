@@ -71,8 +71,8 @@ func build(app) -> void:
 	if online_match:
 		var player_scene: PackedScene = load("res://scenes/player.tscn") as PackedScene
 		for member in app.lobby_players:
-			if not bool(member.get("alive", true)): continue
 			var peer_id := int(member.get("id", -1))
+			if not bool(member.get("alive", true)) and peer_id != app.network_manager.local_peer_id(): continue
 			var actor_position: Vector2 = member.get("position", MapGeometry.spawn_point(app.selected_map))
 			var character := str(member.get("character", ""))
 			var is_local: bool = peer_id == app.network_manager.local_peer_id()
@@ -92,12 +92,8 @@ func build(app) -> void:
 			if is_local:
 				app.player_body = actor
 				_configure_player_camera_and_vision(actor)
-			if app.player_is_impostor and peer_id != app.network_manager.local_peer_id():
-				_add_world_marker(world, actor_position + Vector2(0, -66), "!", Color("ff7770"), "EliminateMarker_%d" % peer_id)
-	else:
-		for i in GameData.NPC_NAMES.size():
-			if app.dead_npcs.has(GameData.NPC_NAMES[i]): continue
-			_add_npc_actor(world, GameData.NPC_NAMES[i], MapGeometry.npc_points(app.selected_map)[i])
+			actor.call("set_sleeping", bool(member.get("sleeping", false)))
+			actor.set("inactive", not bool(member.get("alive", true)))
 	var clue_points: Array = app.clue_points if app.clue_points.size() == 3 else MapGeometry.clue_candidates(app.selected_map).slice(0, 3)
 	var character_clues: Array = GameData.CHARACTER_CLUES.get(app.impostor_character, [])
 	for i in clue_points.size():
@@ -114,6 +110,7 @@ func build(app) -> void:
 			pawn.set("move_speed", 150.0)
 		world.add_child(pawn)
 		pawn.call("configure", app.selected_character, app.lobby_player_name, true, false)
+		pawn.set("locked_entrances", app.locked_entrances())
 		var camera := pawn.get_node("Camera2D") as Camera2D
 		camera.limit_left = 0; camera.limit_top = 0
 		camera.limit_right = ceili(world_size.x); camera.limit_bottom = ceili(world_size.y)
@@ -122,12 +119,14 @@ func build(app) -> void:
 	if is_instance_valid(app.player_body):
 		_configure_local_visibility(world, app.player_body)
 	var notice: Label = app.make_label("", 15, Color("fff3cd"), HORIZONTAL_ALIGNMENT_CENTER)
-	notice.name = "NoticeLabel"; notice.position = Vector2(310, 612); notice.size = Vector2(660, 28)
+	notice.name = "NoticeLabel"; notice.position = Vector2(310, 536); notice.size = Vector2(660, 48)
 	var prompt: Label = app.make_label("", 13, GameData.GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	prompt.name = "InteractionPromptLabel"; prompt.position = Vector2(820, 574); prompt.size = Vector2(350, 24)
 	build_control_bar(app)
-	var leave: Button = app.make_button(app, "MENU", Callable(app, "show_exit_confirmation"), 88, 36)
-	leave.position = Vector2(1180, 665)
+	var status: Label = app.make_label("", 14, GameData.GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	status.name = "PowerStatusLabel"; status.position = Vector2(310, 82); status.size = Vector2(660, 40)
+	var watching: Label = app.make_label("", 16, Color("c9e4ff"), HORIZONTAL_ALIGNMENT_CENTER)
+	watching.name = "WatchingLabel"; watching.position = Vector2(330, 651); watching.size = Vector2(460, 55)
 	app.current_area_name = ""
 
 
@@ -203,8 +202,7 @@ func _configure_local_visibility(world: Node2D, observer: CharacterBody2D) -> vo
 			continue
 		var child_name := child.name as String
 		var is_actor := child is CharacterBody2D or child_name.begins_with("NPC_")
-		var is_player_marker := child_name.begins_with("EliminateMarker_")
-		if not is_actor and not is_player_marker:
+		if not is_actor:
 			continue
 		var visibility_tracker: Node = visibility_script.new()
 		visibility_tracker.call("configure", observer, child, 160.0)
@@ -241,30 +239,6 @@ func _add_world_marker(world: Node2D, position: Vector2, text: String, color: Co
 	world.add_child(marker)
 
 
-func _add_npc_actor(world: Node2D, character: String, position: Vector2) -> void:
-	var npc := Node2D.new()
-	npc.name = "NPC_%s" % character.replace(" ", "_")
-	npc.position = position
-	var sprite := Sprite2D.new()
-	if GameData.CHARACTER_AVATARS.has(character):
-		sprite.texture = load(GameData.CHARACTER_AVATARS[character])
-	sprite.scale = Vector2(0.18, 0.18)
-	sprite.position = Vector2(0, -10)
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	npc.add_child(sprite)
-	var name_label := Label.new()
-	name_label.text = character
-	name_label.position = Vector2(-56, -52)
-	name_label.size = Vector2(112, 18)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 10)
-	name_label.add_theme_color_override("font_color", GameData.CREAM)
-	name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	npc.add_child(name_label)
-	world.add_child(npc)
-
-
 func build_control_bar(app) -> void:
 	var pad := Panel.new()
 	pad.name = "VirtualJoystick"; pad.position = Vector2(30, 540); pad.size = Vector2(148, 148)
@@ -284,9 +258,28 @@ func build_control_bar(app) -> void:
 	inspect.name = "InspectClueButton"
 	inspect.position = Vector2(1005, 657)
 	var map_button: Button = app.make_button(app, "MAP", Callable(app, "show_map_overlay"), 120, 38)
+	map_button.name = "GameMapButton"
 	map_button.position = Vector2(824, 610)
 	var journal: Button = app.make_button(app, "CLUE JOURNAL", Callable(app, "show_journal"), 156, 38)
+	journal.name = "GameJournalButton"
 	journal.position = Vector2(824, 657)
 	if app.player_is_impostor:
-		var kill: Button = app.make_button(app, "KILL", Callable(app, "eliminate_nearest"), 136, 42, true)
-		kill.position = Vector2(620, 664)
+		var sleep: Button = app.make_button(app, "JAMPI TIDUR", Callable(app, "cast_sleep_spell"), 132, 48, true)
+		sleep.name = "SleepSpellButton"; sleep.position = Vector2(410, 653)
+		var mist: Button = app.make_button(app, "KABUS", Callable(app, "cast_sabotage").bind("fog"), 100, 48, true)
+		mist.name = "FogButton"; mist.position = Vector2(548, 653)
+		var curse: Button = app.make_button(app, "SUMPAHAN PINTU", Callable(app, "cast_sabotage").bind("lock"), 166, 48, true)
+		curse.name = "DoorLockButton"; curse.position = Vector2(654, 653)
+
+
+func refresh_power_effects(app) -> void:
+	if not is_instance_valid(app.game_world): return
+	var old_effect: Node = app.game_world.get_node_or_null("AreaPowerEffects")
+	if old_effect:
+		app.game_world.remove_child(old_effect)
+		old_effect.queue_free()
+	if app.active_power_kind.is_empty(): return
+	var effect: Node2D = load("res://scripts/area_power_effects.gd").new()
+	effect.name = "AreaPowerEffects"
+	app.game_world.add_child(effect)
+	effect.call("configure", app.selected_map, app.active_power_kind, app.active_power_area, app.player_is_impostor, app.active_fog_origin, app.active_fog_radius, app.player_body)

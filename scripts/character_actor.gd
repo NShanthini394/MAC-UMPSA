@@ -45,6 +45,7 @@ var _walk_frames: Array[Texture2D] = []
 var _front_texture: Texture2D
 var _back_texture: Texture2D
 var _is_running := false
+var _sleeping := false
 var _elapsed := 0.0
 var _frame_index := 0
 var _base_sprite_y := 0.0
@@ -155,6 +156,7 @@ func set_facing_direction(direction: Vector2) -> void:
 
 
 func set_running(running: bool) -> void:
+	if _sleeping: return
 	_is_running = running
 	if not _is_running:
 		_elapsed = 0.0
@@ -171,7 +173,18 @@ func set_running(running: bool) -> void:
 			_fallback_walk_material.set_shader_parameter("walking", false)
 
 
+func set_sleeping(value: bool) -> void:
+	_sleeping = false
+	set_running(false)
+	_sleeping = value
+	_sprite.pivot_offset = Vector2(33, 60)
+	_sprite.rotation = deg_to_rad(-65.0) if value else 0.0
+	_sprite.position.y = _base_sprite_y + (24.0 if value else 0.0)
+	_sprite.modulate = Color("c0d2e8") if value else Color.WHITE
+
+
 func _process(delta: float) -> void:
+	if _sleeping: return
 	if not _is_running:
 		return
 	_elapsed += delta

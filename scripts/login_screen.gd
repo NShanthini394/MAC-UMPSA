@@ -4,7 +4,6 @@ const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
 const WHITE := Color("fff8e9")
 const MUTED := Color("d2bc99")
-const BACKGROUND := Color("21170f")
 const SURFACE := Color("392719")
 const BORDER := Color("ac7d3e")
 
@@ -21,19 +20,22 @@ static func flat_style(fill: Color, border: Color = Color.TRANSPARENT) -> StyleB
 static func account_button(parent: Control, title: String, callback: Callable, rect: Rect2, light: bool = false, outlined: bool = false) -> Button:
 	var button := UI.make_button(parent, title, callback, rect.size.x, rect.size.y)
 	button.position = rect.position
-	var fill := WHITE if light else Color("7d431e")
-	if outlined: fill = Color("2b1d13")
-	button.add_theme_stylebox_override("normal", flat_style(fill, BORDER if not light else fill))
-	button.add_theme_stylebox_override("hover", flat_style(fill.darkened(0.08) if light else fill.lightened(0.12), Data.GOLD))
-	button.add_theme_stylebox_override("pressed", flat_style(fill.darkened(0.15)))
-	button.add_theme_color_override("font_color", Color("20242c") if light else WHITE)
-	button.add_theme_color_override("font_hover_color", Color("20242c") if light else WHITE)
-	button.add_theme_color_override("font_pressed_color", Color("20242c") if light else WHITE)
-	button.add_theme_font_size_override("font_size", 16)
+	UI.apply_menu_button(button, "light" if light else ("wood" if outlined else "red"))
+	button.add_theme_font_size_override("font_size", 24)
 	return button
 
 
 static func provider_mark(button: Button, provider: String) -> void:
+	var title := button.text
+	button.text = ""
+	button.accessibility_name = title
+	var font := button.get_theme_font("font")
+	var title_width := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+	var group := Control.new()
+	group.position = Vector2((button.size.x - title_width - 40) * 0.5, (button.size.y - 34) * 0.5)
+	group.size = Vector2(title_width + 40, 34)
+	group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(group)
 	var mark := TextureRect.new()
 	mark.name = "ProviderLogo"
 	var logo := load("res://assets/ui/providers/google.png" if provider == "Google" else "res://assets/ui/providers/huawei.png") as Texture2D
@@ -41,65 +43,121 @@ static func provider_mark(button: Button, provider: String) -> void:
 	mark.texture = logo if provider == "Google" else UI.make_map_texture(logo, Rect2(100, 0, 300, 281))
 	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	mark.position = Vector2(14, 6); mark.size = Vector2(32, 32)
+	mark.position = Vector2(0, 3); mark.size = Vector2(28, 28)
 	mark.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	button.add_child(mark)
+	group.add_child(mark)
+	var label := UI.make_child_label(group, title, 24, Color("302015"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(40, 0, title_width + 2, 34))
+	label.add_theme_color_override("font_shadow_color", Color.TRANSPARENT)
 
 
 static func build(app: Control) -> void:
-	UI.add_color_overlay(app, BACKGROUND)
-	var hero := UI.make_panel(app, Rect2(240, 14, 800, 250), SURFACE)
+	var background := TextureRect.new()
+	background.name = "LoginBackground"
+	background.texture = load("res://assets/ui/login_background.png") as Texture2D
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(background)
+	var layout := centered_layout(app)
+	var hero := UI.make_panel(layout, Rect2(420, 12, 440, 210), SURFACE)
 	hero.name = "LoginHero"
 	hero.clip_contents = true
 	hero.add_theme_stylebox_override("panel", flat_style(SURFACE, BORDER))
-	var art := load(Data.MENU_ART) as Texture2D
+	var art := load("res://assets/ui/login_nenek_banner.png") as Texture2D
 	var hero_image := TextureRect.new()
 	hero_image.name = "LoginTitleArtwork"
-	hero_image.texture = UI.make_map_texture(art, Rect2(art.get_width() * 0.11, 0, art.get_width() * 0.72, art.get_height() * 0.33))
+	# Frame Nenek's face and shoulders at the centre of the wide banner.
+	hero_image.texture = UI.make_map_texture(art, Rect2(650, 0, 1296, 408))
 	hero_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	hero_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	hero_image.position = Vector2(10, 10); hero_image.size = Vector2(780, 188)
+	hero_image.position = Vector2(4, 4); hero_image.size = Vector2(432, 136)
 	hero_image.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	hero_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.add_child(hero_image)
-	UI.make_child_label(hero, "Nenek Kebayan:", 20, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 199, 760, 28))
-	UI.make_child_label(hero, "Siapa Pengkhianat?", 12, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 228, 760, 18))
+	UI.make_child_label(hero, "Nenek Kebayan", 28, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 144, 416, 36))
+	UI.make_child_label(hero, "Siapa Pengkhianat?", 18, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 179, 416, 24))
 	var form := Control.new()
 	form.name = "LoginPanel"
-	form.position = Vector2(365, 278); form.size = Vector2(550, 356)
-	app.add_child(form)
-	UI.make_child_label(form, "Welcome, Player!", 23, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(0, 0, 550, 34))
-	UI.make_child_label(form, "Sign in, create an account, or join as a guest.", 14, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(0, 36, 550, 28))
-	var google := account_button(form, "Continue with Google", Callable(app, "_login_provider_unavailable").bind("Google"), Rect2(0, 72, 550, 44), true)
+	form.position = Vector2(380, 228); form.size = Vector2(520, 480)
+	layout.add_child(form)
+	UI.make_child_label(form, "Welcome, Player!", 28, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-40, 0, 600, 36))
+	UI.make_child_label(form, "Sign in, create an account, or join as a guest.", 21, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-40, 38, 600, 28))
+	var google := account_button(form, "Continue with Google", Callable(app.firebase_auth, "google_sign_in"), Rect2(0, 74, 520, 60), true)
 	google.name = "LoginGoogleButton"; provider_mark(google, "Google")
-	var huawei := account_button(form, "Continue with Huawei", Callable(app, "_login_provider_unavailable").bind("Huawei"), Rect2(0, 126, 550, 44), true)
+	var email := account_button(form, "Sign in with Email", Callable(app, "show_email_sign_in"), Rect2(0, 144, 520, 60))
+	email.name = "LoginEmailButton"
+	var huawei := account_button(form, "Continue with Huawei ID", Callable(app, "_login_provider_unavailable").bind("Huawei"), Rect2(0, 214, 520, 60), true)
 	huawei.name = "LoginHuaweiButton"; provider_mark(huawei, "Huawei")
-	var create := account_button(form, "Create Account", Callable(app, "show_create_account"), Rect2(0, 180, 550, 44), false, true)
+	var create := account_button(form, "Create Account", Callable(app, "show_create_account"), Rect2(0, 284, 520, 60), false, true)
 	create.name = "LoginCreateAccountButton"
-	UI.make_child_label(form, "────────────  or  ────────────", 13, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(0, 229, 550, 25))
-	var guest := account_button(form, "▶  Play as Guest", Callable(app, "_continue_as_guest"), Rect2(0, 262, 550, 44))
+	var divider := ColorRect.new()
+	divider.position = Vector2(12, 354); divider.size = Vector2(496, 1)
+	divider.color = Color("745132"); divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	form.add_child(divider)
+	var guest := account_button(form, "▷  Play as Guest", Callable(app, "_continue_as_guest"), Rect2(0, 364, 520, 60), false, true)
 	guest.name = "LoginGuestButton"
-	var notice := UI.make_child_label(form, "", 13, Color("ffd79a"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(0, 312, 550, 42))
+	var notice := UI.make_child_label(form, "", 20, Color("ffd79a"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(-180, 432, 880, 48))
+	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	notice.name = "LoginNoticeLabel"
-	UI.make_child_label(app, "Google and Huawei sign-in require provider setup. Guest play is available now.", 12, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(230, 651, 820, 26))
+	var footer := UI.make_child_label(form, "Step into the village. Play your part.", 18, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-80, 440, 680, 28))
+	footer.name = "LoginFooterLabel"
+
+static func centered_layout(parent: Control) -> Control:
+	var layout := Control.new()
+	layout.name = "AccountLayout"
+	layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(layout)
+	layout.set_anchors_preset(Control.PRESET_CENTER)
+	layout.offset_left = -640; layout.offset_right = 640
+	layout.offset_top = -360; layout.offset_bottom = 360
+	return layout
 
 
 static func show_create_account(app: Control) -> void:
+	show_email_form(app, "create")
+
+static func show_email_form(app: Control, mode: String) -> void:
 	if app.find_child("CreateAccountOverlay", true, false) != null: return
 	var shade := ColorRect.new()
 	shade.name = "CreateAccountOverlay"
 	shade.color = Color(0, 0, 0, 0.65)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	app.add_child(shade)
-	var panel := UI.make_panel(shade, Rect2(390, 190, 500, 340), SURFACE)
+	var panel_height := 600 if mode == "create" else (540 if mode == "signin" else 420)
+	var submit_y := 446 if mode == "create" else (342 if mode == "signin" else 190)
+	var notice_y := 370 if mode == "create" else (414 if mode == "signin" else 264)
+	var back_y := 524 if mode == "create" else (480 if mode == "signin" else 350)
+	var panel := UI.make_panel(centered_layout(shade), Rect2(330, (720 - panel_height) * 0.5, 620, panel_height), SURFACE)
 	panel.add_theme_stylebox_override("panel", flat_style(SURFACE, BORDER))
-	UI.make_child_label(panel, "Create your account", 25, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 450, 40))
-	UI.make_child_label(panel, "Choose Google or Huawei to get started.", 14, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 66, 450, 30))
-	for index in 2:
-		var provider: String = ["Google", "Huawei"][index]
-		var button := account_button(panel, "Create with " + provider, func(): shade.queue_free(); app.call("_login_provider_unavailable", provider), Rect2(35, 112 + index * 58, 430, 46), true)
-		button.name = "Create" + provider + "Button"
-		provider_mark(button, provider)
-	var close := account_button(panel, "Back", func(): shade.queue_free(), Rect2(160, 264, 180, 42), false, true)
+	var heading: String = {"create": "Create your account", "signin": "Sign in with Email", "reset": "Reset your password"}[mode]
+	UI.make_child_label(panel, heading, 30, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 18, 560, 44))
+	var fields := [["Email", "AuthEmail", false]]
+	if mode != "reset": fields.append(["Password", "AuthPassword", true])
+	if mode == "create": fields.append(["Confirm password", "AuthConfirmPassword", true])
+	for index in fields.size():
+		var entry: Array = fields[index]
+		UI.make_child_label(panel, str(entry[0]), 22, WHITE, HORIZONTAL_ALIGNMENT_LEFT, Rect2(40, 80 + index * 96, 540, 28))
+		var input := LineEdit.new()
+		input.name = str(entry[1])
+		input.position = Vector2(40, 112 + index * 96)
+		input.size = Vector2(540, 56)
+		input.secret = bool(entry[2])
+		input.placeholder_text = "At least 6 characters" if mode == "create" and index == 1 else str(entry[0])
+		input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_PASSWORD if input.secret else LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
+		input.max_length = 4096 if input.secret else 254
+		input.add_theme_font_size_override("font_size", 24)
+		panel.add_child(input)
+		if index == fields.size() - 1: input.text_submitted.connect(func(_text): app.call("_submit_email_auth", mode))
+		if index == 0: input.grab_focus()
+	var notice := UI.make_child_label(panel, "", 20, Color("ffd79a"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, notice_y, 550, 68 if mode == "create" else 54))
+	notice.name = "AuthNoticeLabel"
+	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var submit := account_button(panel, "CREATE ACCOUNT" if mode == "create" else ("SEND RESET LINK" if mode == "reset" else "SIGN IN"), Callable(app, "_submit_email_auth").bind(mode), Rect2(40, submit_y, 540, 62))
+	submit.name = "AuthSubmitButton"
+	if mode == "signin":
+		var reset := account_button(panel, "Forgot password?", func(): app.firebase_auth.cancel(); shade.get_parent().remove_child(shade); shade.queue_free(); show_email_form(app, "reset"), Rect2(40, 284, 540, 46), false, true)
+		reset.name = "AuthResetButton"
+	var close := account_button(panel, "Back", Callable(app, "_close_email_auth"), Rect2(210, back_y, 200, 46 if mode == "signin" else 52), false, true)
 	close.name = "CreateAccountBackButton"

@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/raja_bersiung.png" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(93.0000, 5.0000, 164.0000, 334.0000)
+margin = Rect2(43.7979, 14.1295, 89.5958, 27.2591)
+filter_clip = true

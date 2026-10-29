@@ -2,13 +2,14 @@ extends RefCounted
 ## Builds the playable screen while delegating game actions to the main controller.
 
 const GameData = preload("res://scripts/game_data.gd")
+const UI = preload("res://scripts/game_ui.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 
 
 func build(app) -> void:
 	await app.clear_screen("game")
 	app.route_active = false
-	app.map_image = app.make_map_texture(load(GameData.MAP_ART), GameData.MAPS[app.selected_map]["region"])
+	app.map_image = app.make_map_texture(load(GameData.map_art_path(app.selected_map)), GameData.MAPS[app.selected_map]["region"])
 	var world := Node2D.new()
 	world.name = "GameWorld"
 	app.game_world = world
@@ -29,12 +30,13 @@ func build(app) -> void:
 	map_sprite.position = (world_size - map_region.size * map_scale) / 2.0
 	# The palace camera zooms into this atlas crop. Linear sampling avoids the
 	# visibly enlarged square pixels while keeping the character sprites crisp.
-	map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if app.selected_map == 0 else CanvasItem.TEXTURE_FILTER_NEAREST
+	map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	world.add_child(map_sprite)
-	var vision_darkness := CanvasModulate.new()
-	vision_darkness.name = "LocalVisionDarkness"
-	vision_darkness.color = Color("3e4754")
-	world.add_child(vision_darkness)
+	var paths := load("res://scripts/map_paths_visual.gd").new() as Node2D
+	paths.name = "PathsAndEntrances"
+	paths.set("map_index", app.selected_map)
+	paths.scale = MapGeometry.floor_plan(app.selected_map).scale
+	world.add_child(paths)
 	_add_map_collisions(world, app.selected_map)
 	var route_line := Line2D.new()
 	route_line.name = "RouteLine"; route_line.width = 6.0
@@ -43,15 +45,17 @@ func build(app) -> void:
 	route_line.visible = false; world.add_child(route_line)
 	var header: Panel = app.make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	app._make_child_label(header, GameData.MAPS[app.selected_map]["name"], 19, GameData.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(18, 12, 440, 32))
-	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "ORANG KAMPUNG") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
-	var progress: Label = app._make_child_label(header, "TUGAS  %d / %d    •    PETUNJUK  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
+	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
+	var progress: Label = app._make_child_label(header, "TASKS  %d / %d    •    CLUES  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
 	progress.name = "ProgressLabel"
+	progress.visible = not app.player_is_impostor
 	var task_panel_height := 438.0 if app.village_tasks_expanded else 68.0
 	var task_panel: Panel = app.make_panel(Rect2(16, 86, 284, task_panel_height), Color(0.12, 0.09, 0.06, 0.91))
 	task_panel.name = "VillageTasksPanel"
+	task_panel.visible = not app.player_is_impostor
 	task_panel.clip_contents = true
 	task_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var toggle_text := "TUGAS KAMPUNG  −" if app.village_tasks_expanded else "TUGAS KAMPUNG  +"
+	var toggle_text := "VILLAGE TASKS  −" if app.village_tasks_expanded else "VILLAGE TASKS  +"
 	var task_toggle: Button = app.make_button(task_panel, toggle_text, Callable(app, "toggle_village_tasks"), 260, 52, true)
 	task_toggle.name = "VillageTasksToggle"
 	task_toggle.position = Vector2(12, 7)
@@ -68,7 +72,13 @@ func build(app) -> void:
 		label.clip_text = true
 	var task_points: Array = MapGeometry.task_points(app.selected_map)
 	for i in task_points.size():
-		_add_world_marker(world, task_points[i], "✦", GameData.GOLD, "TaskMarker_%d" % i)
+		if app.player_is_impostor: continue
+		var station := load("res://scripts/task_station.gd").new() as Node2D
+		station.name = "TaskMarker_%d" % i
+		station.position = task_points[i]
+		station.set("task_index",i)
+		station.visible = app.completed_tasks[i] == 0
+		world.add_child(station)
 	_add_world_marker(world, MapGeometry.gong_point(app.selected_map), "◉", Color("ffdb6b"), "MeetingGongMarker")
 	var online_match: bool = not app.room_code.is_empty() and app.network_manager != null and app.network_manager.is_connected_to_room_server()
 	if online_match:
@@ -100,6 +110,7 @@ func build(app) -> void:
 	var clue_points: Array = app.clue_points if app.clue_points.size() == 3 else MapGeometry.clue_candidates(app.selected_map).slice(0, 3)
 	var character_clues: Array = GameData.CHARACTER_CLUES.get(app.impostor_character, [])
 	for i in clue_points.size():
+		if app.player_is_impostor: continue
 		if online_match and i in app.network_found_clues: continue
 		if not online_match and i < character_clues.size() and app.collected_clues.has(character_clues[i]): continue
 		_add_world_marker(world, clue_points[i], "?", Color("8fe4ff"), "ClueMarker_%d" % i)
@@ -130,7 +141,6 @@ func build(app) -> void:
 	status.name = "PowerStatusLabel"; status.position = Vector2(310, 82); status.size = Vector2(660, 40)
 	var watching: Label = app.make_label("", 16, Color("c9e4ff"), HORIZONTAL_ALIGNMENT_CENTER)
 	watching.name = "WatchingLabel"; watching.position = Vector2(330, 651); watching.size = Vector2(460, 55)
-	app.current_area_name = ""
 
 
 func _wrap_task_text(text: String, max_chars: int) -> String:
@@ -154,6 +164,18 @@ func _add_map_collisions(world: Node2D, map_index: int) -> void:
 	var obstacles := Node2D.new()
 	obstacles.name = "MapCollision"
 	world.add_child(obstacles)
+	var boundary := StaticBody2D.new()
+	boundary.name = "FloorBoundary"
+	boundary.collision_layer = 1
+	boundary.collision_mask = 0
+	obstacles.add_child(boundary)
+	for edge in MapGeometry.floor_plan(map_index).edges:
+		var segment := SegmentShape2D.new()
+		segment.a = edge[0]
+		segment.b = edge[1]
+		var collision := CollisionShape2D.new()
+		collision.shape = segment
+		boundary.add_child(collision)
 	for rect in MapGeometry.obstacles(map_index):
 		var body := StaticBody2D.new()
 		body.collision_layer = 1
@@ -165,37 +187,13 @@ func _add_map_collisions(world: Node2D, map_index: int) -> void:
 		shape.shape = rectangle
 		body.add_child(shape)
 		obstacles.add_child(body)
-		_add_light_occluder(world, rect)
 
 
 func _configure_player_camera_and_vision(player: CharacterBody2D) -> void:
 	var camera := player.get_node_or_null("Camera2D") as Camera2D
 	if camera:
 		camera.zoom = Vector2(1.7, 1.7)
-	var gradient := Gradient.new()
-	gradient.offsets = PackedFloat32Array([0.0, 0.72, 1.0])
-	gradient.colors = PackedColorArray([
-		Color(1.0, 1.0, 1.0, 1.0),
-		Color(1.0, 1.0, 1.0, 0.86),
-		Color(1.0, 1.0, 1.0, 0.0)
-	])
-	var light_texture := GradientTexture2D.new()
-	light_texture.width = 256
-	light_texture.height = 256
-	light_texture.fill = GradientTexture2D.FILL_RADIAL
-	light_texture.fill_from = Vector2(0.5, 0.5)
-	light_texture.fill_to = Vector2(0.5, 0.0)
-	light_texture.gradient = gradient
-	var vision_light := PointLight2D.new()
-	vision_light.name = "LocalVisionLight"
-	vision_light.texture = light_texture
-	vision_light.texture_scale = 1.7
-	vision_light.energy = 1.15
-	vision_light.color = Color("fff4d9")
-	vision_light.shadow_enabled = true
-	vision_light.shadow_color = Color(0.015, 0.02, 0.03, 0.76)
-	vision_light.shadow_filter = PointLight2D.SHADOW_FILTER_PCF5
-	player.add_child(vision_light)
+	# Bright map artwork; sight/door collision checks remain independent of tint.
 
 
 func _configure_local_visibility(world: Node2D, observer: CharacterBody2D) -> void:
@@ -265,8 +263,8 @@ func build_control_bar(app) -> void:
 	navigation.offset_right = -12; navigation.offset_bottom = 268
 	navigation.add_theme_constant_override("separation", 8)
 	app.game_hud.add_child(navigation)
-	_add_dock_button(app, navigation, "GameMapButton", "res://assets/ui/map_icon.svg", "Peta", Callable(app, "show_map_overlay"), false)
-	_add_dock_button(app, navigation, "GameJournalButton", "res://assets/ui/journal_icon.svg", "Jurnal petunjuk", Callable(app, "show_journal"), false)
+	_add_dock_button(app, navigation, "GameMapButton", "res://assets/ui/map_icon.svg", "Map", Callable(app, "show_map_overlay"), false)
+	_add_dock_button(app, navigation, "GameJournalButton", "res://assets/ui/journal_icon.svg", "Clue journal", Callable(app, "show_journal"), false)
 	var actions := Control.new()
 	actions.name = "GameActionButtons"
 	actions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -274,14 +272,15 @@ func build_control_bar(app) -> void:
 	# task list, joystick, or other HUD controls behind its child buttons.
 	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	app.game_hud.add_child(actions)
-	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interaksi · E", Callable(app, "interact_nearest"), true, Vector2(76, 76))
+	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interact · E", Callable(app, "interact_nearest"), true, Vector2(76, 76))
 	interact.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	interact.offset_left = -102; interact.offset_top = -134
 	interact.offset_right = -26; interact.offset_bottom = -58
-	var inspect := _add_dock_button(app, actions, "InspectClueButton", "res://assets/ui/clue_icon.svg", "Periksa petunjuk", Callable(app, "inspect_nearest_clue"), false, Vector2(76, 76))
+	var inspect := _add_dock_button(app, actions, "InspectClueButton", "res://assets/ui/clue_icon.svg", "Inspect clue", Callable(app, "inspect_nearest_clue"), false, Vector2(76, 76))
 	inspect.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	inspect.offset_left = -102; inspect.offset_top = -224
 	inspect.offset_right = -26; inspect.offset_bottom = -148
+	inspect.visible = not app.player_is_impostor
 	if app.player_is_impostor:
 		var powers := HBoxContainer.new()
 		powers.name = "PowerActionButtons"
@@ -290,18 +289,12 @@ func build_control_bar(app) -> void:
 		powers.offset_right = -20; powers.offset_bottom = -236
 		powers.add_theme_constant_override("separation", 6)
 		app.game_hud.add_child(powers)
-		_add_dock_button(app, powers, "SleepSpellButton", "res://assets/ui/sleep_icon.svg", "Jampi tidur", Callable(app, "cast_sleep_spell"), true, Vector2(54, 54))
-		_add_dock_button(app, powers, "FogButton", "res://assets/ui/fog_icon.svg", "Kabus", Callable(app, "cast_sabotage").bind("fog"), true, Vector2(54, 54))
-		_add_dock_button(app, powers, "DoorLockButton", "res://assets/ui/lock_icon.svg", "Sumpahan pintu", Callable(app, "cast_sabotage").bind("lock"), true, Vector2(54, 54))
-	var direction_arrow := TextureRect.new()
-	direction_arrow.name = "TaskDirectionArrow"
-	direction_arrow.texture = load("res://assets/ui/direction_arrow.svg") as Texture2D
-	direction_arrow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	direction_arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	direction_arrow.size = Vector2(54, 54)
-	direction_arrow.visible = false
-	direction_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	app.game_hud.add_child(direction_arrow)
+		_add_dock_button(app, powers, "SleepSpellButton", "res://assets/ui/sleep_icon.svg", "Sleep spell", Callable(app, "cast_sleep_spell"), true, Vector2(54, 54))
+		_add_dock_button(app, powers, "FogButton", "res://assets/ui/fog_icon.svg", "Fog", Callable(app, "cast_sabotage").bind("fog"), true, Vector2(54, 54))
+		_add_dock_button(app, powers, "DoorLockButton", "res://assets/ui/lock_icon.svg", "Door lock", Callable(app, "cast_sabotage").bind("lock"), true, Vector2(54, 54))
+	var task_hint := load("res://scripts/nearby_task_hint.gd").new() as PanelContainer
+	app.game_hud.add_child(task_hint)
+	task_hint.call("configure", app)
 
 
 func _add_dock_button(app, parent: Control, node_name: String, icon_path: String, hint: String, callback: Callable, highlighted: bool, button_size: Vector2 = Vector2(56, 56)) -> Button:
@@ -312,13 +305,8 @@ func _add_dock_button(app, parent: Control, node_name: String, icon_path: String
 	button.expand_icon = true
 	button.tooltip_text = hint
 	button.accessibility_name = hint
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.12, 0.09, 0.07, 0.82) if state != "hover" else Color(0.38, 0.24, 0.12, 0.96)
-		style.border_color = Color("e4b25b")
-		style.set_border_width_all(2)
-		style.set_corner_radius_all(roundi(minf(button_size.x, button_size.y) * 0.5))
-		button.add_theme_stylebox_override(state, style)
+	UI.apply_menu_button(button)
+	button.add_theme_constant_override("icon_max_width", roundi(button_size.x - 26))
 	return button
 
 

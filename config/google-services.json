@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "710944640474",
+    "project_id": "nenek-kebayan",
+    "storage_bucket": "nenek-kebayan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:710944640474:android:7397d4f66c30930b8ac4e3",
+        "android_client_info": {
+          "package_name": "org.godotengine.nenekkebayan"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "710944640474-upf6jvt3de9r5nca2rfc9r83gg5leuuu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.godotengine.nenekkebayan",
+            "certificate_hash": "97285f6ef95089df1724d31dad8f0d084288f76e"
+          }
+        },
+        {
+          "client_id": "710944640474-k6lmmbbdjrjcvepa9peo058th8ujn8qk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDD7vc4HLShQHqtSaInTvuNjuFpYPT58-A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "710944640474-k6lmmbbdjrjcvepa9peo058th8ujn8qk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

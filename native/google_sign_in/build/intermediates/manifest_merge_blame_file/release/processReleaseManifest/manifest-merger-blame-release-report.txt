@@ -1,0 +1,23 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="org.kampung.auth" >
+4
+5    <uses-sdk android:minSdkVersion="23" />
+5-->INJECTED
+5-->INJECTED
+6
+7    <uses-permission android:name="android.permission.INTERNET" />
+7-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:2:5-67
+7-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:2:22-64
+8
+9    <application>
+9-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:3:5-5:19
+10        <meta-data
+10-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:9-136
+11            android:name="org.godotengine.plugin.v2.KampungGoogleSignIn"
+11-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:20-80
+12            android:value="org.kampung.auth.KampungGoogleSignIn" />
+12-->C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:81-133
+13    </application>
+14
+15</manifest>

@@ -105,8 +105,10 @@ func refresh(force: bool = false) -> void:
 	var screen: String = app.current_screen
 	var menu := screen == "menu"
 	var playing := screen in ["game", "meeting"]
-	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal"]
-	var task_modal := playing and int(app.task_overlay_index) >= 0
+	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select"]
+	var map_overlay: Node = app.find_child("MapOverlay",true,false)
+	var map_modal := is_instance_valid(map_overlay) and not map_overlay.is_queued_for_deletion()
+	var task_modal := playing and (int(app.task_overlay_index) >= 0 or map_modal)
 	if force or screen != _last_screen or task_modal != _last_task_modal:
 		_last_screen = screen
 		_last_task_modal = task_modal
@@ -168,8 +170,8 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 	close.name = "PopupCloseButton"
 	close.position = Vector2(rect.size.x - 52, 10)
 	close.add_theme_font_size_override("font_size", 25)
-	close.tooltip_text = "Tutup"
-	close.accessibility_name = "Tutup"
+	close.tooltip_text = "Close"
+	close.accessibility_name = "Close"
 	return panel
 
 
@@ -196,7 +198,10 @@ func show_settings() -> void:
 	var playing: bool = app.current_screen in ["game", "meeting"]
 	if playing:
 		var leave := UI.make_button(panel, "LEAVE GAME", Callable(app, "show_exit_confirmation"), 180, 40)
-		leave.name = "SettingsLeaveGameButton"; leave.position = Vector2(70, 344)
+		leave.name = "SettingsLeaveGameButton"
+		leave.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		leave.offset_left = -90; leave.offset_right = 90
+		leave.offset_top = -56; leave.offset_bottom = -16
 	refresh(true)
 
 
@@ -213,7 +218,7 @@ func show_help() -> void:
 	guide.add_theme_font_size_override("normal_font_size", 16)
 	guide.add_theme_color_override("default_color", Data.CREAM)
 	guide.add_theme_constant_override("line_separation", 3)
-	guide.text = "[color=#f7c35a][b]Orang Kampung[/b][/color]\nFinish tasks, inspect clues, and vote at the gong.\n\n[color=#f7c35a][b]Jampi Tidur[/b][/color]\nVillagers sleep until the match ends. They can watch nearby events but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Kabus & Sumpahan Pintu[/b][/color]\nFog covers Nenek's nearby surroundings for 20 seconds. Door locking closes every entrance of her current section for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nMove with WASD, arrow keys, or the touch pad. Press E near a task."
+	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nFinish tasks, inspect clues, and vote at the gong.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nVillagers sleep until the match ends. They can watch nearby events but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers Nenek's nearby surroundings for 20 seconds. Door locking closes every entrance of her current section for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nMove with WASD, arrow keys, or the touch pad. Press E near a task."
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
 

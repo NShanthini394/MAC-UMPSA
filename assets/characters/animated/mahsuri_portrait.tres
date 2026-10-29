@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/mahsuri.png" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(44.0000, 24.0000, 239.0000, 304.0000)
+margin = Rect2(55.8671, 12.8232, 96.7342, 24.7041)
+filter_clip = true

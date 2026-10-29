@@ -68,7 +68,7 @@ func _process(delta: float) -> void:
 			var flip_h := false
 			if source_sprite is TextureRect:
 				texture = (source_sprite as TextureRect).texture
-				flip_h = (source_sprite as TextureRect).scale.x < 0.0
+				flip_h = (source_sprite as TextureRect).flip_h != ((source_sprite as TextureRect).scale.x < 0.0)
 			elif source_sprite is Sprite2D:
 				texture = (source_sprite as Sprite2D).texture
 				flip_h = (source_sprite as Sprite2D).flip_h

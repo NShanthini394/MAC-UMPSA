@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/orang_kampung_perempuan.png" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(127.0000, 28.0000, 150.0000, 320.0000)
+margin = Rect2(54.0649, 12.6933, 112.1297, 26.4006)
+filter_clip = true

@@ -9,7 +9,7 @@ render_mode unshaded;
 uniform sampler2D scene_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform float fog_opacity = 0.99;
 uniform float blur_strength = 4.0;
-uniform float mist_density = 0.94;
+uniform float mist_density = 0.99;
 uniform bool nearby_view = false;
 uniform vec2 observer_position = vec2(0.0);
 uniform vec2 fog_origin = vec2(0.0);
@@ -29,11 +29,11 @@ void fragment() {
     smoke = smoke * 0.65 + cloud(UV * 13.0 - TIME * 0.045) * 0.35;
     vec2 edge = smoothstep(vec2(0.0), vec2(0.045), UV) * smoothstep(vec2(0.0), vec2(0.045), vec2(1.0) - UV);
     vec3 blurred = textureLod(scene_texture, SCREEN_UV, blur_strength).rgb;
-    vec3 mist = mix(blurred, vec3(0.69, 0.76, 0.78), mist_density + smoke * (1.0 - mist_density));
-    float radial_edge = 1.0 - smoothstep(0.70, 1.0, distance(world_position, fog_origin) / fog_radius);
+    vec3 mist = mix(blurred, vec3(0.53 + smoke * 0.14), mist_density + smoke * (1.0 - mist_density));
+    float radial_edge = 1.0 - smoothstep(0.88, 1.0, distance(world_position, fog_origin) / fog_radius);
     // An upright pocket preserves the local character and the ground at their feet.
-    float nearby_distance = length((world_position - observer_position + vec2(0.0, 26.0)) / vec2(42.0, 66.0));
-    float pocket = nearby_view ? mix(0.10, 1.0, smoothstep(0.55, 1.0, nearby_distance)) : 1.0;
+    float nearby_distance = length((world_position - observer_position + vec2(0.0, 26.0)) / vec2(34.0, 58.0));
+    float pocket = nearby_view ? mix(0.04, 1.0, smoothstep(0.45, 0.95, nearby_distance)) : 1.0;
     COLOR = vec4(mist, edge.x * edge.y * radial_edge * fog_opacity * (0.96 + smoke * 0.04) * pocket);
 }
 """
@@ -47,6 +47,10 @@ func configure(map_index: int, kind: String, area_index: int, nenek_view: bool, 
 	z_index = 80
 	_observer = observer
 	if kind == "fog":
+		# Nenek is immune to her own fog: no tint, blur or fog rectangle at all.
+		if nenek_view:
+			set_process(false)
+			return
 		var shader := Shader.new()
 		shader.code = FOG_SHADER
 		for zone in MapGeometry.fog_regions(map_index, area_index, origin, radius):
@@ -56,9 +60,9 @@ func configure(map_index: int, kind: String, area_index: int, nenek_view: bool, 
 			fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var fog_material := ShaderMaterial.new()
 			fog_material.shader = shader
-			fog_material.set_shader_parameter("fog_opacity", 0.10 if nenek_view else 0.99)
-			fog_material.set_shader_parameter("blur_strength", 0.0 if nenek_view else 4.0)
-			fog_material.set_shader_parameter("mist_density", 0.60 if nenek_view else 0.94)
+			fog_material.set_shader_parameter("fog_opacity", 1.0)
+			fog_material.set_shader_parameter("blur_strength", 4.0)
+			fog_material.set_shader_parameter("mist_density", 0.99)
 			fog_material.set_shader_parameter("nearby_view", not nenek_view and is_instance_valid(_observer))
 			fog_material.set_shader_parameter("fog_origin", origin)
 			fog_material.set_shader_parameter("fog_radius", radius)

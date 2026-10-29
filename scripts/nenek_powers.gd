@@ -48,14 +48,14 @@ static func try_sleep(room: Dictionary, caster_id: int, target_id: int, now: flo
 	if not players.has(caster_id) or not players.has(target_id): return "That player is no longer here."
 	var caster: Dictionary = players[caster_id]
 	var target: Dictionary = players[target_id]
-	if not is_active(caster) or str(caster.get("role", "")) != "nenek_kebayan": return "Only active Nenek Kebayan can cast Jampi Tidur."
-	if caster_id == target_id or not is_active(target) or str(target.get("role", "")) != "villager": return "Choose an awake Orang Kampung."
-	if now < float(caster.get("sleep_ready_at", 0.0)): return "Jampi Tidur is still recharging."
+	if not is_active(caster) or str(caster.get("role", "")) != "nenek_kebayan": return "Only active Nenek Kebayan can cast Sleep Spell."
+	if caster_id == target_id or not is_active(target) or str(target.get("role", "")) != "villager": return "Choose an awake villager."
+	if now < float(caster.get("sleep_ready_at", 0.0)): return "Sleep Spell is still recharging."
 	var origin: Vector2 = caster.get("position", Vector2.ZERO)
 	var destination: Vector2 = target.get("position", Vector2.ZERO)
-	if origin.distance_to(destination) > SLEEP_RANGE: return "Move closer to an awake Orang Kampung."
+	if origin.distance_to(destination) > SLEEP_RANGE: return "Move closer to an awake villager."
 	if not MapGeometry.has_clear_path(int(room.get("map_index", 0)), origin, destination, locked_doors(room, now)):
-		return "A wall or locked entrance blocks Jampi Tidur."
+		return "A wall or locked entrance blocks Sleep Spell."
 	target["sleeping"] = true
 	target["direction"] = Vector2.ZERO
 	caster["sleep_ready_at"] = now + SLEEP_COOLDOWN

@@ -5,6 +5,7 @@ signal connection_changed(connected: bool, message: String)
 signal room_opened(code: String, map_index: int, members: Array, is_host: bool)
 signal room_changed(code: String, map_index: int, host_id: int, members: Array)
 signal room_error(message: String)
+signal lobby_countdown_changed(seconds_left: float)
 signal role_received(role: String, secret_character: String)
 signal match_started(map_index: int, clue_positions: Array)
 signal positions_changed(members: Array)
@@ -20,10 +21,14 @@ signal ability_feedback(message: String)
 const PORT := 7000
 const MAX_PLAYERS_PER_ROOM := 10
 const MAX_SERVER_CLIENTS := 100
+const LOBBY_WAIT_SECONDS := 15.0
 var force_host_nenek_for_testing := false
 const GameData = preload("res://scripts/game_data.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
+const Discovery = preload("res://scripts/lan_discovery.gd")
+var discovery_port := int(ProjectSettings.get_setting("network/discovery_port",Discovery.PORT))
+var lan_discovery: Discovery
 const CLUE_CANDIDATE_POINTS := [
 	Vector2(370, 235), Vector2(530, 235), Vector2(880, 245), Vector2(1050, 370),
 	Vector2(880, 530), Vector2(625, 555), Vector2(350, 520), Vector2(340, 390),
@@ -35,6 +40,7 @@ var server_port := PORT
 var rooms: Dictionary = {}
 var peer_room_codes: Dictionary = {}
 var active_room_code := ""
+var lobby_countdown := -1.0
 var local_player_name := "Player"
 var local_character := ""
 var local_player_role := ""
@@ -49,6 +55,7 @@ var _connection_deadline := 0
 
 func _ready() -> void:
 	_server_random.randomize()
+	_ensure_discovery()
 	server_address = str(ProjectSettings.get_setting("network/server_address", server_address))
 	server_port = int(ProjectSettings.get_setting("network/server_port", PORT))
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -72,7 +79,10 @@ func _process(delta: float) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	for code in rooms.keys():
 		var room: Dictionary = rooms[code]
-		if not bool(room.get("started", false)) or bool(room.get("finished", false)): continue
+		if not bool(room.get("started", false)):
+			_tick_lobby_countdown(str(code), delta)
+			continue
+		if bool(room.get("finished", false)): continue
 		if NenekPowers.expire_sabotage(room, now): _broadcast_positions(str(code), true)
 		if str(room.get("meeting_state", "")) != "":
 			room["meeting_timer"] = maxf(0.0, float(room.get("meeting_timer", 0.0)) - delta)
@@ -94,13 +104,7 @@ func _process(delta: float) -> void:
 			var origin: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
 			var candidate := origin + direction * minf(delta, 0.1) * 250.0
 			candidate = candidate.clamp(Vector2(14, 14), bounds - Vector2(14, 14))
-			if not MapGeometry.is_step_blocked(map_index, origin, candidate, 14.0, entrances):
-				origin = candidate
-			else:
-				var horizontal := Vector2(candidate.x, origin.y)
-				if not MapGeometry.is_step_blocked(map_index, origin, horizontal, 14.0, entrances): origin.x = horizontal.x
-				var vertical := Vector2(origin.x, candidate.y)
-				if not MapGeometry.is_step_blocked(map_index, origin, vertical, 14.0, entrances): origin.y = vertical.y
+			origin = MapGeometry.move_position(map_index, origin, candidate - origin, 14.0, entrances)
 			player["position"] = origin
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
@@ -119,6 +123,10 @@ func start_server(port: int = PORT) -> Error:
 	var result := peer.create_server(port, MAX_SERVER_CLIENTS)
 	if result != OK:
 		return result
+	var discovery_result := _ensure_discovery().listen(discovery_port,_discovery_room)
+	if discovery_result!=OK:
+		peer.close()
+		return discovery_result
 	server_port = port
 	multiplayer.multiplayer_peer = peer
 	print("Nenek Kebayan room server listening on UDP %d" % port)
@@ -154,16 +162,46 @@ func create_room(map_index: int, player_name: String, address: String = "") -> E
 
 func join_room(code: String, player_name: String, address: String = "") -> Error:
 	local_player_name = _clean_player_name(player_name)
-	_pending_action = {"kind": "join", "code": code.strip_edges().to_upper()}
-	var normalized := str(_pending_action["code"])
-	if normalized.length() != 5:
-		_pending_action.clear()
-		return ERR_INVALID_PARAMETER
-	for character in normalized:
-		if character not in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789":
-			_pending_action.clear()
-			return ERR_INVALID_PARAMETER
-	return _connect_for_pending_action(address)
+	var normalized := Discovery.normalize_code(code)
+	if normalized.is_empty(): return ERR_INVALID_PARAMETER
+	if connection_pending or not active_room_code.is_empty(): return ERR_ALREADY_IN_USE
+	_pending_action = {"kind": "join", "code": normalized}
+	# Explicit addresses remain available to developer tools and existing direct
+	# clients. The player-facing form omits them and always uses code discovery.
+	if not address.strip_edges().is_empty(): return _connect_for_pending_action(address)
+	_disconnect_peer()
+	var result := _ensure_discovery().search(normalized,discovery_port)
+	if result!=OK: _pending_action.clear(); return result
+	connection_pending=true
+	_connection_deadline=Time.get_ticks_msec()+Discovery.SEARCH_MS+1000
+	connection_changed.emit(false,"Finding the host on your Wi-Fi…")
+	return OK
+
+
+func _ensure_discovery() -> Discovery:
+	if not is_instance_valid(lan_discovery):
+		lan_discovery=Discovery.new()
+		lan_discovery.name="LanDiscovery"
+		add_child(lan_discovery)
+		lan_discovery.host_found.connect(_on_discovery_found)
+		lan_discovery.search_failed.connect(_on_discovery_failed)
+	return lan_discovery
+
+
+func _discovery_room(code: String) -> Dictionary:
+	return {"port":server_port} if rooms.has(code) else {}
+
+
+func _on_discovery_found(address: String, port: int) -> void:
+	if not connection_pending or _pending_action.get("kind")!="join": return
+	var result := connect_to_server(address,port)
+	if result!=OK: _on_discovery_failed("The host was found but could not be reached. Keep its game open and try again.")
+
+
+func _on_discovery_failed(message: String) -> void:
+	_pending_action.clear()
+	_disconnect_peer()
+	connection_changed.emit(false,message)
 
 
 func _connect_for_pending_action(address: String) -> Error:
@@ -257,6 +295,8 @@ func leave_room() -> void:
 
 
 func _disconnect_peer() -> void:
+	if is_instance_valid(lan_discovery): lan_discovery.cancel_search()
+	lobby_countdown = -1.0
 	connection_pending = false
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
 		multiplayer.multiplayer_peer.close()
@@ -281,7 +321,7 @@ func is_connected_to_room_server() -> bool:
 func _on_connection_failed() -> void:
 	_pending_action.clear()
 	_disconnect_peer()
-	connection_changed.emit(false, "Cannot reach the host. Check its Wi-Fi address, keep its game open, and allow the game through the Windows firewall on Private networks.")
+	connection_changed.emit(false, "Cannot reach the host. Use the same Wi-Fi, keep the host's game open, and allow the game on Private networks if Windows asks.")
 
 
 func _on_server_disconnected() -> void:
@@ -360,6 +400,7 @@ func _send_room_state(code: String) -> void:
 	for peer_id in room["players"].keys():
 		if not _can_send_to(int(peer_id)): continue
 		_rpc_room_state.rpc_id(int(peer_id), code, int(room["map_index"]), int(room["host_id"]), members)
+		_rpc_lobby_countdown.rpc_id(int(peer_id), float(room.get("start_countdown", -1.0)))
 
 
 func _can_send_to(peer_id: int) -> bool:
@@ -471,7 +512,7 @@ func _resolve_vote(code: String) -> void:
 					break
 			if not any_villager_alive:
 				winner = "nenek_kebayan"
-				result_message = "No awake Orang Kampung remain. Nenek Kebayan wins!"
+				result_message = "No awake villager remain. Nenek Kebayan wins!"
 	room["meeting_state"] = ""
 	room["meeting_timer"] = 0.0
 	room["votes"] = {}
@@ -494,6 +535,21 @@ func _all_ready(room: Dictionary) -> bool:
 	return true
 
 
+func _tick_lobby_countdown(code: String, delta: float) -> void:
+	var room: Dictionary = rooms[code]
+	var previous := float(room.get("start_countdown", -1.0))
+	var count: int = room["players"].size()
+	var eligible := count >= 5 and count <= MAX_PLAYERS_PER_ROOM and _all_ready(room)
+	var remaining := -1.0
+	if eligible:
+		remaining = LOBBY_WAIT_SECONDS if previous < 0.0 else maxf(0.0, previous - delta)
+	room["start_countdown"] = remaining
+	if ceili(previous) != ceili(remaining):
+		for peer_id in room["players"]:
+			if _can_send_to(int(peer_id)): _rpc_lobby_countdown.rpc_id(int(peer_id), remaining)
+	if eligible and remaining <= 0.0: _try_start_room(code, false)
+
+
 func _try_start_room(code: String, require_host: bool, requester_id: int = 0) -> void:
 	if not rooms.has(code):
 		return
@@ -503,6 +559,7 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 		return
 	if require_host and requester_id != int(room["host_id"]):
 		return
+	if float(room.get("start_countdown", -1.0)) > 0.0: return
 	room["started"] = true
 	var members: Array = room["players"].values()
 	var role_player_index := _server_random.randi_range(0, members.size() - 1)
@@ -591,7 +648,7 @@ func _remove_player(peer_id: int) -> void:
 		if living_kebayan == 0:
 			_finish_game(code, "villagers", "Nenek Kebayan left the room. The Villagers win!")
 		elif living_villagers == 0:
-			_finish_game(code, "nenek_kebayan", "No awake Orang Kampung remain. Nenek Kebayan wins!")
+			_finish_game(code, "nenek_kebayan", "No awake villager remain. Nenek Kebayan wins!")
 	if str(room.get("meeting_state", "")) == "voting" and room["votes"].size() >= _alive_player_ids(room).size():
 		_resolve_vote(code)
 
@@ -645,6 +702,7 @@ func request_join_room(code: String, player_name: String) -> void:
 		_rpc_room_error.rpc_id(sender, "Room Is Full")
 		return
 	room["players"][sender] = _make_player(sender, player_name, false, _random_available_character(room["players"]))
+	_tick_lobby_countdown(normalized_code, 0.0)
 	peer_room_codes[sender] = normalized_code
 	_rpc_room_opened.rpc_id(sender, normalized_code, int(room["map_index"]), _room_members(room), false)
 	_send_room_state(normalized_code)
@@ -671,6 +729,7 @@ func request_select_character(character: String) -> void:
 		return
 	room["players"][sender]["character"] = character
 	room["players"][sender]["ready"] = false
+	_tick_lobby_countdown(code, 0.0)
 	_send_room_state(code)
 
 
@@ -690,9 +749,8 @@ func request_toggle_ready() -> void:
 		_rpc_room_error.rpc_id(sender, "Choose a character before marking Ready.")
 		return
 	member["ready"] = not bool(member.get("ready", false))
+	_tick_lobby_countdown(code, 0.0)
 	_send_room_state(code)
-	if room["players"].size() == MAX_PLAYERS_PER_ROOM and _all_ready(room):
-		_try_start_room(code, false)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -703,7 +761,8 @@ func request_start_match() -> void:
 	if not peer_room_codes.has(sender):
 		return
 	var code: String = peer_room_codes[sender]
-	_try_start_room(code, true, sender)
+	if int(rooms[code]["host_id"]) != sender: return
+	_tick_lobby_countdown(code, 0.0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -752,7 +811,8 @@ func request_task_action(task_index: int) -> void:
 		_rpc_task_resolved.rpc_id(sender, task_index, false, 0, false)
 		return
 	var position: Vector2 = member.get("position", Vector2.ZERO)
-	if position.distance_to(MapGeometry.task_points(int(room["map_index"]))[task_index]) > 72.0:
+	var task_point: Vector2 = MapGeometry.task_points(int(room["map_index"]))[task_index]
+	if position.distance_to(task_point) > 72.0 or not MapGeometry.has_clear_path(int(room["map_index"]),position,task_point,NenekPowers.locked_doors(room,Time.get_ticks_msec()/1000.0)):
 		_rpc_task_resolved.rpc_id(sender, task_index, false, int(room["task_progress"][task_index]), bool(room["completed_tasks"][task_index]))
 		return
 	if int(room["completed_tasks"][task_index]) == 1:
@@ -783,14 +843,14 @@ func request_inspect_clue(clue_index: int) -> void:
 		return
 	var member: Dictionary = room["players"][sender]
 	if not NenekPowers.is_active(member) or str(member.get("role", "villager")) != "villager":
-		_rpc_room_error.rpc_id(sender, "Hanya Orang Kampung yang sedar boleh memeriksa petunjuk.")
+		_rpc_room_error.rpc_id(sender, "Only awake villagers can inspect clues.")
 		return
 	var positions: Array = room["clue_positions"]
 	if clue_index < 0 or clue_index >= positions.size() or clue_index in room["found_clues"]:
 		return
 	var position: Vector2 = member.get("position", Vector2.ZERO)
 	if position.distance_to(positions[clue_index]) > 72.0:
-		_rpc_room_error.rpc_id(sender, "Dekati petunjuk untuk memeriksanya.")
+		_rpc_room_error.rpc_id(sender, "Move close to the clue to inspect it.")
 		return
 	room["found_clues"].append(clue_index)
 	var clue_name: String = room["clue_names"][clue_index]
@@ -892,11 +952,11 @@ func request_sleep_spell(target_id: int) -> void:
 	if not error.is_empty():
 		_ability_error(sender, error)
 		return
-	_rpc_ability_feedback.rpc_id(sender, "Jampi Tidur cast. That villager is asleep for the rest of this match.")
+	_rpc_ability_feedback.rpc_id(sender, "Sleep Spell cast. That villager is asleep for the rest of this match.")
 	_broadcast_positions(str(context["code"]), true)
 	_send_room_state(str(context["code"]))
 	if NenekPowers.winner(room) == "nenek_kebayan":
-		_finish_game(str(context["code"]), "nenek_kebayan", "No awake Orang Kampung remain. Nenek Kebayan wins!")
+		_finish_game(str(context["code"]), "nenek_kebayan", "No awake villager remain. Nenek Kebayan wins!")
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -920,6 +980,7 @@ func request_sabotage(kind: String) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _rpc_room_opened(code: String, map_index: int, members: Array, is_host: bool) -> void:
 	active_room_code = code
+	lobby_countdown = -1.0
 	local_player_role = ""
 	local_secret_character = ""
 	local_role_character = ""
@@ -954,7 +1015,14 @@ func _rpc_private_role(role: String, secret_character: String, role_character: S
 
 
 @rpc("authority", "call_remote", "reliable")
+func _rpc_lobby_countdown(seconds_left: float) -> void:
+	lobby_countdown = seconds_left
+	lobby_countdown_changed.emit(seconds_left)
+
+
+@rpc("authority", "call_remote", "reliable")
 func _rpc_match_started(map_index: int, clue_positions: Array) -> void:
+	lobby_countdown = -1.0
 	match_started.emit(map_index, clue_positions)
 
 

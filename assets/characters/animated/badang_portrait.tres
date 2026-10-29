@@ -1,0 +1,9 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/badang.png" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(135.0000, 9.0000, 170.0000, 337.0000)
+margin = Rect2(100.6999, 13.1722, 182.3999, 26.4968)
+filter_clip = true

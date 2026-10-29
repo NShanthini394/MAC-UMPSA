@@ -1,473 +1,358 @@
 extends Control
-## Small physical task interactions that run inside the task overlay.
-
+## Eight village chores. Mouse, touch drag, and tap-to-place share the same rules.
 signal step_completed
 signal sound_requested(kind: String)
-
-class DragToken extends Button:
-	var item_id := ""
-
-	func _get_drag_data(_at_position: Vector2) -> Variant:
-		var preview := Label.new()
-		preview.text = text
-		preview.add_theme_font_size_override("font_size", 18)
-		preview.add_theme_color_override("font_color", Color("fff0cf"))
-		set_drag_preview(preview)
-		return {"item": item_id}
-
-
-class DropTarget extends Button:
-	signal item_dropped(item_id: String, target_id: String)
-	var target_id := ""
-	var accepting := true
-
-	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-		return accepting and data is Dictionary and data.has("item")
-
-	func _drop_data(_at_position: Vector2, data: Variant) -> void:
-		item_dropped.emit(str(data.get("item", "")), target_id)
-
-
-const BOARD := Color("30251c")
-const BOARD_EDGE := Color("b9833f")
 const CREAM := Color("fff0cf")
-const GOLD := Color("f7c35a")
-const GREEN := Color("61f28a")
-
+const GOLD := Color("edbb63")
+const INK := Color("30251b")
+const MarbleShot = preload("res://scripts/marble_shot.gd")
+const ShoeArrangement = preload("res://scripts/shoe_arrangement.gd")
+var shoe_board: Control
+var _shot := MarbleShot.new()
+const COLORS := [Color("cc6451"),Color("e8bb64"),Color("72acb8"),Color("9eae76")]
 var task: Dictionary = {}
-var task_kind := "collect"
+var task_kind := "rice"
 var current_progress := 0
 var required_progress := 1
-var board: Panel
-var feedback_label: Label
-var timing_marker: ColorRect
-var timing_phase := 0.0
-var timing_direction := 1.0
-var route_position := 0
-var supplies_found: Array[String] = []
-var key_found := false
-var key_hide_index := -1
-var active_drag_target: String = ""
-var selected_drag_item := ""
 var input_enabled := true
+var feedback_label: Label
+var _instruction: Label
+var _selected := false
+var _dragging := false
+var _pointer := Vector2.ZERO
+var _last_pointer := Vector2.ZERO
+var _stroke := 0.0
+var _sparks := 0
+var _heat := 0.0
+var _heat_direction := 1.0
+var _touch_id := -1
+var _pending := false
 
-
-func configure(task_data: Dictionary, progress: int, required: int) -> void:
-	task = task_data
-	task_kind = str(task.get("minigame", "collect"))
-	current_progress = progress
-	required_progress = required
-	key_hide_index = randi_range(0, 2)
-	_build_board()
-
+func configure(data: Dictionary, progress: int, required: int) -> void:
+    task = data
+    task_kind = str(task["minigame"])
+    required_progress = required
+    mouse_filter = Control.MOUSE_FILTER_STOP
+    clip_contents = true
+    feedback_label = Label.new()
+    feedback_label.name = "TaskBoardFeedback"
+    feedback_label.position = Vector2(20,340)
+    feedback_label.size = Vector2(752,30)
+    feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    feedback_label.add_theme_font_size_override("font_size",15)
+    feedback_label.add_theme_color_override("font_color",CREAM)
+    feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(feedback_label)
+    _instruction = Label.new()
+    _instruction.position = Vector2(20,10)
+    _instruction.size = Vector2(752,36)
+    _instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _instruction.add_theme_font_size_override("font_size",17)
+    _instruction.add_theme_color_override("font_color",CREAM)
+    _instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(_instruction)
+    if task_kind=="slippers":
+        shoe_board=ShoeArrangement.new()
+        shoe_board.configure(progress)
+        shoe_board.pair_completed.connect(func():_submit("drag"))
+        shoe_board.feedback.connect(func(message:String,success:bool):
+            feedback_label.text=message
+            if not success: sound_requested.emit("timing_miss"))
+        add_child(shoe_board)
+    set_progress(progress)
 
 func set_progress(progress: int) -> void:
-	current_progress = progress
-	if task_kind == "collect" or task_kind == "talk" or task_kind == "timing" or task_kind == "matching":
-		_build_board()
-
+    current_progress = progress
+    _pending = false
+    input_enabled = progress < required_progress
+    _selected = false
+    _dragging = false
+    _touch_id = -1
+    _pointer = Vector2(145,230)
+    _stroke = 0
+    _sparks = 0
+    _shot.reset()
+    if is_instance_valid(shoe_board): shoe_board.set_progress(progress)
+    var lines := {
+        "rice":["Drag the rice into the pot.","Pour the water into the pot.","Lift the pot when the marker reaches the green zone."],
+        "fire":["Place the dry twigs in the fire pit.","Stack the logs on the twigs.","Tap the flint five times to make sparks."],
+        "sweep":["Swipe through the dirt. Piles cleared: %d/5"%progress],
+        "laundry":["Drag the cloth to the matching colour on the line."],
+        "flowers":["Find the hidden flowers. Flowers found: %d/5"%progress],
+        "marbles":["Pull the marble back, aim the arrow, then release."],
+        "lamp":["Join the wire ends with matching colours and letters."],
+        "slippers":["Drag each shoe to its matching colour on the right."]
+    }
+    var messages: Array = lines.get(task_kind,["Complete the task."])
+    _instruction.text = "Task complete!" if progress >= required_progress else messages[mini(progress,messages.size()-1)]
+    feedback_label.text = "Swipe with your finger or mouse." if task_kind=="sweep" else "You can also tap the object, then tap its target." if task_kind in ["rice","fire","laundry","marbles","lamp","slippers"] else "Look for petals behind the leaves."
+    if task_kind=="rice" and progress==2: feedback_label.text="Cooking only: wait for the rice to cook, then lift the pot."
+    if task_kind=="fire" and progress==2: feedback_label.text="Tap the flint to light the stacked wood."
+    if task_kind=="marbles": feedback_label.text="Pull for power • green: inside • red: miss • land all 4 marbles"
+    if task_kind=="slippers": feedback_label.text="Place both shoes of each colour to complete all four pairs."
+    if task_kind=="lamp" and progress<3: _instruction.text="Connect wire %s to its matching letter and colour."%["A","B","C"][progress]
+    queue_redraw()
 
 func set_input_enabled(enabled: bool) -> void:
-	input_enabled = enabled
-	for child in find_children("*", "BaseButton", true, false):
-		(child as BaseButton).disabled = not enabled
-		if child is DropTarget:
-			(child as DropTarget).accepting = enabled
-
+    if enabled: _pending = false
+    input_enabled = enabled and current_progress < required_progress
 
 func _process(delta: float) -> void:
-	if task_kind != "timing" or not is_instance_valid(timing_marker):
-		return
-	timing_phase += delta * timing_direction * 0.72
-	if timing_phase >= 1.0:
-		timing_phase = 1.0
-		timing_direction = -1.0
-	elif timing_phase <= 0.0:
-		timing_phase = 0.0
-		timing_direction = 1.0
-	timing_marker.position.x = 30.0 + timing_phase * 622.0
+    if task_kind=="marbles" and _shot.rolling:
+        var outcome := _shot.advance(delta)
+        if outcome=="inside": _submit("timing_good")
+        elif outcome=="miss":
+            _shot.reset()
+            _miss("The marble stopped outside the circle. Adjust your aim and power, then try again.")
+        queue_redraw()
+    if task_kind=="rice" and current_progress==2 and input_enabled:
+        _heat += delta*_heat_direction*0.45
+        if _heat>=1: _heat=1; _heat_direction=-1
+        if _heat<=0: _heat=0; _heat_direction=1
+        queue_redraw()
 
+func _text(copy: String, at: Vector2, font_size: int = 18, color: Color = CREAM) -> void:
+    draw_string(ThemeDB.fallback_font,at,copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)
 
-func _build_board() -> void:
-	selected_drag_item = ""
-	for child in get_children():
-		remove_child(child)
-		child.queue_free()
-	board = Panel.new()
-	board.name = "PhysicalTaskBoard"
-	board.position = Vector2.ZERO
-	board.size = size
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = BOARD
-	panel_style.border_color = BOARD_EDGE
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(12)
-	board.add_theme_stylebox_override("panel", panel_style)
-	add_child(board)
-	feedback_label = _label("", 15, CREAM, Rect2(20, size.y - 34, size.x - 40, 24), HORIZONTAL_ALIGNMENT_CENTER)
-	match task_kind:
-		"collect": _build_collect_board()
-		"talk": _build_talk_board()
-		"drag": _build_drag_board()
-		"interact": _build_interact_board()
-		"timing": _build_timing_board()
-		"route": _build_route_board()
-		"supplies": _build_supplies_board()
-		"find_rooster": _build_find_rooster_board()
-		"search_key": _build_search_key_board()
-		"matching": _build_matching_board()
-		"final_route": _build_final_route_board()
-		_: _build_collect_board()
+func _box(rect: Rect2, fill: Color, edge: Color = GOLD) -> void:
+    draw_style_box(_style(fill,edge),rect)
 
+func _style(fill: Color, edge: Color) -> StyleBoxFlat:
+    var style := StyleBoxFlat.new()
+    style.bg_color=fill; style.border_color=edge
+    style.set_border_width_all(2); style.set_corner_radius_all(12)
+    return style
 
-func _label(copy: String, font_size: int, color: Color, rect: Rect2, alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	var label := Label.new()
-	label.text = copy
-	label.position = rect.position
-	label.size = rect.size
-	label.horizontal_alignment = alignment
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	board.add_child(label)
-	return label
+func _source() -> Vector2:
+    if task_kind=="slippers" and is_instance_valid(shoe_board): return shoe_board.next_source()
+    if task_kind=="lamp": return Vector2(135,106+current_progress*77)
+    return Vector2(145,180)
 
+func _target() -> Vector2:
+    match task_kind:
+        "lamp": return Vector2(650,106+([2,0,1][mini(current_progress,2)])*77)
+        "laundry": return Vector2(340+current_progress*105,155)
+        "slippers": return shoe_board.next_target()
+        _: return Vector2(535,182)
 
-func _button(copy: String, rect: Rect2, callback: Callable, prominent: bool = false) -> Button:
-	var button := Button.new()
-	button.text = copy
-	button.position = rect.position
-	button.size = rect.size
-	button.disabled = not input_enabled
-	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 17)
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color("79502e") if prominent else Color("493528")
-	normal.border_color = GOLD if prominent else Color("9a7449")
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(10)
-	normal.content_margin_left = 14
-	normal.content_margin_right = 14
-	normal.content_margin_top = 8
-	normal.content_margin_bottom = 8
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color("96663a") if prominent else Color("60462f")
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", hover)
-	button.add_theme_stylebox_override("disabled", normal)
-	button.add_theme_color_override("font_color", CREAM)
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", GOLD)
-	button.pressed.connect(callback)
-	board.add_child(button)
-	return button
+func _flower_position() -> Vector2:
+    return [Vector2(178,125),Vector2(590,240),Vector2(348,184),Vector2(649,115),Vector2(420,265)][mini(current_progress,4)]
 
+func _dust_position() -> Vector2:
+    return [Vector2(220,140),Vector2(545,245),Vector2(390,180),Vector2(620,115),Vector2(182,272)][mini(current_progress,4)]
 
-func _build_collect_board() -> void:
-	_label("Kutip objek yang betul di sekitar kawasan.", 16, CREAM, Rect2(20, 14, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var items: Array = task.get("items", [str(task.get("action", "Objek"))])
-	var amount := mini(required_progress - current_progress, 8)
-	for i in amount:
-		var text := str(items[i % items.size()])
-		var col := i % 4
-		var row := i / 4
-		var rect := Rect2(36 + col * 170, 62 + row * 82, 148, 64)
-		_button(text, rect, Callable(self, "_complete_one"))
-	if amount <= 0:
-		_label("Semua objek sudah dikutip.", 18, GREEN, Rect2(30, 100, size.x - 60, 60), HORIZONTAL_ALIGNMENT_CENTER)
+func _draw() -> void:
+    _box(Rect2(Vector2.ZERO,Vector2(792,382)),Color("30251c"),Color("b9833f"))
+    _box(Rect2(22,51,748,279),Color("b78a54"),Color("674728"))
+    for i in 10: draw_line(Vector2(24,65+i*27),Vector2(766,65+i*27),Color(0.3,0.2,0.1,0.12),1)
+    if current_progress>=required_progress:
+        _text("✓   TASK COMPLETE",Vector2(250,200),30,CREAM)
+        return
+    var source := _pointer if _dragging else _source()
+    match task_kind:
+        "rice":
+            draw_circle(Vector2(535,220),65,Color("5e3d26"))
+            draw_arc(Vector2(535,220),55,0,PI,24,Color("ed9f4c"),10,true)
+            _box(Rect2(467,134,136,80),Color("525654"),Color("ccd0c1"))
+            _ellipse(Vector2(535,139),Vector2(68,16),Color("d9d6b6"))
+            if current_progress>0:
+                for i in 35: draw_line(Vector2(482+(i*29)%107,136+(i*7)%9),Vector2(487+(i*29)%107,137+(i*7)%9),CREAM,2,true)
+            if current_progress<2:
+                _box(Rect2(source-Vector2(62,40),Vector2(124,80)),Color("795334"))
+                _text("RICE" if current_progress==0 else "WATER",source+Vector2(-35,8),22)
+                _text("RICE POT",Vector2(472,270),18,INK)
+            else:
+                _box(Rect2(92,268,400,23),Color("64533b"))
+                draw_rect(Rect2(92+400*0.55,270,400*0.25,19),Color("66965d"))
+                draw_line(Vector2(92+_heat*400,260),Vector2(92+_heat*400,299),CREAM,5)
+                _box(Rect2(525,269,190,42),Color("784f2f"))
+                _text("LIFT THE POT",Vector2(541,297),18)
+        "fire":
+            draw_circle(Vector2(535,210),90,Color("6f6b59"))
+            draw_circle(Vector2(535,210),70,Color("3e3127"))
+            if current_progress>=1: _logs(Vector2(535,210),Color("cead75"),4)
+            if current_progress>=2: _logs(Vector2(535,200),Color("794c2b"),3)
+            if current_progress<2:
+                _logs(source,Color("cead75") if current_progress==0 else Color("794c2b"),4)
+                _text("TWIGS" if current_progress==0 else "LOGS",Vector2(95,275),18,INK)
+            else:
+                _box(Rect2(73,128,148,105),Color("7a7f78"))
+                _text("FLINT",Vector2(97,188),20)
+                _text("Sparks: %d/5"%_sparks,Vector2(88,270),17,INK)
+                for i in _sparks: draw_line(Vector2(520+i*6,160),Vector2(515+i*11,140-i*4),GOLD,3,true)
+        "sweep":
+            var dust := _dust_position()
+            for i in 24:
+                var point := dust+Vector2(sin(i*3.1)*42,cos(i*2.3)*22)
+                draw_circle(point,3+(i%3),Color("624a2e"))
+            draw_line(_pointer+Vector2(26,-35),_pointer+Vector2(-8,14),Color("6a4028"),7,true)
+            for i in 10: draw_line(_pointer+Vector2(-13+i*3,5),_pointer+Vector2(-30+i*6,30),Color("dfbd73"),3,true)
+            _text("SWEEP",Vector2(640,299),20,INK)
+        "laundry":
+            draw_line(Vector2(280,94),Vector2(730,94),INK,5)
+            draw_line(Vector2(280,75),Vector2(280,278),Color("6b4629"),9)
+            draw_line(Vector2(730,75),Vector2(730,278),Color("6b4629"),9)
+            for i in 4:
+                var at := Vector2(340+i*105,155)
+                if i<current_progress: _cloth(at,COLORS[i])
+                else: draw_rect(Rect2(at-Vector2(33,35),Vector2(66,76)),COLORS[i],false,3)
+            _cloth(source,COLORS[current_progress%4])
+        "flowers":
+            for i in 34:
+                var at := Vector2(66+(i*101)%653,82+(i*47)%220)
+                _ellipse(at,Vector2(32,15),Color("5f7b48") if i%2 else Color("829553"))
+            var flower := _flower_position()
+            for i in 6: draw_circle(flower+Vector2.from_angle(i*TAU/6)*10,8,Color("eee4c3"))
+            draw_circle(flower,6,Color("dda943"))
+            for offset in [Vector2(-17,14),Vector2(14,16),Vector2(22,-5)]: _ellipse(flower+offset,Vector2(17,7),Color("658443"))
+        "marbles":
+            draw_circle(_shot.goal,85,Color("cfaa6e"))
+            draw_arc(_shot.goal,85,0,TAU,48,CREAM,5,true)
+            for i in current_progress: _marble(Vector2(512+i%2*35,163+i/2*34),COLORS[i])
+            var marble_at := _shot.position
+            if _dragging:
+                var pull := _shot.clamped_pull(_source()-_pointer)
+                marble_at = _source()-pull
+                var landing := _shot.prediction(pull)
+                var inside := _shot.inside_goal(landing)
+                var color := Color("679e4b") if inside else Color("b54936")
+                var tip := landing.clamp(Vector2(55,83),Vector2(735,297))
+                var direction := (tip-marble_at).normalized()
+                draw_line(marble_at,_source(),Color(0.3,0.2,0.1,0.4),2,true)
+                draw_dashed_line(marble_at,tip,color,3,8,true)
+                draw_colored_polygon(PackedVector2Array([tip,tip-direction*14+direction.orthogonal()*7,tip-direction*14-direction.orthogonal()*7]),color)
+                draw_arc(tip,18,0,TAU,24,color,2,true)
+                _text("INSIDE" if inside else "MISS",Vector2(300,305),18,color)
+            _marble(marble_at,COLORS[current_progress%4])
+            _text("INSIDE: %d / 4"%current_progress,Vector2(460,307),18,INK)
+        "lamp":
+            for i in 3:
+                var left := Vector2(135,106+i*77)
+                var right := Vector2(650,106+([2,0,1][i])*77)
+                if i<current_progress: draw_line(left,right,COLORS[i],7,true)
+                draw_circle(left,22,COLORS[i]); draw_circle(right,22,COLORS[i])
+                if i==current_progress: draw_arc(left,27,0,TAU,24,CREAM,3,true)
+                _text(["A","B","C"][i],left+Vector2(-6,7),21,INK)
+                _text(["A","B","C"][i],right+Vector2(-6,7),21,INK)
+            if _selected: draw_line(_source(),_pointer,COLORS[current_progress],7,true)
+            draw_circle(Vector2(392,159),31,Color("786949"))
+            _box(Rect2(374,187,36,32),Color("6c6457"))
+            _text("LAMP",Vector2(363,253),18,INK)
+        "slippers":
+            pass # The footwear board draws eight independently movable image sprites.
+    if _pending: _text("Saving progress…",Vector2(285,322),16,CREAM)
 
+func _ellipse(at: Vector2, radius: Vector2, color: Color) -> void:
+    var points := PackedVector2Array()
+    for i in 32: points.append(at+Vector2(cos(i*TAU/32)*radius.x,sin(i*TAU/32)*radius.y))
+    draw_colored_polygon(points,color)
 
-func _build_talk_board() -> void:
-	_label("Pilih penduduk untuk berbual.", 16, CREAM, Rect2(20, 14, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var people: Array = task.get("people", ["Penduduk 1", "Penduduk 2", "Penduduk 3"])
-	var remaining := mini(required_progress - current_progress, people.size())
-	for i in remaining:
-		var person_index := current_progress + i
-		var rect := Rect2(42 + (i % 3) * 220, 92, 190, 100)
-		_button("◉\n" + str(people[person_index % people.size()]), rect, Callable(self, "_complete_one").bind("ui"))
+func _logs(at: Vector2, color: Color, count: int) -> void:
+    for i in count:
+        var start := at+Vector2(-43+i*8,-18+i*13)
+        draw_line(start,start+Vector2(80,-10),Color("513721"),15,true)
+        draw_line(start,start+Vector2(80,-10),color,10,true)
 
+func _cloth(at: Vector2, color: Color) -> void:
+    _box(Rect2(at-Vector2(34,37),Vector2(68,78)),color,INK)
+    for i in 4: draw_line(at+Vector2(-30,-23+i*16),at+Vector2(30,-23+i*16),CREAM,2,true)
 
-func _build_drag_board() -> void:
-	var source_name := str(task.get("drag_from", "Objek"))
-	var target_name := str(task.get("drag_to", "Tempat sasaran"))
-	active_drag_target = str(task.get("drag_id", "item"))
-	_label("Seret objek ke tempat yang betul.", 16, CREAM, Rect2(20, 12, size.x - 40, 32), HORIZONTAL_ALIGNMENT_CENTER)
-	var token := DragToken.new()
-	token.text = source_name
-	token.item_id = active_drag_target
-	token.disabled = not input_enabled
-	token.position = Vector2(55, 105)
-	token.size = Vector2(190, 80)
-	token.add_theme_font_size_override("font_size", 19)
-	var token_style := StyleBoxFlat.new()
-	token_style.bg_color = Color("8b6038")
-	token_style.border_color = GOLD
-	token_style.set_border_width_all(3)
-	token_style.set_corner_radius_all(14)
-	token.add_theme_stylebox_override("normal", token_style)
-	token.add_theme_color_override("font_color", CREAM)
-	token.pressed.connect(_on_drag_token_pressed.bind(active_drag_target))
-	board.add_child(token)
-	_label("➜", 34, GOLD, Rect2(310, 112, 80, 58), HORIZONTAL_ALIGNMENT_CENTER)
-	var target := DropTarget.new()
-	target.text = target_name
-	target.position = Vector2(445, 92)
-	target.size = Vector2(230, 115)
-	target.target_id = active_drag_target
-	target.accepting = input_enabled
-	var target_style := StyleBoxFlat.new()
-	target_style.bg_color = Color("3b4c39")
-	target_style.border_color = Color("9dbb72")
-	target_style.set_border_width_all(3)
-	target_style.set_corner_radius_all(14)
-	target_style.content_margin_left = 16
-	target_style.content_margin_right = 16
-	target.add_theme_stylebox_override("normal", target_style)
-	var target_hover := target_style.duplicate() as StyleBoxFlat
-	target_hover.bg_color = Color("4c6248")
-	target.add_theme_stylebox_override("hover", target_hover)
-	target.add_theme_stylebox_override("pressed", target_hover)
-	target.add_theme_color_override("font_color", CREAM)
-	target.add_theme_font_size_override("font_size", 17)
-	target.pressed.connect(_on_drag_target_pressed)
-	target.item_dropped.connect(_on_drag_dropped)
-	board.add_child(target)
-	feedback_label.text = "" if task.get("hint", "").is_empty() else str(task["hint"])
-	feedback_label.text += " Tekan objek, kemudian tekan tempat sasaran."
+func _marble(at: Vector2, color: Color) -> void:
+    draw_circle(at,18,INK); draw_circle(at,15,color)
+    draw_circle(at+Vector2(-5,-5),5,CREAM)
 
+func _slipper(at: Vector2, color: Color, left: bool) -> void:
+    _ellipse(at,Vector2(19,45),INK)
+    _ellipse(at,Vector2(16,41),color)
+    draw_line(at+Vector2(-13,-20),at+Vector2(0,4),CREAM,5,true)
+    draw_line(at+Vector2(13,-20),at+Vector2(0,4),CREAM,5,true)
+    _text("L" if left else "R",at+Vector2(-5,28),14,INK)
 
-func _on_drag_token_pressed(item_id: String) -> void:
-	selected_drag_item = item_id
-	sound_requested.emit("ui")
-	feedback_label.text = "Objek dipilih. Tekan tempat sasaran yang betul."
+func _gui_input(event: InputEvent) -> void:
+    if task_kind=="slippers" and is_instance_valid(shoe_board):
+        shoe_board.input_enabled=input_enabled and not _pending
+        shoe_board.handle_input(event)
+        accept_event()
+        return
+    if not input_enabled or _pending or (task_kind=="marbles" and _shot.rolling):
+        # Network acknowledgements can arrive after the finger is lifted.
+        # Always release ownership so the next swipe starts a fresh gesture.
+        if event is InputEventScreenTouch and not event.pressed and event.index==_touch_id: _touch_id=-1
+        if event is InputEventMouseButton and not event.pressed: _dragging=false
+        return
+    if event is InputEventScreenTouch:
+        if event.pressed and _touch_id<0: _touch_id=event.index; _press(event.position)
+        elif not event.pressed and event.index==_touch_id: _release(event.position); _touch_id=-1
+        accept_event()
+    elif event is InputEventScreenDrag and event.index==_touch_id:
+        _motion(event.position); accept_event()
+    elif event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and _touch_id<0:
+        if event.pressed: _press(event.position)
+        else: _release(event.position)
+        accept_event()
+    elif event is InputEventMouseMotion and _dragging and _touch_id<0:
+        _motion(event.position); accept_event()
 
+func _press(at: Vector2) -> void:
+    _pointer=at; _last_pointer=at
+    if task_kind=="marbles":
+        if at.distance_to(_shot.anchor)<=28:
+            _dragging=true
+            queue_redraw()
+        else: _miss("Touch the marble first, then pull it back.")
+        return
+    if task_kind=="flowers":
+        if at.distance_to(_flower_position())<=28: _submit("collect")
+        else: _miss("No flower there. Look between the leaves.")
+        return
+    if task_kind=="rice" and current_progress==2:
+        if Rect2(525,269,190,42).has_point(at):
+            if _heat>=0.55 and _heat<=0.8: _submit("timing_good")
+            else: _miss("Wait for the marker to reach the green zone before lifting the pot.")
+        return
+    if task_kind=="fire" and current_progress==2:
+        if Rect2(73,128,148,105).has_point(at):
+            _sparks+=1; sound_requested.emit("ui"); queue_redraw()
+            if _sparks>=5: _submit("timing_good")
+        return
+    if task_kind=="sweep": _dragging=true; queue_redraw(); return
+    if _selected and _drop_valid(at): _submit("drag"); return
+    if at.distance_to(_source())<=70:
+        _selected=true; _dragging=true; queue_redraw()
+    else: _miss("Select the object first, then drag it to the target.")
 
-func _on_drag_target_pressed() -> void:
-	if selected_drag_item == active_drag_target:
-		_complete_one("drag")
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Pilih objek dahulu, kemudian tekan tempat sasaran."
+func _motion(at: Vector2) -> void:
+    if not _dragging: return
+    if task_kind=="sweep":
+        var closest := Geometry2D.get_closest_point_to_segment(_dust_position(),_last_pointer,at)
+        if closest.distance_to(_dust_position())<48: _stroke+=minf(at.distance_to(_last_pointer),120)
+        if _stroke>=90: _submit("drag")
+    _pointer=at; _last_pointer=at; queue_redraw()
 
+func _release(at: Vector2) -> void:
+    if _pending or not input_enabled: return
+    if task_kind=="marbles":
+        if _dragging:
+            if _shot.launch(_source()-at): feedback_label.text="The marble is rolling…"
+            else: _miss("Pull back a little to launch the marble.")
+        _dragging=false; _selected=false; queue_redraw()
+        return
+    if _dragging and task_kind!="sweep":
+        if _drop_valid(at): _submit("drag")
+        else: feedback_label.text="Not quite. Select the object and try the target again."
+    _dragging=false; _pointer=at; queue_redraw()
 
-func _build_interact_board() -> void:
-	_label(str(task.get("interact_caption", "Tekan butang interaksi untuk meneruskan.")), 16, CREAM, Rect2(20, 20, size.x - 40, 36), HORIZONTAL_ALIGNMENT_CENTER)
-	_label("◉", 64, GOLD, Rect2(285, 74, 220, 100), HORIZONTAL_ALIGNMENT_CENTER)
-	_button(str(task.get("interact_label", "INTERAKSI")), Rect2(220, 194, 340, 62), Callable(self, "_complete_one").bind("ui"), true)
+func _drop_valid(at: Vector2) -> bool:
+    if task_kind=="marbles": return false
+    if task_kind in ["lamp","slippers","laundry"]: return at.distance_to(_target())<=38
+    return at.distance_to(_target())<=68
 
+func _miss(copy: String) -> void:
+    sound_requested.emit("timing_miss"); feedback_label.text=copy
 
-func _on_drag_dropped(item_id: String, target_id: String) -> void:
-	if item_id == active_drag_target and target_id == active_drag_target:
-		_complete_one("drag")
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Belum tepat. Cuba seret semula."
-
-
-func _build_timing_board() -> void:
-	_label("Tekan apabila penanda berada di dalam zon hijau.", 16, CREAM, Rect2(20, 14, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var track := ColorRect.new()
-	track.position = Vector2(30, 112)
-	track.size = Vector2(622, 24)
-	track.color = Color("503d2b")
-	board.add_child(track)
-	var target_zone := ColorRect.new()
-	target_zone.position = Vector2(30 + 622 * 0.43, 108)
-	target_zone.size = Vector2(622 * 0.14, 32)
-	target_zone.color = Color("49b66b", 0.85)
-	board.add_child(target_zone)
-	timing_marker = ColorRect.new()
-	timing_marker.position = Vector2(30, 100)
-	timing_marker.size = Vector2(8, 48)
-	timing_marker.color = Color("ffe37a")
-	board.add_child(timing_marker)
-	_button("TEKAN SEKARANG", Rect2(240, 190, 240, 58), Callable(self, "_try_timing"), true)
-
-
-func _try_timing() -> void:
-	if absf(timing_phase - 0.5) <= 0.14:
-		_complete_one("timing_good")
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Belum kena pada masa yang tepat. Cuba lagi!"
-
-
-func _build_route_board() -> void:
-	_label("Ikut turutan penanda pada laluan.", 16, CREAM, Rect2(20, 12, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var route: Array = task.get("route", ["↑", "→", "↑"])
-	var route_text := ""
-	for direction in route: route_text += str(direction) + "   "
-	_label("LALUAN   " + route_text.strip_edges(), 22, GOLD, Rect2(20, 52, size.x - 40, 40), HORIZONTAL_ALIGNMENT_CENTER)
-	var directions := ["↑", "→", "↓", "←"]
-	for i in directions.size():
-		var rect := Rect2(220 + (i % 2) * 150, 110 + (i / 2) * 72, 120, 58)
-		_button(directions[i], rect, Callable(self, "_choose_route_direction").bind(directions[i]), true)
-	feedback_label.text = "Langkah %d/%d" % [route_position, route.size()]
-
-
-func _choose_route_direction(direction: String) -> void:
-	var route: Array = task.get("route", ["↑", "→", "↑"])
-	if direction == str(route[route_position]):
-		route_position += 1
-		if route_position >= route.size():
-			route_position = 0
-			_complete_one("ui")
-		else:
-			sound_requested.emit("ui")
-			feedback_label.text = "Betul! Langkah %d/%d" % [route_position, route.size()]
-	else:
-		route_position = 0
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Tersalah laluan. Cuba semula dari awal."
-
-
-func _build_supplies_board() -> void:
-	_label("Kumpulkan kedua-dua bekalan perjalanan.", 16, CREAM, Rect2(20, 14, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var supplies: Array = task.get("items", ["Air", "Makanan"])
-	for i in supplies.size():
-		var item := str(supplies[i])
-		var rect := Rect2(145 + i * 245, 92, 200, 100)
-		_button("✚\n" + item, rect, Callable(self, "_collect_supply").bind(item))
-	feedback_label.text = "Bekalan dikumpul: %d/%d" % [supplies_found.size(), supplies.size()]
-
-
-func _collect_supply(item: String) -> void:
-	if not supplies_found.has(item):
-		supplies_found.append(item)
-		sound_requested.emit("collect")
-	feedback_label.text = "Bekalan dikumpul: %d/%d" % [supplies_found.size(), task.get("items", []).size()]
-	if supplies_found.size() >= task.get("items", []).size():
-		_complete_one("ui")
-
-
-func _build_find_rooster_board() -> void:
-	_label("Cari dan tekan ayam Pak Kaduk.", 16, CREAM, Rect2(20, 14, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var choices: Array = ["Ayam betina", "Patung ayam", "Ayam Pak Kaduk", "Bakul jerami"]
-	choices.shuffle()
-	for i in choices.size():
-		var item := str(choices[i])
-		var rect := Rect2(70 + (i % 2) * 300, 75 + (i / 2) * 82, 250, 68)
-		_button("◉  " + item, rect, Callable(self, "_select_rooster").bind(item))
-
-
-func _select_rooster(item: String) -> void:
-	if item == "Ayam Pak Kaduk":
-		_complete_one("collect")
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Bukan ayam Pak Kaduk. Cari lagi!"
-
-
-func _build_search_key_board() -> void:
-	if not key_found:
-		_label("Cari kunci di dalam peti yang berhampiran.", 15, CREAM, Rect2(20, 10, size.x - 40, 36), HORIZONTAL_ALIGNMENT_CENTER)
-		var hiding_places := ["Bakul", "Pasu", "Tikar"]
-		for i in hiding_places.size():
-			_button("⌕\n" + hiding_places[i], Rect2(96 + i * 205, 80, 160, 115), Callable(self, "_search_spot").bind(i))
-	else:
-		_build_drag_board()
-		feedback_label.text = "Kunci ditemui! Seret kunci ke peti berkunci."
-
-
-func _search_spot(spot_index: int) -> void:
-	if spot_index == key_hide_index:
-		key_found = true
-		sound_requested.emit("collect")
-		_build_board()
-		feedback_label.text = "Kunci ditemui! Seret kunci ke peti berkunci."
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Tiada kunci di situ. Cuba tempat yang lain."
-
-
-func _build_matching_board() -> void:
-	_label("Seret setiap barang kepada pemilik yang betul.", 16, CREAM, Rect2(20, 12, size.x - 40, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	var pairs: Array = task.get("pairs", [])
-	if pairs.is_empty():
-		_complete_one()
-		return
-	var pair_index := current_progress % pairs.size()
-	var pair: Dictionary = pairs[pair_index]
-	var token := DragToken.new()
-	token.text = str(pair.get("item", "Barang"))
-	token.item_id = str(pair.get("id", ""))
-	token.disabled = not input_enabled
-	token.position = Vector2(54, 102)
-	token.size = Vector2(210, 82)
-	token.add_theme_font_size_override("font_size", 18)
-	token.add_theme_color_override("font_color", CREAM)
-	token.pressed.connect(_on_drag_token_pressed.bind(token.item_id))
-	board.add_child(token)
-	_label("➜", 32, GOLD, Rect2(315, 112, 70, 56), HORIZONTAL_ALIGNMENT_CENTER)
-	var owners: Array = task.get("owners", [])
-	for i in owners.size():
-		var target := DropTarget.new()
-		target.text = str(owners[i])
-		target.position = Vector2(300 + (i % 3) * 132, 190 + (i / 3) * 62)
-		target.size = Vector2(122, 58)
-		target.target_id = str(owners[i])
-		target.accepting = input_enabled
-		target.disabled = not input_enabled
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color("3b4c39")
-		style.border_color = Color("9dbb72")
-		style.set_border_width_all(2)
-		style.set_corner_radius_all(10)
-		style.content_margin_left = 8; style.content_margin_right = 8
-		style.content_margin_top = 6; style.content_margin_bottom = 6
-		target.add_theme_stylebox_override("normal", style)
-		var hover := style.duplicate() as StyleBoxFlat
-		hover.bg_color = Color("4c6248")
-		target.add_theme_stylebox_override("hover", hover)
-		target.add_theme_stylebox_override("pressed", hover)
-		target.add_theme_font_size_override("font_size", 16)
-		target.add_theme_color_override("font_color", CREAM)
-		target.pressed.connect(_on_matching_target_pressed.bind(str(pair.get("id", "")), str(pair.get("owner", "")), str(owners[i])))
-		target.item_dropped.connect(_on_matching_drop.bind(str(pair.get("id", "")), str(pair.get("owner", ""))))
-		board.add_child(target)
-
-
-func _on_matching_target_pressed(expected_id: String, expected_owner: String, target_owner: String) -> void:
-	if selected_drag_item.is_empty():
-		feedback_label.text = "Pilih barang dahulu, kemudian tekan pemiliknya."
-		return
-	_on_matching_drop(selected_drag_item, target_owner, expected_id, expected_owner)
-
-
-func _on_matching_drop(item_id: String, target_id: String, expected_id: String, expected_owner: String) -> void:
-	if item_id == expected_id and target_id == expected_owner:
-		_complete_one("drag")
-	else:
-		sound_requested.emit("timing_miss")
-		feedback_label.text = "Padanan salah. Cuba barang yang lain."
-
-
-func _build_final_route_board() -> void:
-	_label("Ikut penanda ke Puteri, kemudian tekan untuk berbual.", 16, CREAM, Rect2(20, 14, size.x - 40, 34), HORIZONTAL_ALIGNMENT_CENTER)
-	_button("⌖  IKUT PENANDA", Rect2(90, 92, 240, 95), Callable(self, "_reach_princess"))
-	var princess := _button("◉  PUTERI GUNUNG LEDANG", Rect2(400, 92, 250, 95), Callable(self, "_speak_to_princess"))
-	princess.name = "PrincessTaskButton"
-	princess.disabled = true
-	feedback_label.text = "Ikut penanda dahulu."
-
-
-func _reach_princess() -> void:
-	sound_requested.emit("ui")
-	feedback_label.text = "Anda sudah tiba. Sekarang berbual dengan Puteri."
-	var princess := board.get_node_or_null("PrincessTaskButton") as Button
-	if princess: princess.disabled = false
-
-
-func _speak_to_princess() -> void:
-	var princess := board.get_node_or_null("PrincessTaskButton") as Button
-	if princess and princess.disabled:
-		feedback_label.text = "Ikut penanda ke puncak dahulu."
-		return
-	_complete_one("ui")
-
-
-func _complete_one(sound_kind: String = "collect") -> void:
-	sound_requested.emit(sound_kind)
-	step_completed.emit()
+func _submit(sound_kind: String) -> void:
+    if not input_enabled or _pending: return
+    _pending=true; input_enabled=false; _dragging=false; _selected=false
+    sound_requested.emit(sound_kind)
+    step_completed.emit()
+    queue_redraw()

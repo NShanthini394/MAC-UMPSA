@@ -1,0 +1,28 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:1:1-6:12
+INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:1:1-6:12
+	package
+		INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:1:11-69
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:2:5-67
+	android:name
+		ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:2:22-64
+application
+ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:3:5-5:19
+meta-data#org.godotengine.plugin.v2.KampungGoogleSignIn
+ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:9-136
+	android:value
+		ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:81-133
+	android:name
+		ADDED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml:4:20-80
+uses-sdk
+INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml
+INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\AndroidManifest.xml

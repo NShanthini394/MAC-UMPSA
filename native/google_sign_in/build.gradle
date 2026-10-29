@@ -1,0 +1,13 @@
+plugins { id 'com.android.library' version '9.4.1' }
+android {
+    namespace 'org.kampung.auth'
+    compileSdk 36
+    defaultConfig { minSdk 23 }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies {
+    compileOnly files('../../.godot/firebase-native/godot.aar')
+    implementation 'androidx.credentials:credentials:1.3.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+}

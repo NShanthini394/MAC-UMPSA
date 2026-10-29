@@ -3,9 +3,8 @@
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/character_actor.gd" id="2_actor"]
 
-[sub_resource type="CapsuleShape2D" id="Capsule_player"]
-radius = 10.0
-height = 28.0
+[sub_resource type="CircleShape2D" id="Circle_player"]
+radius = 14.0
 
 [node name="Player" type="CharacterBody2D"]
 collision_layer = 1
@@ -14,8 +13,7 @@ motion_mode = 1
 script = ExtResource("1_player")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -2)
-shape = SubResource("Capsule_player")
+shape = SubResource("Circle_player")
 
 [node name="CharacterActor" type="Control" parent="."]
 position = Vector2(-40, -66)

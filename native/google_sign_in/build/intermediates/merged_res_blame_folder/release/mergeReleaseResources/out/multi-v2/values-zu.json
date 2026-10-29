@@ -1,0 +1,102 @@
+{
+    "logs": [
+        {
+            "outputFile": "org.kampung.auth-release-14:/values-zu/values-zu.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\7e148811b2a842c0427df81d7de308d6\\transformed\\play-services-basement-18.3.0\\res\\values-zu\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "195",
+                        "endColumns": "127",
+                        "endOffsets": "322"
+                    },
+                    "to": {
+                        "startLines": "12",
+                        "startColumns": "4",
+                        "startOffsets": "1349",
+                        "endColumns": "131",
+                        "endOffsets": "1476"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\97e19f6a981e5840a071a4877d49da3b\\transformed\\credentials-1.3.0\\res\\values-zu\\values-zu.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,169",
+                        "endColumns": "113,122",
+                        "endOffsets": "164,287"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\2b62d5e2f596dad0c559afe73362e5d3\\transformed\\play-services-base-18.3.0\\res\\values-zu\\values.xml",
+                    "from": {
+                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+                        "startOffsets": "193,300,472,603,703,867,992,1112,1218,1374,1480,1641,1768,1922,2075,2132,2197",
+                        "endColumns": "106,171,130,99,163,124,119,105,155,105,160,126,153,152,56,64,80",
+                        "endOffsets": "299,471,602,702,866,991,1111,1217,1373,1479,1640,1767,1921,2074,2131,2196,2277"
+                    },
+                    "to": {
+                        "startLines": "4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "292,403,579,714,818,986,1115,1239,1481,1641,1751,1916,2047,2205,2362,2423,2492",
+                        "endColumns": "110,175,134,103,167,128,123,109,159,109,164,130,157,156,60,68,84",
+                        "endOffsets": "398,574,709,813,981,1110,1234,1344,1636,1746,1911,2042,2200,2357,2418,2487,2572"
+                    }
+                }
+            ]
+        },
+        {
+            "outputFile": "org.kampung.auth-mergeReleaseResources-12:/values-zu/values-zu.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\7e148811b2a842c0427df81d7de308d6\\transformed\\play-services-basement-18.3.0\\res\\values-zu\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "195",
+                        "endColumns": "127",
+                        "endOffsets": "322"
+                    },
+                    "to": {
+                        "startLines": "12",
+                        "startColumns": "4",
+                        "startOffsets": "1349",
+                        "endColumns": "131",
+                        "endOffsets": "1476"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\97e19f6a981e5840a071a4877d49da3b\\transformed\\credentials-1.3.0\\res\\values-zu\\values-zu.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,169",
+                        "endColumns": "113,122",
+                        "endOffsets": "164,287"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\shant\\.gradle\\caches\\9.6.0\\transforms\\2b62d5e2f596dad0c559afe73362e5d3\\transformed\\play-services-base-18.3.0\\res\\values-zu\\values.xml",
+                    "from": {
+                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+                        "startOffsets": "193,300,472,603,703,867,992,1112,1218,1374,1480,1641,1768,1922,2075,2132,2197",
+                        "endColumns": "106,171,130,99,163,124,119,105,155,105,160,126,153,152,56,64,80",
+                        "endOffsets": "299,471,602,702,866,991,1111,1217,1373,1479,1640,1767,1921,2074,2131,2196,2277"
+                    },
+                    "to": {
+                        "startLines": "4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "292,403,579,714,818,986,1115,1239,1481,1641,1751,1916,2047,2205,2362,2423,2492",
+                        "endColumns": "110,175,134,103,167,128,123,109,159,109,164,130,157,156,60,68,84",
+                        "endOffsets": "398,574,709,813,981,1110,1234,1344,1636,1746,1911,2042,2200,2357,2418,2487,2572"
+                    }
+                }
+            ]
+        }
+    ]
+}

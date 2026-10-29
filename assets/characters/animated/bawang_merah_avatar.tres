@@ -1,0 +1,8 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/bawang_merah.png" id="1"]
+
+[resource]
+atlas = ExtResource("1")
+region = Rect2(98.5200, 19.0000, 223.4800, 146.2800)
+filter_clip = true

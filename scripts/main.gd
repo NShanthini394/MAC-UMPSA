@@ -11,6 +11,8 @@ const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
 const PageControls = preload("res://scripts/page_controls.gd")
 const LoginScreen = preload("res://scripts/login_screen.gd")
+const FirebaseAuth = preload("res://scripts/firebase_auth.gd")
+var firebase_auth: Node
 const MultiplayerSetup = preload("res://scripts/multiplayer_setup.gd")
 const LanHost = preload("res://scripts/lan_host.gd")
 const MENU_ART := GameData.MENU_ART
@@ -45,6 +47,7 @@ var selected_character := ""
 var character_reservations: Dictionary = {}
 var route_target := Vector2.ZERO
 var route_active := false
+var route_waypoints := PackedVector2Array()
 var auto_start_triggered := false
 var impostor_character := ""
 var assigned_role_character := ""
@@ -81,7 +84,6 @@ var game_screen := GameScreen.new()
 var game_world: Node2D
 var game_hud: CanvasLayer
 var player_body: CharacterBody2D
-var current_area_name := ""
 var network_manager = null
 var lan_host: Node
 var _lobby_refresh_queued := false
@@ -115,6 +117,13 @@ func _ready() -> void:
 		set_process(false)
 		return
 	audio_director = AudioDirector.new()
+	firebase_auth = FirebaseAuth.new()
+	firebase_auth.name = "FirebaseAuth"
+	add_child(firebase_auth)
+	firebase_auth.authenticated.connect(_on_authenticated)
+	firebase_auth.failed.connect(_auth_notice)
+	firebase_auth.busy_changed.connect(_auth_busy_changed)
+	firebase_auth.reset_sent.connect(func(): _auth_notice("If this email has an account, check its inbox for a password reset link."))
 	audio_director.name = "AudioDirector"
 	add_child(audio_director)
 	lan_host = LanHost.new()
@@ -153,8 +162,6 @@ func _process(delta: float) -> void:
 	if current_screen in ["game", "meeting"]:
 		_update_power_view()
 		_update_power_hud()
-	if current_screen == "game":
-		_update_direction_indicator()
 	if now - last_notice_time > 2.4:
 		var notice_label := find_child("NoticeLabel", true, false) as Label
 		if notice_label: notice_label.text = ""
@@ -176,6 +183,8 @@ func _process(delta: float) -> void:
 		for member in lobby_players:
 			if bool(member.get("ready", false)): ready_count += 1
 		var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
+		if network_room and network_manager.lobby_countdown >= 0.0:
+			network_manager.lobby_countdown = maxf(0.0, network_manager.lobby_countdown - delta)
 		if not network_room and practice_start_countdown >= 0.0:
 			practice_start_countdown = maxf(0.0, practice_start_countdown - delta)
 			if practice_start_countdown <= 0.0 and not auto_start_triggered:
@@ -188,29 +197,27 @@ func _process(delta: float) -> void:
 			if not network_room and practice_start_countdown >= 0.0:
 				var practice_seconds := ceili(practice_start_countdown)
 				timer_label.text = "READY   •   STARTING IN %02d:%02d" % [floori(float(practice_seconds) / 60.0), practice_seconds % 60]
+			elif network_room and network_manager.lobby_countdown >= 0.0:
+				var seconds := ceili(network_manager.lobby_countdown)
+				timer_label.text = "READY %d/%d   •   STARTING IN %02d:%02d" % [ready_count, player_count, floori(float(seconds) / 60.0), seconds % 60]
 			else:
 				var wait_text := "WAITING FOR PLAYERS" if player_count < 5 else ("ALL PLAYERS READY!" if _all_lobby_players_ready() else "WAITING %02d:%02d" % [floori(float(elapsed) / 60.0), elapsed % 60])
 				timer_label.text = "%d / 10 PLAYERS   •   READY %d/%d   •   %s" % [player_count, ready_count, player_count, wait_text]
 		var action_button := find_child("LobbyActionButton", true, false) as Button
 		if action_button:
 			var is_ready := _local_player_is_ready()
-			var all_ready := _all_lobby_players_ready()
-			var can_start_manually := network_room and room_is_host and all_ready and player_count >= 5 and player_count < 10
-			if can_start_manually:
-				action_button.text = "START GAME"
-				action_button.disabled = false
-				_apply_ready_button_color(action_button, true)
-			elif not network_room and practice_start_countdown >= 0.0:
+			if not network_room and practice_start_countdown >= 0.0:
 				var practice_seconds := ceili(practice_start_countdown)
 				action_button.text = "STARTING IN %02d:%02d" % [floori(float(practice_seconds) / 60.0), practice_seconds % 60]
 				action_button.disabled = true
 				_apply_ready_button_color(action_button, true)
 			else:
-				action_button.text = "READY ✓" if is_ready else "READY"
-				action_button.disabled = selected_character.is_empty() or (network_room and player_count >= 10)
+				action_button.text = "READY ✓" if is_ready else "ARE YOU READY?"
+				action_button.disabled = selected_character.is_empty()
+				action_button.tooltip_text = ""
 				_apply_ready_button_color(action_button, is_ready)
 		return
-	if current_screen != "game" or task_overlay_index >= 0 or not can_local_act() or _utility_dialog_open():
+	if current_screen != "game" or task_overlay_index >= 0 or not can_local_act() or _utility_dialog_open() or find_child("MapOverlay",true,false) != null:
 		return
 	var direction := move_vector
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): direction.x -= 1.0
@@ -222,74 +229,17 @@ func _process(delta: float) -> void:
 	if online_match:
 		network_manager.send_player_input(direction)
 		_update_interaction_prompt()
+		_refresh_route_line()
 		return
 	if is_instance_valid(player_body):
 		player_body.call("set_input_direction", direction)
 		player_position = player_body.global_position
-	_update_area_indicator()
 	_update_interaction_prompt()
-	var route_line: Line2D = null
-	if is_instance_valid(game_world): route_line = game_world.get_node_or_null("RouteLine") as Line2D
-	if route_active and route_line:
-		route_line.clear_points()
-		route_line.add_point(player_position)
-		route_line.add_point(route_target)
-		if player_position.distance_to(route_target) < 44.0:
-			route_active = false
-			route_line.visible = false
-	else:
-		if route_line: route_line.visible = false
+	_refresh_route_line()
 
 
 func _utility_dialog_open() -> bool:
 	return is_instance_valid(page_controls) and bool(page_controls.call("dialog_open"))
-
-
-func _update_direction_indicator() -> void:
-	var arrow := find_child("TaskDirectionArrow", true, false) as TextureRect
-	if arrow == null: return
-	if task_overlay_index >= 0 or _utility_dialog_open() or not can_local_act():
-		arrow.visible = false
-		return
-	var target := route_target
-	if not route_active:
-		var points: Array = MapGeometry.task_points(selected_map)
-		var nearest_distance := INF
-		var has_target := false
-		for i in points.size():
-			if i >= completed_tasks.size() or completed_tasks[i] == 1: continue
-			var distance := player_position.distance_to(points[i])
-			if distance < nearest_distance:
-				nearest_distance = distance
-				target = points[i]
-				has_target = true
-		if not has_target:
-			arrow.visible = false
-			return
-	if not is_instance_valid(player_body):
-		arrow.visible = false
-		return
-	var viewport_size := get_viewport_rect().size
-	var screen_center := viewport_size * 0.5
-	var target_screen: Vector2 = get_viewport().get_canvas_transform() * target
-	var safe_rect := Rect2(Vector2(56, 76), viewport_size - Vector2(112, 152))
-	if safe_rect.has_point(target_screen):
-		arrow.visible = false
-		return
-	var direction := target_screen - screen_center
-	if direction.length_squared() < 1.0:
-		arrow.visible = false
-		return
-	direction = direction.normalized()
-	var edge := viewport_size * 0.5 - Vector2(48, 54)
-	var horizontal_scale := edge.x / maxf(absf(direction.x), 0.001)
-	var vertical_scale := edge.y / maxf(absf(direction.y), 0.001)
-	var distance_to_edge := minf(horizontal_scale, vertical_scale)
-	var arrow_center := screen_center + direction * distance_to_edge
-	arrow.position = arrow_center - arrow.size * 0.5
-	arrow.rotation = direction.angle() + PI * 0.5
-	arrow.tooltip_text = "Arah ke tugasan"
-	arrow.visible = true
 
 
 func _set_audio_volume(percent: float) -> void:
@@ -314,6 +264,9 @@ func navigate_back() -> void:
 	for overlay_name in ["CreateAccountOverlay", "ConnectionLostOverlay", "CharacterConfirmOverlay", "TaskOverlay", "TaskScreenDim", "MapOverlay", "JournalOverlay", "ClueOverlay", "VoteOverlay", "JoinRoomChoiceOverlay", "JoinRoomOverlay", "OnlineUnavailableOverlay", "CreateRoomOverlay"]:
 		var overlay := find_child(overlay_name, true, false)
 		if overlay:
+			if overlay_name == "CreateAccountOverlay":
+				_close_email_auth()
+				return
 			if overlay_name == "TaskOverlay":
 				_close_task()
 				return
@@ -322,13 +275,16 @@ func navigate_back() -> void:
 			return
 	match current_screen:
 		"login": page_controls.call("confirm", "EXIT GAME?", "Close Nenek Kebayan?", Callable(get_tree(), "quit"))
-		"menu": build_login_screen()
+		"menu": _sign_out()
 		"map_select":
 			if room_code.is_empty(): build_menu()
 			else: show_leave_room_confirmation()
 		"create_room":
 			network_manager.leave_room()
-			build_map_select()
+			if lan_host != null: lan_host.stop()
+			room_code = ""
+			room_is_host = false
+			build_menu()
 		"character_select": build_waiting_room()
 		"waiting_room": show_leave_room_confirmation()
 		"game", "meeting", "role_reveal": show_exit_confirmation()
@@ -401,14 +357,14 @@ func _update_power_hud() -> void:
 	var sleep_seconds := ceili(maxf(0.0, sleep_ready_at - now))
 	if sleep_button:
 		sleep_button.visible = not watching
-		sleep_button.tooltip_text = "Jampi tidur" + (" · sedia dalam %ds" % sleep_seconds if sleep_seconds > 0 else " · sedia digunakan")
+		sleep_button.tooltip_text = "Sleep spell" + (" · ready in %ds" % sleep_seconds if sleep_seconds > 0 else " · ready")
 		sleep_button.disabled = watching or sleep_seconds > 0 or current_screen != "game"
 	var sabotage_seconds := ceili(maxf(0.0, sabotage_ready_at - now))
-	for info in [["FogButton", "Kabus"], ["DoorLockButton", "Sumpahan pintu"]]:
+	for info in [["FogButton", "Fog"], ["DoorLockButton", "Door lock"]]:
 		var button := find_child(info[0], true, false) as Button
 		if button:
 			button.visible = not watching
-			button.tooltip_text = info[1] + (" · sedia dalam %ds" % sabotage_seconds if sabotage_seconds > 0 else " · sedia digunakan")
+			button.tooltip_text = info[1] + (" · ready in %ds" % sabotage_seconds if sabotage_seconds > 0 else " · ready")
 			button.disabled = watching or sabotage_seconds > 0 or current_screen != "game"
 	var banner := find_child("WatchingLabel", true, false) as Label
 	if banner:
@@ -419,7 +375,7 @@ func _update_power_hud() -> void:
 		var areas := MapGeometry.sabotage_areas(selected_map)
 		if active_power_kind != "":
 			var section_name := str(areas[active_power_area]["name"]) if active_power_area >= 0 and active_power_area < areas.size() else "Nearby surroundings"
-			status.text = ("KABUS · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
+			status.text = ("FOG · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
 
 
 func _enter_watch_mode() -> void:
@@ -436,18 +392,6 @@ func _enter_watch_mode() -> void:
 		player_body.call("set_sleeping", player_sleeping)
 	_update_power_hud()
 	_update_interaction_prompt()
-
-
-func _update_area_indicator() -> void:
-	var area_name := "Village Yard"
-	for area in MapGeometry.areas(selected_map):
-		var area_rect: Rect2 = area["rect"]
-		if area_rect.has_point(player_position):
-			area_name = str(area["name"])
-			break
-	if area_name != current_area_name:
-		current_area_name = area_name
-		show_notice(area_name)
 
 
 func _update_interaction_prompt() -> void:
@@ -467,14 +411,14 @@ func _update_interaction_prompt() -> void:
 		if clue_index < local_clues.size() and collected_clues.has(local_clues[clue_index]):
 			clue_available = false
 	inspect.disabled = not clue_available
-	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
+	var task_index := -1 if player_is_impostor else _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	var gong_near := player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0
 	if clue_available:
-		prompt.text = "Petunjuk berhampiran • tekan PERIKSA PETUNJUK"
+		prompt.text = "Clue nearby • press INSPECT CLUE"
 		interact.disabled = false
 	elif task_index >= 0:
-		var tasks: Array = TASKS[MAPS[selected_map]["name"]]
-		prompt.text = "Tugasan berhampiran • " + str(tasks[task_index]["name"])
+		# NearbyTaskHint owns task wording and direction; avoid a second HUD sentence.
+		prompt.text = ""
 		interact.disabled = completed_tasks.size() > task_index and completed_tasks[task_index] == 1
 	elif gong_near:
 		prompt.text = "Emergency meeting gong • tap INTERACT"
@@ -498,9 +442,8 @@ func clear_screen(screen_name: String) -> void:
 	game_world = null
 	game_hud = null
 	player_body = null
-	current_area_name = ""
 	for child in get_children():
-		if child != network_manager and child != page_controls and child != lan_host: child.queue_free()
+		if child != network_manager and child != page_controls and child != lan_host and child != firebase_auth: child.queue_free()
 	await get_tree().process_frame
 
 
@@ -513,13 +456,60 @@ func build_login_screen() -> void:
 func show_create_account() -> void:
 	LoginScreen.show_create_account(self)
 
+func show_email_sign_in() -> void:
+	LoginScreen.show_email_form(self, "signin")
+
+func _auth_notice(message: String) -> void:
+	var footer := find_child("LoginFooterLabel", true, false) as Label
+	if footer: footer.visible = message.is_empty()
+	var notice := find_child("AuthNoticeLabel", true, false) as Label
+	if notice == null: notice = find_child("LoginNoticeLabel", true, false) as Label
+	if notice: notice.text = message
+
+func _auth_busy_changed(value: bool) -> void:
+	for button_name in ["AuthSubmitButton", "LoginGoogleButton", "LoginEmailButton", "LoginHuaweiButton", "LoginCreateAccountButton", "AuthResetButton"]:
+		var button := find_child(button_name, true, false) as Button
+		if button: button.disabled = value
+	if value: _auth_notice("Connecting securely…")
+
+func _submit_email_auth(mode: String) -> void:
+	var email := find_child("AuthEmail", true, false) as LineEdit
+	var password := find_child("AuthPassword", true, false) as LineEdit
+	if email == null: return
+	if mode == "reset":
+		firebase_auth.reset_password(email.text)
+		return
+	if password == null: return
+	if mode == "create":
+		var confirm := find_child("AuthConfirmPassword", true, false) as LineEdit
+		if confirm == null or confirm.text != password.text:
+			_auth_notice("The passwords do not match.")
+			return
+	firebase_auth.email_sign_in(email.text, password.text, mode == "create")
+
+func _close_email_auth() -> void:
+	firebase_auth.cancel()
+	_auth_notice("")
+	var overlay := find_child("CreateAccountOverlay", true, false)
+	if overlay: overlay.queue_free()
+
+func _on_authenticated() -> void:
+	if current_screen != "login": return
+	room_code = ""
+	room_is_host = false
+	build_menu()
+
+func _sign_out() -> void:
+	firebase_auth.sign_out()
+	build_login_screen()
+
 
 func _login_provider_unavailable(provider: String) -> void:
-	var notice := find_child("LoginNoticeLabel", true, false) as Label
-	if notice: notice.text = provider + " sign-in needs provider setup. You can play as a guest for now."
+	_auth_notice(provider + " ID sign-in is not connected yet. Use Google, email or Play as Guest for now.")
 
 
 func _continue_as_guest() -> void:
+	if firebase_auth != null: firebase_auth.sign_out()
 	room_code = ""
 	room_is_host = false
 	build_menu()
@@ -533,10 +523,13 @@ func build_menu() -> void:
 	_make_menu_art_hitbox("PlayArtworkButton", Rect2(510, 286, 260, 72), Callable(self, "_menu_action").bind(0))
 	_make_menu_art_hitbox("CreateRoomArtworkButton", Rect2(528, 363, 228, 43), Callable(self, "_menu_action").bind(1))
 	_make_menu_art_hitbox("JoinRoomArtworkButton", Rect2(528, 408, 228, 44), Callable(self, "_menu_action").bind(2))
-	_make_menu_art_hitbox("SettingsArtworkButton", Rect2(528, 454, 228, 44), Callable(self, "_menu_action").bind(3))
-	_make_menu_art_hitbox("HowToPlayArtworkButton", Rect2(528, 501, 228, 44), Callable(self, "_menu_action").bind(4))
-	_make_menu_art_hitbox("ExitArtworkButton", Rect2(528, 545, 228, 44), Callable(self, "_menu_action").bind(5))
+	_make_menu_art_hitbox("HowToPlayArtworkButton", Rect2(528, 454, 228, 44), Callable(self, "_menu_action").bind(4))
+	_make_menu_art_hitbox("ExitArtworkButton", Rect2(528, 501, 228, 44), Callable(self, "_menu_action").bind(5))
 	var menu_notice := make_label("", 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	if firebase_auth != null and not firebase_auth.user.is_empty():
+		var sign_out_button := GameUI.make_button(self, "SIGN OUT", _sign_out, 160, 38)
+		sign_out_button.name = "SignOutButton"
+		sign_out_button.position = Vector2(560, 608)
 	menu_notice.name = "MenuNoticeLabel"; menu_notice.position = Vector2(390, 657); menu_notice.size = Vector2(500, 28)
 	if is_instance_valid(page_controls): page_controls.call("refresh", true)
 
@@ -604,7 +597,7 @@ func _host_lan_room() -> void:
 	var status := find_child("CreateRoomStatusLabel", true, false) as Label
 	var result: Error = lan_host.call("start", network_manager.server_port)
 	if result != OK:
-		if status: status.text = "Cannot host on port %d. Another copy may already be hosting; use Join Room instead." % network_manager.server_port
+		if status: status.text = "Cannot open a Wi-Fi room. Another host may already be open on this device; close that room or join it instead."
 		return
 	server_address = "127.0.0.1"
 	_set_connection_busy(true)
@@ -620,11 +613,6 @@ func _set_connection_busy(busy: bool) -> void:
 func _cancel_join_room() -> void:
 	if room_code.is_empty(): network_manager.leave_room()
 	_close_menu_popups()
-
-
-func _lan_address_text() -> String:
-	var addresses := LanHost.addresses()
-	return ", ".join(addresses) if not addresses.is_empty() else "No Wi-Fi address found; check your network connection."
 
 
 func _queue_network_lobby_refresh() -> void:
@@ -655,9 +643,9 @@ func _return_after_connection_loss(message: String) -> void:
 
 
 func _copy_created_room_code() -> void:
-	DisplayServer.clipboard_set(GameData.GAME_TITLE + "\nRoom code: " + room_code + "\nHost Wi-Fi address: " + _lan_address_text() + "\nPort: %d\nJoin on the same Wi-Fi." % network_manager.server_port)
+	DisplayServer.clipboard_set(room_code)
 	var copy := find_child("CopyCreatedRoomCodeButton", true, false) as Button
-	if copy: copy.text = "INVITE COPIED"
+	if copy: copy.text = "CODE COPIED"
 
 
 func _continue_to_room_map() -> void:
@@ -680,17 +668,14 @@ func _join_room_with_code() -> void:
 	if entry.text.strip_edges().length() != 5:
 		status.text = "Enter the five-character code shown on the host's screen."
 		return
-	status.text = "Connecting to room server…"
+	status.text = "Finding the host on your Wi-Fi…"
 	var name_entry := find_child("LobbyPlayerNameEntry", true, false) as LineEdit
 	if name_entry and not name_entry.text.strip_edges().is_empty(): lobby_player_name = name_entry.text.strip_edges().substr(0, 20)
-	var address_entry := find_child("ServerAddressEntry", true, false) as LineEdit
-	var address := address_entry.text.strip_edges() if address_entry else server_address
-	if not address.is_empty(): server_address = address
 	_set_connection_busy(true)
-	var result: Error = network_manager.join_room(entry.text, lobby_player_name, address)
+	var result: Error = network_manager.join_room(entry.text, lobby_player_name)
 	if result != OK:
 		_set_connection_busy(false)
-		status.text = "Check the room code and host Wi-Fi address, then try again."
+		status.text = "Enter the host's five-character room code, then try again."
 
 
 func _open_create_room() -> void:
@@ -703,13 +688,10 @@ func _create_online_room() -> void:
 	if status: status.text = "Connecting to room server…"
 	var name_entry := find_child("LobbyPlayerNameEntry", true, false) as LineEdit
 	if name_entry and not name_entry.text.strip_edges().is_empty(): lobby_player_name = name_entry.text.strip_edges().substr(0, 20)
-	var address_entry := find_child("ServerAddressEntry", true, false) as LineEdit
-	var address := address_entry.text.strip_edges() if address_entry else server_address
-	if not address.is_empty(): server_address = address
-	var result: Error = network_manager.create_room(selected_map, lobby_player_name, address)
+	var result: Error = network_manager.create_room(selected_map, lobby_player_name, server_address)
 	if result != OK and status:
 		_set_connection_busy(false)
-		status.text = "Room creation failed. Check the selected map and server address."
+		status.text = "Could not create the Wi-Fi room. Keep the host's game open and try again."
 
 
 func _start_local_practice_lobby() -> void:
@@ -738,7 +720,7 @@ func _random_available_character() -> String:
 
 
 func _show_created_room() -> void:
-	MultiplayerSetup.show_created(self, _lan_address_text())
+	MultiplayerSetup.show_created(self)
 
 
 func _enter_waiting_room() -> void:
@@ -758,11 +740,10 @@ func build_map_select() -> void:
 	close.position = Vector2(1168, 21)
 	close.tooltip_text = "Close map selection"
 	close.add_theme_font_size_override("font_size", 30)
-	var atlas := load(MAP_ART) as Texture2D
 	for i in MAPS.size():
 		var card := make_panel(Rect2(40 + i * 400, 120, 380, 500), Color(0.12, 0.09, 0.07, 0.97))
 		var preview := TextureRect.new()
-		preview.texture = make_map_texture(atlas, MAPS[i]["region"])
+		preview.texture = make_map_texture(load(GameData.map_art_path(i)), MAPS[i]["region"])
 		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		preview.position = Vector2(12, 12); preview.size = Vector2(356, 230)
@@ -798,6 +779,11 @@ func _change_offline_map() -> void:
 
 func _on_network_connection_changed(connected: bool, message: String) -> void:
 	if connected:
+		return
+	if network_manager.connection_pending:
+		_set_connection_busy(true)
+		var progress_label := find_child("JoinRoomStatusLabel",true,false) as Label
+		if progress_label: progress_label.text=message
 		return
 	_set_connection_busy(false)
 	if not room_code.is_empty() and not network_manager.is_connected_to_room_server():
@@ -916,7 +902,6 @@ func _on_network_positions_changed(members: Array) -> void:
 				actor.set("inactive", not alive)
 	if not was_watching and not can_local_act(): _enter_watch_mode()
 	if current_screen == "game":
-		_update_area_indicator()
 		_update_interaction_prompt()
 	_update_power_hud()
 
@@ -931,7 +916,9 @@ func _on_network_task_state_changed(completed: Array, progress: Array) -> void:
 		if completed_tasks[task_overlay_index] == 1:
 			_close_task()
 		elif is_instance_valid(task_minigame):
-			task_minigame.set_progress(task_progress[task_overlay_index])
+			# Another villager's unrelated task must not cancel the current drag.
+			if task_minigame.current_progress != task_progress[task_overlay_index]:
+				task_minigame.set_progress(task_progress[task_overlay_index])
 
 
 func _on_network_task_resolved(task_index: int, success: bool, progress: int, complete: bool) -> void:
@@ -939,13 +926,13 @@ func _on_network_task_resolved(task_index: int, success: bool, progress: int, co
 		if complete:
 			_play_sfx("task_complete")
 			_close_task()
-			show_notice("Tugasan selesai!")
+			show_notice("Task complete!")
 		else:
 			_update_task_dialog_progress(task_index, progress)
 			if is_instance_valid(task_minigame): task_minigame.set_input_enabled(true)
 	else:
 		if is_instance_valid(task_minigame): task_minigame.set_input_enabled(true)
-		show_notice("Nenek Kebayan tidak boleh menyiapkan tugasan." if player_is_impostor else "Anda perlu berada dekat dengan tempat tugasan.")
+		show_notice("Nenek Kebayan cannot complete tasks." if player_is_impostor else "You must be near the task station.")
 
 
 func _on_network_clue_found(clue_index: int, clue_name: String, found_by: int) -> void:
@@ -956,9 +943,9 @@ func _on_network_clue_found(clue_index: int, clue_name: String, found_by: int) -
 		collected_clues.append(clue_name)
 	_update_progress()
 	if network_manager.local_peer_id() == found_by:
-		show_clue_panel(clue_name, "watak tersembunyi")
+		show_clue_panel(clue_name, "a hidden character")
 	elif current_screen == "game":
-		show_notice("Petunjuk ditemui: " + clue_name)
+		show_notice("Clue found: " + clue_name)
 	var marker := game_world.get_node_or_null("ClueMarker_%d" % clue_index) if is_instance_valid(game_world) else null
 	if marker: marker.queue_free()
 	_update_interaction_prompt()
@@ -1178,7 +1165,7 @@ func _show_role_reveal() -> void:
 	role_badge.size = Vector2(266, 48)
 	role_badge.add_theme_stylebox_override("panel", role_style)
 	revealed.add_child(role_badge)
-	var role_title := "You are Nenek Kebayan" if player_is_impostor else "You are Orang Kampung"
+	var role_title := "You are Nenek Kebayan" if player_is_impostor else "You are a Villager"
 	_make_child_label(role_badge, role_title, 19, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(6, 3, 254, 42))
 	var lobby_pick_label := _make_child_label(revealed, "Lobby pick:\n" + selected_character, 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(174, 70, 266, 42))
 	lobby_pick_label.clip_text = true
@@ -1254,7 +1241,7 @@ func build_waiting_room() -> void:
 	var map_panel := make_panel(Rect2(55, 140, 420, 430), Color(0.12, 0.08, 0.055, 0.96))
 	_make_child_label(map_panel, "YOUR SELECTED MAP", 18, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 14, 380, 34))
 	var map_preview := TextureRect.new()
-	map_preview.texture = make_map_texture(load(MAP_ART), MAPS[selected_map]["region"])
+	map_preview.texture = make_map_texture(load(GameData.map_art_path(selected_map)), MAPS[selected_map]["region"])
 	map_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	map_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
@@ -1319,12 +1306,15 @@ func build_waiting_room() -> void:
 	change_map.visible = not network_room
 	var choose := make_button(self, "CHOOSE CHARACTER", Callable(self, "build_character_select"), 240, 48)
 	choose.position = Vector2(456, 610)
-	var action_title := "READY" if not _local_player_is_ready() else "READY ✓"
+	var action_title := "ARE YOU READY?" if not _local_player_is_ready() else "READY ✓"
 	var action := make_button(self, action_title, Callable(self, "_on_lobby_primary_action"), 230, 48, true)
 	action.name = "LobbyActionButton"; action.position = Vector2(1012, 610)
 	action.disabled = selected_character.is_empty()
 	_apply_ready_button_color(action, _local_player_is_ready())
-	var lobby_note_text := ("Wi-Fi room · host " + (_lan_address_text() if is_instance_valid(lan_host.service) else server_address)) if network_room else "Offline practice lobby"
+	var ready_note := _make_child_label(self, "Game starts after a 15-second wait\nwhen everyone is ready.", 12, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(996, 664, 260, 40))
+	ready_note.name = "LobbyReadyWaitNote"
+	ready_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lobby_note_text := "Same Wi-Fi · friends join with the room code" if network_room else "Offline practice lobby"
 	var lobby_note := _make_child_label(self, lobby_note_text, 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(650, 578, 575, 24))
 	lobby_note.clip_text = true
 
@@ -1380,7 +1370,7 @@ func _toggle_lobby_ready() -> void:
 	var index := _local_player_index()
 	if index < 0: return
 	lobby_players[index]["ready"] = not bool(lobby_players[index].get("ready", false))
-	practice_start_countdown = 30.0 if bool(lobby_players[index]["ready"]) else -1.0
+	practice_start_countdown = NetworkManagerScript.LOBBY_WAIT_SECONDS if bool(lobby_players[index]["ready"]) else -1.0
 	auto_start_triggered = false
 	var host_status := find_child("LocalReadyStatusLabel", true, false) as Label
 	if host_status: host_status.text = "HOST  •  " + ("READY" if _local_player_is_ready() else "WAITING")
@@ -1388,9 +1378,6 @@ func _toggle_lobby_ready() -> void:
 
 func _on_lobby_primary_action() -> void:
 	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
-	if network_room and room_is_host and _all_lobby_players_ready() and lobby_players.size() >= 5 and lobby_players.size() < 10:
-		_start_from_lobby()
-		return
 	if not network_room and practice_start_countdown >= 0.0:
 		return
 	_toggle_lobby_ready()
@@ -1401,24 +1388,7 @@ func _apply_ready_button_color(button: Button, is_ready: bool) -> void:
 	if button.has_meta("ready_color_state") and str(button.get_meta("ready_color_state")) == state:
 		return
 	button.set_meta("ready_color_state", state)
-	var base_color := Color("3d7848") if is_ready else Color("9b342d")
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = base_color
-	normal.border_color = Color("e4b25b")
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(10)
-	normal.content_margin_left = 10
-	normal.content_margin_right = 10
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color("4d9658") if is_ready else Color("b94439")
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color("2d5b37") if is_ready else Color("762721")
-	var disabled := normal.duplicate() as StyleBoxFlat
-	disabled.bg_color = base_color.darkened(0.38)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("disabled", disabled)
+	GameUI.apply_menu_button(button, "green" if is_ready else "red")
 	button.add_theme_color_override("font_color", Color.WHITE)
 	button.add_theme_color_override("font_hover_color", Color.WHITE)
 	button.add_theme_color_override("font_pressed_color", Color("fff0cf"))
@@ -1434,12 +1404,13 @@ func _start_from_lobby() -> void:
 
 
 func toggle_village_tasks() -> void:
+	if player_is_impostor: return
 	village_tasks_expanded = not village_tasks_expanded
 	var task_panel := find_child("VillageTasksPanel", true, false) as Panel
 	if task_panel == null: return
 	task_panel.size.y = 438.0 if village_tasks_expanded else 68.0
 	var toggle := task_panel.get_node_or_null("VillageTasksToggle") as Button
-	if toggle: toggle.text = "TUGAS KAMPUNG  −" if village_tasks_expanded else "TUGAS KAMPUNG  +"
+	if toggle: toggle.text = "VILLAGE TASKS  −" if village_tasks_expanded else "VILLAGE TASKS  +"
 	for i in 8:
 		var entry := task_panel.get_node_or_null("TaskEntry_%d" % i) as Label
 		if entry: entry.visible = village_tasks_expanded
@@ -1581,6 +1552,8 @@ func _confirm_character_selection(character: String, overlay: Control) -> void:
 		network_manager.set_character(character)
 		return
 	selected_character = character
+	practice_start_countdown = -1.0
+	auto_start_triggered = false
 	var index := _local_player_index()
 	if index >= 0:
 		lobby_players[index]["character"] = character
@@ -1646,22 +1619,22 @@ func build_control_bar() -> void:
 func interact_nearest() -> void:
 	if _utility_dialog_open(): return
 	if not can_local_act(): return
-	var task_index := _nearest_index(MapGeometry.task_points(selected_map), 72.0)
+	var task_index := -1 if player_is_impostor else _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	if task_index >= 0:
-		if completed_tasks[task_index] == 1: show_notice("Tugasan ini sudah selesai."); return
+		if completed_tasks[task_index] == 1: show_notice("This task is already complete."); return
 		open_task(task_index); return
 	if player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0:
 		call_meeting(); return
-	show_notice("Pergi dekat dengan penanda tugasan atau gong.")
+	show_notice("Move close to the gong." if player_is_impostor else "Move close to a task marker or the gong.")
 
 
 func cast_sleep_spell() -> void:
 	if _utility_dialog_open(): return
 	if not player_is_impostor or not can_local_act(): return
 	if Time.get_ticks_msec() / 1000.0 < sleep_ready_at:
-		show_notice("Jampi Tidur is still recharging."); return
+		show_notice("Sleep Spell is still recharging."); return
 	if room_code.is_empty() or network_manager == null or not network_manager.is_connected_to_room_server():
-		show_notice("Jampi Tidur needs another player in an online room."); return
+		show_notice("Sleep Spell needs another player in an online room."); return
 	var nearest_peer := -1
 	var nearest_distance := NenekPowers.SLEEP_RANGE + 0.01
 	for member in lobby_players:
@@ -1697,9 +1670,13 @@ func cast_sabotage(kind: String) -> void:
 func open_task(index: int) -> void:
 	if not can_local_act(): return
 	if player_is_impostor:
-		show_notice("Nenek Kebayan tidak boleh menyiapkan tugasan.")
+		show_notice("Nenek Kebayan cannot complete tasks.")
 		return
 	if index < 0 or index >= completed_tasks.size() or completed_tasks[index] == 1: return
+	var task_point: Vector2 = MapGeometry.task_points(selected_map)[index]
+	if player_position.distance_to(task_point) > 72 or not MapGeometry.has_clear_path(selected_map,player_position,task_point,locked_entrances()):
+		show_notice("Reach the task station through an open doorway.")
+		return
 	task_overlay_index = index
 	_stop_move()
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
@@ -1724,7 +1701,8 @@ func open_task(index: int) -> void:
 	close.position = Vector2(778, 10)
 	var instruction := make_label(str(task["prompt"]), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	instruction.position = Vector2(40, 65); instruction.size = Vector2(760, 46); instruction.reparent(overlay, false)
-	var progress_label := make_label("Kemajuan: %d/%d" % [task_progress[index], TASK_STEPS[MAPS[selected_map]["name"]][index]], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var progress_caption := "Pairs arranged" if task["minigame"]=="slippers" else "Progress"
+	var progress_label := make_label("%s: %d/%d" % [progress_caption, task_progress[index], TASK_STEPS[MAPS[selected_map]["name"]][index]], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	progress_label.name = "TaskProgressLabel"
 	progress_label.position = Vector2(40, 112); progress_label.size = Vector2(760, 26); progress_label.reparent(overlay, false)
 	task_minigame = TaskMiniGame.new()
@@ -1741,7 +1719,7 @@ func open_task(index: int) -> void:
 func _on_task_minigame_step_completed(task_index: int) -> void:
 	if not can_local_act(): return
 	if player_is_impostor:
-		show_notice("Nenek Kebayan tidak boleh menyiapkan tugasan.")
+		show_notice("Nenek Kebayan cannot complete tasks.")
 		return
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		if is_instance_valid(task_minigame): task_minigame.set_input_enabled(false)
@@ -1757,9 +1735,9 @@ func _on_task_minigame_step_completed(task_index: int) -> void:
 		_update_interaction_prompt()
 		_close_task()
 		if completed_tasks.count(1) == TASKS[MAPS[selected_map]["name"]].size():
-			show_result(true, "Semua tugasan selesai. Kampung berjaya diselamatkan!")
+			show_result(true, "All tasks are complete. The village has been saved!")
 		else:
-			show_notice("Tugasan selesai!")
+			show_notice("Task complete!")
 	else:
 		_update_task_dialog_progress(task_index, task_progress[task_index])
 		_update_progress()
@@ -1770,7 +1748,8 @@ func _update_task_dialog_progress(task_index: int, current: int) -> void:
 	var label := find_child("TaskProgressLabel", true, false) as Label
 	if label and task_index >= 0 and task_index < completed_tasks.size():
 		var required: int = TASK_STEPS[MAPS[selected_map]["name"]][task_index]
-		label.text = "Kemajuan: %d/%d" % [current, required]
+		var caption := "Pairs arranged" if TASKS[MAPS[selected_map]["name"]][task_index]["minigame"]=="slippers" else "Progress"
+		label.text = "%s: %d/%d" % [caption, current, required]
 	if is_instance_valid(task_minigame): task_minigame.set_progress(current)
 
 
@@ -1785,12 +1764,12 @@ func _play_sfx(kind: String) -> void:
 func _test_audio() -> void:
 	var label := find_child("SettingsVolumeLabel", true, false) as Label
 	if audio_muted:
-		if label: label.text = "AUDIO OFF · AKTIFKAN BUNYI DAHULU"
+		if label: label.text = "AUDIO OFF · UNMUTE AUDIO FIRST"
 		return
 	if audio_volume <= 0.0:
-		if label: label.text = "VOLUME 0% · NAIKKAN VOLUME UNTUK UJI BUNYI"
+		if label: label.text = "VOLUME 0% · INCREASE VOLUME TO TEST AUDIO"
 		return
-	if label: label.text = "UJIAN SFX · DENGAR BUNYI SEKARANG"
+	if label: label.text = "SOUND TEST · LISTEN NOW"
 	_play_sfx("task_complete")
 
 
@@ -1808,14 +1787,14 @@ func inspect_nearest_clue() -> void:
 	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	var clue_points_local: Array = clue_points if clue_points.size() == 3 else MapGeometry.clue_candidates(selected_map).slice(0, 3)
 	var nearest := _nearest_index(clue_points_local, 72.0)
-	if nearest < 0: show_notice("Dekati penanda bercahaya untuk memeriksa petunjuk."); return
+	if nearest < 0: show_notice("Move close to a glowing marker to inspect a clue."); return
 	if online_match:
-		if nearest in network_found_clues: show_notice("Petunjuk ini sudah direkodkan."); return
+		if nearest in network_found_clues: show_notice("This clue has already been recorded."); return
 		network_manager.inspect_clue(nearest)
 		return
 	var clues: Array = CHARACTER_CLUES[impostor_character]
 	var clue_name: String = clues[nearest]
-	if collected_clues.has(clue_name): show_notice("Petunjuk ini sudah direkodkan."); return
+	if collected_clues.has(clue_name): show_notice("This clue has already been recorded."); return
 	collected_clues.append(clue_name)
 	_play_sfx("clue")
 	var clue_marker := game_world.get_node_or_null("ClueMarker_%d" % nearest) if is_instance_valid(game_world) else null
@@ -1830,11 +1809,11 @@ func show_clue_panel(clue_name: String, character: String) -> void:
 	var overlay := make_panel(Rect2(370, 190, 540, 300), Color(0.12, 0.08, 0.06, 0.98))
 	overlay.name = "ClueOverlay"
 	_add_overlay_close(overlay, 540, Callable(overlay, "queue_free"))
-	var title := make_label("PETUNJUK DIREKODKAN", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	var title := make_label("CLUE RECORDED", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(25, 24); title.size = Vector2(490, 40); title.reparent(overlay, false)
-	var copy := make_label("Ditemui: " + clue_name + "\n\nBukti ini dikaitkan dengan watak " + character + ". Penampilan watak bukan bukti peranannya.", 18, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var copy := make_label("Found: " + clue_name + "\n\nThis clue is linked to " + character + ". A character's appearance does not reveal their secret role.", 18, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	copy.position = Vector2(35, 82); copy.size = Vector2(470, 130); copy.reparent(overlay, false)
-	var close := make_button(overlay, "TAMBAH KE JURNAL", func(): overlay.queue_free(), 250, 46, true)
+	var close := make_button(overlay, "ADD TO JOURNAL", func(): overlay.queue_free(), 250, 46, true)
 	close.position = Vector2(145, 229)
 
 
@@ -1844,31 +1823,22 @@ func show_journal() -> void:
 	var overlay := make_panel(Rect2(320, 115, 640, 480), Color(0.12, 0.08, 0.06, 0.98))
 	overlay.name = "JournalOverlay"
 	_add_overlay_close(overlay, 640, Callable(overlay, "queue_free"))
-	var title := make_label("JURNAL PETUNJUK", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	var title := make_label("CLUE JOURNAL", 25, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(20, 18); title.size = Vector2(548, 40); title.reparent(overlay, false)
-	var intro := make_label("Petunjuk membantu siasatan, tetapi rupa watak tidak menentukan peranan rahsia.", 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var intro := make_label("Clues help your investigation, but appearance does not reveal a character's secret role.", 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	intro.position = Vector2(32, 65); intro.size = Vector2(576, 40); intro.reparent(overlay, false)
-	var list_text := "Belum ada petunjuk. Periksa penanda bercahaya pada peta."
+	var list_text := "No clues yet. Inspect the glowing markers around the map."
 	if not collected_clues.is_empty(): list_text = "\n".join(collected_clues.map(func(c: String) -> String: return "• " + c))
 	var list := make_label(list_text, 19, CREAM)
 	list.position = Vector2(70, 135); list.size = Vector2(500, 245); list.reparent(overlay, false)
 
 
 func show_map_overlay() -> void:
-	if not can_local_act(): return
 	if find_child("MapOverlay", true, false) != null: return
 	_stop_move()
-	var overlay := make_panel(Rect2(250, 110, 780, 500), Color(0.12, 0.08, 0.06, 0.99))
-	overlay.name = "MapOverlay"
-	_add_overlay_close(overlay, 780, Callable(overlay, "queue_free"))
-	_make_child_label(overlay, MAPS[selected_map]["name"], 22, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 14, 670, 36))
-	var preview := TextureRect.new()
-	preview.texture = map_image
-	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	preview.position = Vector2(24, 58); preview.size = Vector2(732, 380)
-	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.add_child(preview)
+	var view := load("res://scripts/floor_map_view.gd").new() as Control
+	game_hud.add_child(view)
+	view.call("configure", self)
 
 
 func call_meeting() -> void:
@@ -1956,8 +1926,9 @@ func _return_to_menu_cleanly() -> void:
 
 
 func _travel_hint(index: int) -> void:
+	if player_is_impostor: return
 	var task_points: Array = MapGeometry.task_points(selected_map)
-	if index >= 0 and index < task_points.size(): _set_route(task_points[index], "Ikut laluan ke penanda tugasan, kemudian tekan INTERAKSI.")
+	if index >= 0 and index < task_points.size(): _set_route(task_points[index], "Follow the route to the task marker, then press INTERACT.")
 
 
 func _travel_npc(index: int) -> void:
@@ -1967,21 +1938,48 @@ func _travel_npc(index: int) -> void:
 
 func _travel_clue(index: int) -> void:
 	var route_points: Array = clue_points if not clue_points.is_empty() else MapGeometry.clue_candidates(selected_map).slice(0, 3)
-	if index >= 0 and index < route_points.size(): _set_route(route_points[index], "Ikut laluan ke petunjuk dan tekan PERIKSA PETUNJUK.")
+	if index >= 0 and index < route_points.size(): _set_route(route_points[index], "Follow the route to the clue and press INSPECT CLUE.")
 
 
 func _set_route(target: Vector2, message: String) -> void:
 	if not can_local_act(): return
 	route_target = target
 	route_active = true
-	var route_line: Line2D = null
-	if is_instance_valid(game_world): route_line = game_world.get_node_or_null("RouteLine") as Line2D
-	if route_line:
-		route_line.clear_points()
-		route_line.add_point(player_position)
-		route_line.add_point(route_target)
-		route_line.visible = true
+	route_waypoints = load("res://scripts/map_navigation.gd").path(selected_map, player_position, target, locked_entrances())
+	if route_waypoints.is_empty():
+		route_active = false
+		show_notice("The route is blocked. Wait for the doors to reopen.")
+		return
+	_refresh_route_line()
 	show_notice(message)
+
+
+func _refresh_route_line() -> void:
+	if not is_instance_valid(game_world): return
+	var line := game_world.get_node_or_null("RouteLine") as Line2D
+	if line == null: return
+	if not route_active or player_position.distance_to(route_target) < 44:
+		route_active = false
+		line.visible = false
+		return
+	var doors := locked_entrances()
+	var visible_waypoint := -1
+	for i in range(route_waypoints.size() - 1, -1, -1):
+		if not MapGeometry.is_step_blocked(selected_map, player_position, route_waypoints[i], 14, doors):
+			visible_waypoint = i
+			break
+	if visible_waypoint >= 0:
+		route_waypoints = route_waypoints.slice(visible_waypoint)
+	else:
+		route_waypoints = load("res://scripts/map_navigation.gd").path(selected_map, player_position, route_target, doors)
+	if route_waypoints.is_empty():
+		route_active = false
+		line.visible = false
+		return
+	line.clear_points()
+	line.add_point(player_position)
+	for point in route_waypoints: line.add_point(point)
+	line.visible = true
 
 
 func _nearest_index(points: Array, max_distance: float) -> int:
@@ -2039,7 +2037,7 @@ func _update_progress() -> void:
 	var tasks: Array = TASKS[MAPS[selected_map]["name"]]
 	var clues: Array = CHARACTER_CLUES.get(impostor_character, [])
 	var clue_total: int = clues.size()
-	if progress: progress.text = "TUGAS  %d/%d • PETUNJUK  %d/%d" % [completed_tasks.count(1), tasks.size(), collected_clues.size(), clue_total]
+	if progress: progress.text = "TASKS  %d/%d • CLUES  %d/%d" % [completed_tasks.count(1), tasks.size(), collected_clues.size(), clue_total]
 
 
 func _refresh_task_rows() -> void:
@@ -2107,8 +2105,8 @@ func _add_overlay_close(panel: Control, panel_width: float, callback: Callable) 
 	close.name = "PopupCloseButton"
 	close.position = Vector2(panel_width - 52, 10)
 	close.add_theme_font_size_override("font_size", 25)
-	close.tooltip_text = "Tutup"
-	close.accessibility_name = "Tutup"
+	close.tooltip_text = "Close"
+	close.accessibility_name = "Close"
 	return close
 
 

@@ -22,13 +22,16 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/handheld/orientation=1
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/kampung_google/plugin.cfg")
 
 [network]
 
 server_address="127.0.0.1"
 server_port=7000
+discovery_port=7001
 
 [physics]
 
@@ -39,3 +42,4 @@ server_port=7000
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true

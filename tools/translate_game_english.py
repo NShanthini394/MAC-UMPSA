@@ -1,0 +1,132 @@
+"""One-time source migration of player-facing village UI copy to English."""
+from pathlib import Path
+import re
+
+COPY = {
+    "Masak nasi": "Cook rice", "Nyalakan kayu api": "Light a wood fire",
+    "Sapu sampah": "Sweep the floor", "Sidai kain": "Hang the laundry",
+    "Cari bunga": "Find the flowers", "Masukkan guli dalam bulatan": "Shoot marbles into the circle",
+    "Baiki lampu": "Repair the lamp", "Susun selipar": "Arrange the shoes",
+    "Dapur": "Kitchen", "Tempat unggun": "Fire pit", "Ruang dalam": "Indoor area",
+    "Jemuran": "Clothesline", "Taman": "Garden", "Ruang permainan": "Play area",
+    "Lampu": "Lamp", "Pintu masuk": "Entrance",
+    "Masukkan beras dan air ke dalam periuk, kemudian angkat nasi apabila masak.": "Add rice and water to the pot, then lift it when the rice is cooked.",
+    "Susun ranting dan kayu, kemudian gosok batu api untuk menyalakan unggun.": "Arrange the twigs and logs, then strike the flint to light the fire.",
+    "Leret penyapu melalui tompokan sampah sehingga lantai bersih.": "Sweep through the piles of dirt until the floor is clean.",
+    "Seret setiap kain ke tempatnya pada ampaian.": "Drag each cloth to its matching place on the clothesline.",
+    "Cari lima bunga yang tersembunyi di celah dedaun.": "Find five flowers hidden among the leaves.",
+    "Tarik guli ke belakang dan lepaskan. Empat guli mesti berhenti sepenuhnya di dalam bulatan.": "Pull each marble back and release it. All four marbles must stop fully inside the circle.",
+    "Sambungkan wayar dengan warna dan huruf yang sepadan.": "Connect the wires with matching colours and letters.",
+    "Padankan selipar kiri dengan selipar kanan yang sama coraknya.": "Drag the scattered shoes on the left into four matching pairs on the right.",
+    "Seret beras ke periuk.": "Drag the rice into the pot.",
+    "Tuangkan air ke dalam periuk.": "Pour the water into the pot.",
+    "Angkat periuk apabila penanda berada di zon hijau.": "Lift the pot when the marker reaches the green zone.",
+    "Letakkan ranting kering di dalam tempat unggun.": "Place the dry twigs in the fire pit.",
+    "Susun kayu api di atas ranting.": "Stack the logs on the twigs.",
+    "Tekan batu api lima kali untuk menghasilkan percikan.": "Tap the flint five times to make sparks.",
+    "Leret melalui sampah untuk menyapunya. Lantai bersih: %d/5": "Swipe through the dirt. Piles cleared: %d/5",
+    "Seret kain ke petak ampaian yang berwarna sama.": "Drag the cloth to the matching colour on the line.",
+    "Cari bunga di celah daun. Bunga ditemui: %d/5": "Find the hidden flowers. Flowers found: %d/5",
+    "Tarik guli ke belakang, halakan anak panah, kemudian lepaskan.": "Pull the marble back, aim the arrow, then release.",
+    "Sambungkan hujung wayar dengan warna dan huruf yang sama.": "Join the wire ends with matching colours and letters.",
+    "Seret selipar kiri ke pasangan kanannya.": "Drag each shoe from the left to its matching pair on the right.",
+    "Selesaikan tugasan.": "Complete the task.", "Tugasan selesai!": "Task complete!",
+    "Leret dengan jari atau tetikus.": "Swipe with your finger or mouse.",
+    "Boleh juga tekan objek, kemudian tekan sasarannya.": "You can also tap the object, then tap its target.",
+    "Perhatikan bentuk kelopak di sebalik daun.": "Look for petals behind the leaves.",
+    "Nasi sahaja: tunggu masak, kemudian angkat periuk.": "Cooking only: wait for the rice to cook, then lift the pot.",
+    "Tekan batu api untuk menyalakan kayu yang telah disusun.": "Tap the flint to light the stacked wood.",
+    "Tarik untuk kuasa • hijau: masuk • merah: tersasar • sasaran 4 guli": "Pull for power • green: inside • red: miss • land all 4 marbles",
+    "Sambungkan wayar %s ke huruf dan warna yang sama.": "Connect wire %s to its matching letter and colour.",
+    "Guli tidak berhenti di dalam bulatan. Laraskan arah dan kuasa, cuba lagi.": "The marble stopped outside the circle. Adjust your aim and power, then try again.",
+    "✓   TUGASAN SELESAI": "✓   TASK COMPLETE", "BERAS": "RICE", "AIR": "WATER",
+    "PERIUK NASI": "RICE POT", "ANGKAT PERIUK": "LIFT THE POT", "RANTING": "TWIGS",
+    "KAYU API": "LOGS", "BATU API": "FLINT", "Percikan: %d/5": "Sparks: %d/5",
+    "SAPU": "SWEEP", "MASUK": "INSIDE", "TERSASAR": "MISS", "GULI MASUK: %d / 4": "INSIDE: %d / 4",
+    "LAMPU": "LAMP", "Menyimpan kemajuan…": "Saving progress…",
+    "Mula dengan menyentuh guli, kemudian tarik ke belakang.": "Touch the marble first, then pull it back.",
+    "Belum jumpa bunga. Perhatikan celah daun.": "No flower there. Look between the leaves.",
+    "Tunggu penanda di zon hijau sebelum angkat periuk.": "Wait for the marker to reach the green zone before lifting the pot.",
+    "Pilih objek dahulu, kemudian seret ke sasaran.": "Select the object first, then drag it to the target.",
+    "Guli sedang bergolek…": "The marble is rolling…",
+    "Tarik sedikit ke belakang untuk melancarkan guli.": "Pull back a little to launch the marble.",
+    "Belum tepat. Pilih objek dan cuba sasaran semula.": "Not quite. Select the object and try the target again.",
+    "ADA TUGAS BERHAMPIRAN": "TASK NEARBY", "Tekan INTERAKSI untuk mula": "Press INTERACT to start",
+    "Ikut arah anak panah ke tugasan": "Follow the arrow to the task", "Arah ke tugasan berhampiran": "Direction to the nearby task",
+    "PETA": "MAP", "TUGAS": "TASKS", "PETUNJUK PETA": "MAP KEY",
+    "▲   Kedudukan anda": "▲   Your position", "1–8   Tugasan belum selesai": "1–8   Unfinished tasks",
+    "✓   Tugasan selesai": "✓   Completed tasks", "▣   Bilik / kawasan": "▣   Room / area", "┄   Pintu / akses": "┄   Door / access",
+    "Pilih nombor tugasan\\nuntuk melihat lokasinya:": "Choose a task number\\nto see its location:",
+    "Lihat bilik dan laluan\\npada peta.": "View rooms and paths\\non the map.",
+    "TUNJUK LALUAN": "SHOW ROUTE", "SUDAH SELESAI": "COMPLETED", "MUAT": "FIT",
+    "Peta lakaran • ikut pintu dan laluan yang ditandakan": "Floor plan • follow the marked doors and paths",
+    "TUGAS KAMPUNG  −": "VILLAGE TASKS  −", "TUGAS KAMPUNG  +": "VILLAGE TASKS  +",
+    "TUGAS  %d / %d    •    PETUNJUK  %d / %d": "TASKS  %d / %d    •    CLUES  %d / %d",
+    "TUGAS  %d/%d • PETUNJUK  %d/%d": "TASKS  %d/%d • CLUES  %d/%d",
+    "ORANG KAMPUNG": "VILLAGER", "Interaksi · E": "Interact · E", "Periksa petunjuk": "Inspect clue",
+    "Jampi tidur": "Sleep spell", "Kabus": "Fog", "Sumpahan pintu": "Door lock", "KABUS · ": "FOG · ",
+    " · sedia dalam %ds": " · ready in %ds", " · sedia digunakan": " · ready",
+    "Petunjuk berhampiran • tekan PERIKSA PETUNJUK": "Clue nearby • press INSPECT CLUE",
+    "Nenek Kebayan tidak boleh menyiapkan tugasan.": "Nenek Kebayan cannot complete tasks.",
+    "Anda perlu berada dekat dengan tempat tugasan.": "You must be near the task station.",
+    "Petunjuk ditemui: ": "Clue found: ", "Tugasan ini sudah selesai.": "This task is already complete.",
+    "Pergi dekat dengan gong.": "Move close to the gong.",
+    "Pergi dekat dengan penanda tugasan atau gong.": "Move close to a task marker or the gong.",
+    "Dekati tempat tugasan melalui pintu yang terbuka.": "Reach the task station through an open doorway.",
+    "Kemajuan: %d/%d": "Progress: %d/%d",
+    "Semua tugasan selesai. Kampung berjaya diselamatkan!": "All tasks are complete. The village has been saved!",
+    "Dekati penanda bercahaya untuk memeriksa petunjuk.": "Move close to a glowing marker to inspect a clue.",
+    "Petunjuk ini sudah direkodkan.": "This clue has already been recorded.",
+    "PETUNJUK DIREKODKAN": "CLUE RECORDED", "Ditemui: ": "Found: ",
+    "\\n\\nBukti ini dikaitkan dengan watak ": "\\n\\nThis clue is linked to ",
+    ". Penampilan watak bukan bukti peranannya.": ". A character's appearance does not reveal their secret role.",
+    "TAMBAH KE JURNAL": "ADD TO JOURNAL", "JURNAL PETUNJUK": "CLUE JOURNAL",
+    "Petunjuk membantu siasatan, tetapi rupa watak tidak menentukan peranan rahsia.": "Clues help your investigation, but appearance does not reveal a character's secret role.",
+    "Belum ada petunjuk. Periksa penanda bercahaya pada peta.": "No clues yet. Inspect the glowing markers around the map.",
+    "Ikut laluan ke penanda tugasan, kemudian tekan INTERAKSI.": "Follow the route to the task marker, then press INTERACT.",
+    "Ikut laluan ke petunjuk dan tekan PERIKSA PETUNJUK.": "Follow the route to the clue and press INSPECT CLUE.",
+    "Laluan ditutup. Tunggu sehingga pintu dibuka semula.": "The route is blocked. Wait for the doors to reopen.",
+    "Tutup": "Close", "Peta": "Map", "Jurnal petunjuk": "Clue journal",
+    "Hanya Orang Kampung yang sedar boleh memeriksa petunjuk.": "Only awake villagers can inspect clues.",
+    "Dekati petunjuk untuk memeriksanya.": "Move close to the clue to inspect it.",
+    "AUDIO OFF · AKTIFKAN BUNYI DAHULU": "AUDIO OFF · UNMUTE AUDIO FIRST",
+    "VOLUME 0% · NAIKKAN VOLUME UNTUK UJI BUNYI": "VOLUME 0% · INCREASE VOLUME TO TEST AUDIO",
+    "UJIAN SFX · DENGAR BUNYI SEKARANG": "SOUND TEST · LISTEN NOW",
+    "Balairung Takhta": "Throne Hall", "Dewan Makan": "Dining Hall", "Bilik Tamu": "Guest Room",
+    "Bilik Senjata": "Armoury", "Jambatan Utama": "Main Bridge", "Lobi": "Lobby",
+    "Taman Barat": "West Garden", "Taman Timur": "East Garden", "Bilik Tidur": "Bedroom",
+    "Ruang Keluarga": "Family Room", "Serambi": "Veranda", "Ruang Makan": "Dining Room",
+    "Kebun": "Garden", "Reban Ayam": "Chicken Coop", "Perigi dan Halaman Timur": "Well and East Yard",
+    "Halaman Hadapan": "Front Yard", "Ruang Tamu": "Living Room", "Serambi dan Tangga": "Veranda and Stairs",
+    "Halaman dan Kebun": "Yard and Garden", "Laluan Tandas Luar": "Back Yard", "Pantai dan Jeti": "Beach and Piers",
+    "Peti emas": "Gold chest", "Kain sutera ungu": "Purple silk cloth", "Loket bermotif bunga": "Floral pendant",
+    "Bulu ayam": "Rooster feather", "Kad permainan lama": "Old playing card", "Jejak kaki berlumpur": "Muddy footprints",
+    "Monyet kecil": "Small monkey", "Kain ikat kepala": "Headband", "Batu besar bercalar": "Scratched boulder",
+    "Bulu merpati putih": "White dove feather", "Surat koyak": "Torn letter", "Botol minyak wangi": "Perfume bottle",
+    "Katak kampung": "Village frog", "Jala usang": "Worn fishing net", "Jejak kaki kecil berlumpur": "Small muddy footprints",
+    "Bawang putih": "Garlic", "Sapu tangan putih": "White handkerchief", "Loket berbentuk bunga": "Flower-shaped pendant",
+    "Bawang merah": "Shallot", "Kain merah": "Red cloth", "Cermin retak": "Cracked mirror",
+    "Taring": "Fang", "Kain berlumuran darah": "Bloodstained cloth", "Mahkota berukir": "Carved crown",
+    "Bakul rotan lama": "Old rattan basket", "Bunga melur": "Jasmine flower", "Jejak kaki halus": "Delicate footprints",
+    "Topi mengkuang": "Woven hat", "Pipa kayu": "Wooden pipe", "Beras dan sayur": "Rice and vegetables",
+    "Bakul sayur": "Vegetable basket", "Sapu tangan batik bunga": "Floral batik handkerchief", "Selipar berlumpur": "Muddy slippers",
+}
+
+root = Path(__file__).resolve().parents[1]
+count = 0
+for file in (root / "scripts").glob("*.gd"):
+    source = file.read_text(encoding="utf-8")
+    def translate(match):
+        global count
+        text = match.group(1)
+        replacement = COPY.get(text, text)
+        replacement = replacement.replace("Jampi Tidur", "Sleep Spell").replace("Kabus & Sumpahan Pintu", "Fog & Door Lock")
+        if text not in ("Orang Kampung Lelaki", "Orang Kampung Perempuan"):
+            replacement = replacement.replace("awake Orang Kampung", "awake villager").replace("[b]Orang Kampung[/b]", "[b]Villagers[/b]")
+        if replacement != text:
+            count += 1
+        return '"' + replacement + '"'
+    result = re.sub(r'"((?:[^"\\]|\\.)*)"', translate, source)
+    if result != source:
+        file.write_text(result, encoding="utf-8", newline="\n")
+print(f"Translated {count} UI strings.")

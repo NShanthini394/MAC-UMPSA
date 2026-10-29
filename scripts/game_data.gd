@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Shared immutable content and layout data for the game.
 const GAME_TITLE := "Nenek Kebayan: Siapa Pengkhianat?"
-const MENU_ART := "res://assets/ui/main_menu.png"
+const MENU_ART := "res://assets/ui/main_menu_no_center_settings.png"
 const WAITING_ROOM_ART := "res://assets/ui/waiting_room.png"
 const MAP_ART := "res://assets/maps/palace_village_maps.png"
 const CAST_ART := "res://assets/characters/folklore_cast.png"
@@ -23,92 +23,92 @@ const MAP_CHARACTERS := {
 	"Rumah Mahsuri": ["Mahsuri", "Puteri Gunung Ledang", "Pak Pandir", "Bawang Putih", "Bawang Merah", "Orang Kampung Lelaki", "Orang Kampung Perempuan"]
 }
 
+const CHARACTER_ANIMATIONS := {
+	"Puteri Gunung Ledang": "res://assets/characters/animated/puteri_gunung_ledang.tres",
+	"Pak Kaduk": "res://assets/characters/animated/pak_kaduk.tres",
+	"Badang": "res://assets/characters/animated/badang.tres",
+	"Mahsuri": "res://assets/characters/animated/mahsuri.tres",
+	"Pak Pandir": "res://assets/characters/animated/pak_pandir.tres",
+	"Bawang Putih": "res://assets/characters/animated/bawang_putih.tres",
+	"Bawang Merah": "res://assets/characters/animated/bawang_merah.tres",
+	"Raja Bersiung": "res://assets/characters/animated/raja_bersiung.tres",
+	"Orang Kampung Lelaki": "res://assets/characters/animated/orang_kampung_lelaki.tres",
+	"Orang Kampung Perempuan": "res://assets/characters/animated/orang_kampung_perempuan.tres"
+}
+
 const CHARACTER_PORTRAITS := {
-	"Puteri Gunung Ledang": "res://assets/characters/portraits/puteri_gunung_ledang.png",
-	"Pak Kaduk": "res://assets/characters/portraits/pak_kaduk.png",
-	"Badang": "res://assets/characters/portraits/badang.png",
-	"Mahsuri": "res://assets/characters/portraits/mahsuri.png",
-	"Pak Pandir": "res://assets/characters/portraits/pak_pandir.png",
-	"Bawang Putih": "res://assets/characters/portraits/bawang_putih.png",
-	"Bawang Merah": "res://assets/characters/portraits/bawang_merah.png",
-	"Raja Bersiung": "res://assets/characters/portraits/raja_bersiung.png",
+	"Puteri Gunung Ledang": "res://assets/characters/animated/puteri_gunung_ledang_portrait.tres",
+	"Pak Kaduk": "res://assets/characters/animated/pak_kaduk_portrait.tres",
+	"Badang": "res://assets/characters/animated/badang_portrait.tres",
+	"Mahsuri": "res://assets/characters/animated/mahsuri_portrait.tres",
+	"Pak Pandir": "res://assets/characters/animated/pak_pandir_portrait.tres",
+	"Bawang Putih": "res://assets/characters/animated/bawang_putih_portrait.tres",
+	"Bawang Merah": "res://assets/characters/animated/bawang_merah_portrait.tres",
+	"Raja Bersiung": "res://assets/characters/animated/raja_bersiung_portrait.tres",
 	"Nenek Kebayan": "res://assets/characters/portraits/nenek_kebayan.png",
-	"Orang Kampung Lelaki": "res://assets/characters/portraits/orang_kampung_lelaki.png",
-	"Orang Kampung Perempuan": "res://assets/characters/portraits/orang_kampung_perempuan.png"
+	"Orang Kampung Lelaki": "res://assets/characters/animated/orang_kampung_lelaki_portrait.tres",
+	"Orang Kampung Perempuan": "res://assets/characters/animated/orang_kampung_perempuan_portrait.tres"
 }
 
 const CHARACTER_AVATARS := {
-	"Puteri Gunung Ledang": "res://assets/characters/portraits/puteri_gunung_ledang_avatar.png",
-	"Pak Kaduk": "res://assets/characters/portraits/pak_kaduk_avatar.png",
-	"Badang": "res://assets/characters/portraits/badang_avatar.png",
-	"Mahsuri": "res://assets/characters/portraits/mahsuri_avatar.png",
-	"Pak Pandir": "res://assets/characters/portraits/pak_pandir_avatar.png",
-	"Bawang Putih": "res://assets/characters/portraits/bawang_putih_avatar.png",
-	"Bawang Merah": "res://assets/characters/portraits/bawang_merah_avatar.png",
-	"Raja Bersiung": "res://assets/characters/portraits/raja_bersiung_avatar.png",
+	"Puteri Gunung Ledang": "res://assets/characters/animated/puteri_gunung_ledang_avatar.tres",
+	"Pak Kaduk": "res://assets/characters/animated/pak_kaduk_avatar.tres",
+	"Badang": "res://assets/characters/animated/badang_avatar.tres",
+	"Mahsuri": "res://assets/characters/animated/mahsuri_avatar.tres",
+	"Pak Pandir": "res://assets/characters/animated/pak_pandir_avatar.tres",
+	"Bawang Putih": "res://assets/characters/animated/bawang_putih_avatar.tres",
+	"Bawang Merah": "res://assets/characters/animated/bawang_merah_avatar.tres",
+	"Raja Bersiung": "res://assets/characters/animated/raja_bersiung_avatar.tres",
 	"Nenek Kebayan": "res://assets/characters/portraits/nenek_kebayan_avatar.png",
-	"Orang Kampung Lelaki": "res://assets/characters/portraits/orang_kampung_lelaki_avatar.png",
-	"Orang Kampung Perempuan": "res://assets/characters/portraits/orang_kampung_perempuan_avatar.png"
+	"Orang Kampung Lelaki": "res://assets/characters/animated/orang_kampung_lelaki_avatar.tres",
+	"Orang Kampung Perempuan": "res://assets/characters/animated/orang_kampung_perempuan_avatar.tres"
 }
 
 const CHARACTER_CLUES := {
-	"Puteri Gunung Ledang": ["Peti emas", "Kain sutera ungu", "Loket bermotif bunga"],
-	"Pak Kaduk": ["Bulu ayam", "Kad permainan lama", "Jejak kaki berlumpur"],
-	"Badang": ["Monyet kecil", "Kain ikat kepala", "Batu besar bercalar"],
-	"Mahsuri": ["Bulu merpati putih", "Surat koyak", "Botol minyak wangi"],
-	"Pak Pandir": ["Katak kampung", "Jala usang", "Jejak kaki kecil berlumpur"],
-	"Bawang Putih": ["Bawang putih", "Sapu tangan putih", "Loket berbentuk bunga"],
-	"Bawang Merah": ["Bawang merah", "Kain merah", "Cermin retak"],
-	"Raja Bersiung": ["Taring", "Kain berlumuran darah", "Mahkota berukir"],
-	"Nenek Kebayan": ["Bakul rotan lama", "Bunga melur", "Jejak kaki halus"],
-	"Orang Kampung Lelaki": ["Topi mengkuang", "Pipa kayu", "Beras dan sayur"],
-	"Orang Kampung Perempuan": ["Bakul sayur", "Sapu tangan batik bunga", "Selipar berlumpur"]
+	"Puteri Gunung Ledang": ["Gold chest", "Purple silk cloth", "Floral pendant"],
+	"Pak Kaduk": ["Rooster feather", "Old playing card", "Muddy footprints"],
+	"Badang": ["Small monkey", "Headband", "Scratched boulder"],
+	"Mahsuri": ["White dove feather", "Torn letter", "Perfume bottle"],
+	"Pak Pandir": ["Village frog", "Worn fishing net", "Small muddy footprints"],
+	"Bawang Putih": ["Garlic", "White handkerchief", "Flower-shaped pendant"],
+	"Bawang Merah": ["Shallot", "Red cloth", "Cracked mirror"],
+	"Raja Bersiung": ["Fang", "Bloodstained cloth", "Carved crown"],
+	"Nenek Kebayan": ["Old rattan basket", "Jasmine flower", "Delicate footprints"],
+	"Orang Kampung Lelaki": ["Woven hat", "Wooden pipe", "Rice and vegetables"],
+	"Orang Kampung Perempuan": ["Vegetable basket", "Floral batik handkerchief", "Muddy slippers"]
 }
 
 const MAPS := [
-	{"name": "Istana Puteri Gunung Ledang", "description": "Explore palace halls and gardens\non the mountain path.", "region": Rect2(0, 0, 1420, 505)},
-	{"name": "Rumah Pak Kaduk", "description": "Search the kampung yard and paddy field\nfor the rooster arena.", "region": Rect2(10, 515, 745, 440)},
-	{"name": "Rumah Mahsuri", "description": "Follow village paths from Mahsuri's home\nto her garden.", "region": Rect2(780, 515, 748, 440)}
+	{"name": "Istana Puteri Gunung Ledang", "description": "Explore the throne hall, palace rooms\nand gardens through marked entrances.", "art":"res://assets/maps/istana_puteri_gunung_ledang.png", "region": Rect2(0, 0, 2172, 724)},
+	{"name": "Rumah Pak Kaduk", "description": "Explore the wooden homestead,\nchicken yard and vegetable garden.", "art":"res://assets/maps/rumah_pak_kaduk.png", "region": Rect2(0, 0, 1448, 1086)},
+	{"name": "Rumah Mahsuri", "description": "Follow the coastal house stairways,\nsandy paths and wooden piers.", "art":"res://assets/maps/rumah_mahsuri.png", "region": Rect2(0, 0, 1448, 1086)}
 ]
 
-const TASKS := {
-	"Rumah Mahsuri": [
-		{"name":"Cari 5 petunjuk di sekitar kampung", "place":"Jalan kampung", "prompt":"Cari dan kutip petunjuk yang bertaburan di sekitar kampung.", "minigame":"collect", "items":["Surat Mahsuri", "Bulu merpati", "Botol minyak wangi", "Kain batik", "Loket bunga"]},
-		{"name":"Bercakap dengan 3 orang penduduk", "place":"Balai kampung", "prompt":"Berbual dengan penduduk untuk mengumpulkan kisah tentang Mahsuri.", "minigame":"talk", "people":["Pak Pandir", "Bawang Putih", "Badang"]},
-		{"name":"Ambil bekalan ubat dari rumah tabib", "place":"Rumah tabib", "prompt":"Ambil bekalan ubat tradisional daripada tabib.", "minigame":"collect", "items":["Bekalan ubat"]},
-		{"name":"Hantar ubat kepada keluarga Mahsuri", "place":"Rumah Mahsuri", "prompt":"Seret bungkusan ubat kepada keluarga Mahsuri.", "minigame":"drag", "drag_from":"Bungkusan ubat", "drag_to":"Keluarga Mahsuri", "drag_id":"ubat"},
-		{"name":"Cari dan kutip 6 bunga putih", "place":"Taman bunga", "prompt":"Kutip bunga putih yang tumbuh di sekitar kampung.", "minigame":"collect", "items":["Bunga putih", "Bunga melur", "Bunga tanjung", "Bunga cempaka", "Bunga kenanga", "Bunga raya putih"]},
-		{"name":"Padankan barang dengan pemiliknya", "place":"Balai perhimpunan", "prompt":"Seret setiap barang kepada pemilik yang betul.", "minigame":"matching", "pairs":[{"id":"surat","item":"Surat koyak","owner":"Mahsuri"},{"id":"batu","item":"Batu bercalar","owner":"Badang"},{"id":"kad","item":"Kad lama","owner":"Pak Kaduk"}], "owners":["Mahsuri", "Badang", "Pak Kaduk"]},
-		{"name":"Buka peti berkunci", "place":"Stor simpanan", "prompt":"Cari kunci di kawasan berhampiran, kemudian buka peti.", "minigame":"search_key", "drag_from":"Kunci peti", "drag_to":"Peti berkunci", "drag_id":"kunci"},
-		{"name":"Letakkan bunga di makam Mahsuri", "place":"Makam Mahsuri", "prompt":"Seret bunga ke makam Mahsuri untuk melengkapkan misi.", "minigame":"drag", "drag_from":"Bunga putih", "drag_to":"Makam Mahsuri", "drag_id":"bunga"}
-	],
-	"Rumah Pak Kaduk": [
-		{"name":"Cari 5 cebisan makanan untuk ayam Pak Kaduk", "place":"Laman kampung", "prompt":"Cari dan kutip cebisan makanan yang bertaburan.", "minigame":"collect", "items":["Beras", "Jagung", "Padi", "Dedak", "Kacang"]},
-		{"name":"Beri makan ayam Pak Kaduk", "place":"Kandang ayam", "prompt":"Tekan butang interaksi untuk memberi makanan kepada ayam.", "minigame":"interact", "interact_caption":"Bekas makanan sudah tersedia. Tekan untuk memberi makan ayam.", "interact_label":"BERI MAKAN AYAM"},
-		{"name":"Cari 3 barang untuk membaiki baju", "place":"Stor rumah", "prompt":"Kutip barang jahitan yang diperlukan.", "minigame":"collect", "items":["Benang", "Jarum", "Cebisan kain"]},
-		{"name":"Baiki baju Pak Kaduk", "place":"Rumah utama", "prompt":"Seret cebisan kain ke bahagian baju yang koyak.", "minigame":"drag", "drag_from":"Cebisan kain", "drag_to":"Bahagian baju koyak", "drag_id":"kain"},
-		{"name":"Ikut jejak ayam dengan mengutip 5 bulu", "place":"Laluan bendang", "prompt":"Kutip bulu ayam untuk menjejaki laluannya.", "minigame":"collect", "items":["Bulu ayam", "Bulu ayam", "Bulu ayam", "Bulu ayam", "Bulu ayam"]},
-		{"name":"Cari ayam Pak Kaduk di sekitar gelanggang", "place":"Gelanggang pertandingan", "prompt":"Periksa kawasan gelanggang dan cari ayam Pak Kaduk.", "minigame":"find_rooster"},
-		{"name":"Sertai cabaran masa di gelanggang", "place":"Pintu gelanggang", "prompt":"Tekan apabila penanda berada di zon hijau.", "minigame":"timing"},
-		{"name":"Kutip syiling selepas pertandingan", "place":"Lantai gelanggang", "prompt":"Kutip syiling yang bertaburan di gelanggang.", "minigame":"collect", "items":["Syiling emas", "Syiling perak", "Syiling tembaga", "Syiling emas", "Syiling perak"]}
-	],
-	"Istana Puteri Gunung Ledang": [
-		{"name":"Cari 5 penanda laluan ke kaki gunung", "place":"Taman istana", "prompt":"Cari dan kutip penanda laluan untuk membuka jalan ke kaki gunung.", "minigame":"collect", "items":["Penanda kayu", "Pita merah", "Batu tanda", "Bendera kecil", "Ukiran laluan"]},
-		{"name":"Kumpulkan bekalan perjalanan", "place":"Dapur istana", "prompt":"Ambil air dan makanan untuk perjalanan.", "minigame":"supplies", "items":["Bekas air", "Bungkusan makanan"]},
-		{"name":"Cari jalan di persimpangan hutan", "place":"Persimpangan hutan", "prompt":"Ikut turutan penanda untuk mencari jalan yang betul.", "minigame":"route", "route":["↑", "→", "↑"]},
-		{"name":"Cari 7 dulang emas", "place":"Balai diraja", "prompt":"Cari dulang emas di lokasi yang ditandakan pada peta.", "minigame":"collect", "items":["Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas", "Dulang emas"]},
-		{"name":"Tangkap 7 ikon hati nyamuk", "place":"Taman tanglung", "prompt":"Tekan ketika ikon berada di zon hijau untuk menangkapnya.", "minigame":"timing"},
-		{"name":"Kumpul bahan simbolik untuk Puteri", "place":"Bilik Puteri", "prompt":"Kutip bahan simbolik yang diperlukan Puteri.", "minigame":"collect", "items":["Bunga melur", "Kain sutera", "Loket bunga"]},
-		{"name":"Bawa surat pinangan ke kawasan pertemuan", "place":"Kem Sultan", "prompt":"Seret surat pinangan dari kem Sultan ke kawasan pertemuan.", "minigame":"drag", "drag_from":"Surat pinangan", "drag_to":"Kawasan pertemuan", "drag_id":"surat"},
-		{"name":"Temui Puteri dan selesaikan perbualan", "place":"Puncak gunung", "prompt":"Ikut penanda ke lokasi Puteri, kemudian berbual dengannya.", "minigame":"final_route"}
-	]
-}
 
-const TASK_POINTS := [Vector2(370, 235), Vector2(530, 235), Vector2(880, 245), Vector2(1050, 370), Vector2(880, 530), Vector2(625, 555), Vector2(350, 520), Vector2(340, 390)]
+static func map_art_path(map_index: int) -> String:
+	return str(MAPS[clampi(map_index, 0, 2)]["art"])
+
+const COMMON_TASKS := [
+    {"name":"Cook rice", "place":"Kitchen", "prompt":"Add rice and water to the pot, then lift it when the rice is cooked.", "minigame":"rice"},
+    {"name":"Light a wood fire", "place":"Fire pit", "prompt":"Arrange the twigs and logs, then strike the flint to light the fire.", "minigame":"fire"},
+    {"name":"Sweep the floor", "place":"Indoor area", "prompt":"Sweep through the piles of dirt until the floor is clean.", "minigame":"sweep"},
+    {"name":"Hang the laundry", "place":"Clothesline", "prompt":"Drag each cloth to its matching place on the clothesline.", "minigame":"laundry"},
+    {"name":"Find the flowers", "place":"Garden", "prompt":"Find five flowers hidden among the leaves.", "minigame":"flowers"},
+    {"name":"Shoot marbles into the circle", "place":"Play area", "prompt":"Pull each marble back and release it. All four marbles must stop fully inside the circle.", "minigame":"marbles"},
+    {"name":"Repair the lamp", "place":"Lamp", "prompt":"Connect the wires with matching colours and letters.", "minigame":"lamp"},
+    {"name":"Arrange the shoes", "place":"Entrance", "prompt":"Match the footwear by colour to make four pairs: blue, yellow, red and green.", "minigame":"slippers"}
+]
+const TASKS := {
+    "Istana Puteri Gunung Ledang": COMMON_TASKS,
+    "Rumah Pak Kaduk": COMMON_TASKS,
+    "Rumah Mahsuri": COMMON_TASKS
+}
+const TASK_POINTS := [Vector2(580,382),Vector2(1805,435),Vector2(990,236),Vector2(1360,279),Vector2(240,280),Vector2(709,267),Vector2(1340,414),Vector2(850,401)]
+const COMMON_TASK_STEPS := [3,3,5,4,5,4,3,4]
 const TASK_STEPS := {
-	"Rumah Mahsuri": [5, 3, 1, 1, 6, 3, 1, 1],
-	"Rumah Pak Kaduk": [5, 1, 3, 1, 5, 1, 1, 1],
-	"Istana Puteri Gunung Ledang": [5, 1, 1, 7, 7, 3, 1, 1]
+    "Istana Puteri Gunung Ledang": COMMON_TASK_STEPS,
+    "Rumah Pak Kaduk": COMMON_TASK_STEPS,
+    "Rumah Mahsuri": COMMON_TASK_STEPS
 }
 const NPC_NAMES := ["Pak Pandir", "Bawang Putih", "Badang", "Mahsuri"]
 const NPC_POINTS := [Vector2(430, 330), Vector2(760, 300), Vector2(990, 475), Vector2(520, 460)]

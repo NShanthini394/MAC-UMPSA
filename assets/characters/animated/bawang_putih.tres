@@ -1,0 +1,103 @@
+[gd_resource type="SpriteFrames" load_steps=17 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/characters/animated/bawang_putih.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="pose_0"]
+atlas = ExtResource("1")
+region = Rect2(89.0000, 14.0000, 187.0000, 316.0000)
+margin = Rect2(69.7370, 13.4392, 88.4740, 25.8784)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_1"]
+atlas = ExtResource("1")
+region = Rect2(383.0000, 14.0000, 200.0000, 318.0000)
+margin = Rect2(63.6285, 13.5456, 77.2570, 26.0912)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_2"]
+atlas = ExtResource("1")
+region = Rect2(690.0000, 14.0000, 190.0000, 316.0000)
+margin = Rect2(72.7370, 13.4392, 85.4740, 25.8784)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_3"]
+atlas = ExtResource("1")
+region = Rect2(973.0000, 13.0000, 210.0000, 317.0000)
+margin = Rect2(50.7370, 12.4392, 65.4740, 24.8784)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_4"]
+atlas = ExtResource("1")
+region = Rect2(1284.0000, 14.0000, 184.0000, 317.0000)
+margin = Rect2(69.6827, 13.4924, 92.3655, 25.9848)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_5"]
+atlas = ExtResource("1")
+region = Rect2(90.0000, 345.0000, 183.0000, 314.0000)
+margin = Rect2(67.3997, 12.2796, 89.7995, 24.5592)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_6"]
+atlas = ExtResource("1")
+region = Rect2(379.0000, 347.0000, 199.0000, 312.0000)
+margin = Rect2(57.0082, 12.1732, 72.0165, 24.3464)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_7"]
+atlas = ExtResource("1")
+region = Rect2(695.0000, 347.0000, 180.0000, 312.0000)
+margin = Rect2(70.0082, 12.1732, 91.0165, 24.3464)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_8"]
+atlas = ExtResource("1")
+region = Rect2(985.0000, 348.0000, 192.0000, 311.0000)
+margin = Rect2(60.5625, 12.1200, 78.1250, 24.2400)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_9"]
+atlas = ExtResource("1")
+region = Rect2(1296.0000, 348.0000, 186.0000, 311.0000)
+margin = Rect2(68.5625, 12.1200, 84.1250, 24.2400)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_10"]
+atlas = ExtResource("1")
+region = Rect2(91.0000, 672.0000, 186.0000, 322.0000)
+margin = Rect2(70.9115, 12.7584, 94.8230, 26.5168)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_11"]
+atlas = ExtResource("1")
+region = Rect2(369.0000, 672.0000, 215.0000, 321.0000)
+margin = Rect2(39.5200, 12.6520, 64.0400, 25.3040)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_12"]
+atlas = ExtResource("1")
+region = Rect2(683.0000, 672.0000, 184.0000, 322.0000)
+margin = Rect2(64.9658, 12.7052, 95.9315, 25.4104)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_13"]
+atlas = ExtResource("1")
+region = Rect2(972.0000, 672.0000, 223.0000, 321.0000)
+margin = Rect2(43.5200, 12.6520, 56.0400, 25.3040)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="pose_14"]
+atlas = ExtResource("1")
+region = Rect2(1285.0000, 672.0000, 195.0000, 322.0000)
+margin = Rect2(61.4658, 12.7052, 84.9315, 25.4104)
+filter_clip = true
+
+[resource]
+animations = [
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_0")}], "loop": true, "name": &"front_idle", "speed": 8.0},
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_1")}, {"duration": 1.0, "texture": SubResource("pose_2")}, {"duration": 1.0, "texture": SubResource("pose_3")}, {"duration": 1.0, "texture": SubResource("pose_4")}], "loop": true, "name": &"front_walk", "speed": 8.0},
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_5")}], "loop": true, "name": &"back_idle", "speed": 8.0},
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_6")}, {"duration": 1.0, "texture": SubResource("pose_7")}, {"duration": 1.0, "texture": SubResource("pose_8")}, {"duration": 1.0, "texture": SubResource("pose_9")}], "loop": true, "name": &"back_walk", "speed": 8.0},
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_10")}], "loop": true, "name": &"side_idle", "speed": 8.0},
+{"frames": [{"duration": 1.0, "texture": SubResource("pose_11")}, {"duration": 1.0, "texture": SubResource("pose_12")}, {"duration": 1.0, "texture": SubResource("pose_13")}, {"duration": 1.0, "texture": SubResource("pose_14")}], "loop": true, "name": &"side_walk", "speed": 8.0}
+]

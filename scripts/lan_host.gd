@@ -1,6 +1,7 @@
 extends Node
 ## A separate server MultiplayerAPI keeps the host's own player a normal client.
 const Network = preload("res://scripts/network_manager.gd")
+var discovery_port := int(ProjectSettings.get_setting("network/discovery_port",7001))
 var service: Node
 var _api: MultiplayerAPI
 var _branch: Node
@@ -17,6 +18,7 @@ func start(port: int = 7000) -> Error:
 	get_tree().set_multiplayer(_api, _branch.get_path())
 	service = Network.new()
 	service.name = "NetworkManager"
+	service.set("discovery_port",discovery_port)
 	_branch.add_child(service)
 	var result: Error = service.call("start_server", port)
 	if result != OK:
@@ -28,6 +30,7 @@ func start(port: int = 7000) -> Error:
 func stop() -> void:
 	if is_instance_valid(service):
 		service.set_process(false)
+		if is_instance_valid(service.get("lan_discovery")): service.get("lan_discovery").stop_listener()
 		var peer := _api.multiplayer_peer if _api != null else null
 		if peer != null: peer.close()
 	if is_instance_valid(_branch): _branch.queue_free()

@@ -71,26 +71,20 @@ func _ready() -> void:
 	set_process(is_network_driven)
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if not is_local_player or is_network_driven:
 		return
 	if sleeping or inactive:
 		velocity = Vector2.ZERO
 		character_actor.call("set_running", false)
 		return
-	velocity = _move_direction * move_speed
-	# Static bodies provide physical wall collisions. This radius check also
-	# prevents a step into river or pond regions at map edges and wall corners.
+	global_position = MapGeometry.recover_position(map_index, global_position, 14.0, locked_entrances)
 	var current := global_position
-	var candidate := current + velocity * _delta
-	if MapGeometry.is_step_blocked(map_index, current, candidate, 14.0, locked_entrances):
-		var horizontal := Vector2(candidate.x, current.y)
-		var vertical := Vector2(current.x, candidate.y)
-		if MapGeometry.is_step_blocked(map_index, current, horizontal, 14.0, locked_entrances):
-			velocity.x = 0.0
-		if MapGeometry.is_step_blocked(map_index, current, vertical, 14.0, locked_entrances):
-			velocity.y = 0.0
-	move_and_slide()
+	var target := MapGeometry.move_position(map_index, current, _move_direction * move_speed * minf(delta, 0.1), 14.0, locked_entrances)
+	# Geometry has already selected a safe wall slide. Do not let a second physics
+	# slide redirect that motion into an unvalidated inside corner.
+	move_and_collide(target - current)
+	velocity = (global_position - current) / maxf(delta, 0.0001)
 	if velocity.length_squared() > 1.0:
 		character_actor.call("set_facing_direction", velocity)
 	character_actor.call("set_running", velocity.length_squared() > 1.0)

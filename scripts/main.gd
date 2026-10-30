@@ -88,6 +88,8 @@ var network_manager = null
 var lan_host: Node
 var _lobby_refresh_queued := false
 var server_address := "127.0.0.1"
+var internet_mode := false
+var online_server_url := str(ProjectSettings.get_setting("network/online_server_url", ""))
 var clue_points: Array = []
 var network_found_clues: Array[int] = []
 var network_meeting_state := ""
@@ -349,7 +351,7 @@ func _update_power_hud() -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	var watching := not can_local_act()
 	for button_name in ["InteractButton", "InspectClueButton", "GameMapButton", "GameJournalButton"]:
-		var button := find_child(button_name, true, false) as Button
+		var button := find_child(button_name, true, false) as BaseButton
 		if button: button.disabled = watching
 	var pad := find_child("VirtualJoystick", true, false) as Control
 	if pad: pad.visible = not watching
@@ -468,7 +470,7 @@ func _auth_notice(message: String) -> void:
 
 func _auth_busy_changed(value: bool) -> void:
 	for button_name in ["AuthSubmitButton", "LoginGoogleButton", "LoginEmailButton", "LoginHuaweiButton", "LoginCreateAccountButton", "AuthResetButton"]:
-		var button := find_child(button_name, true, false) as Button
+		var button := find_child(button_name, true, false) as BaseButton
 		if button: button.disabled = value
 	if value: _auth_notice("Connecting securely…")
 
@@ -592,6 +594,21 @@ func _create_room_code() -> void:
 	_create_online_room()
 
 
+func _host_selected_room() -> void:
+	if not internet_mode:
+		_host_lan_room()
+		return
+	if network_manager.connection_pending: return
+	var status := find_child("CreateRoomStatusLabel", true, false) as Label
+	if not online_server_url.begins_with("wss://") and not online_server_url.begins_with("ws://127.0.0.1"):
+		if status: status.text = "Online play is not configured in this build yet. Use Same Wi-Fi for now."
+		return
+	lan_host.stop()
+	server_address = online_server_url
+	_set_connection_busy(true)
+	_create_online_room()
+
+
 func _host_lan_room() -> void:
 	if network_manager.connection_pending: return
 	var status := find_child("CreateRoomStatusLabel", true, false) as Label
@@ -605,8 +622,8 @@ func _host_lan_room() -> void:
 
 
 func _set_connection_busy(busy: bool) -> void:
-	for button_name in ["CreateOnlineRoomButton", "JoinOnlineRoomButton", "PracticeOfflineButton"]:
-		var button := find_child(button_name, true, false) as Button
+	for button_name in ["CreateOnlineRoomButton", "JoinOnlineRoomButton", "PracticeOfflineButton", "ConnectionMode"]:
+		var button := find_child(button_name, true, false) as BaseButton
 		if button: button.disabled = busy
 
 
@@ -668,11 +685,14 @@ func _join_room_with_code() -> void:
 	if entry.text.strip_edges().length() != 5:
 		status.text = "Enter the five-character code shown on the host's screen."
 		return
-	status.text = "Finding the host on your Wi-Fi…"
+	status.text = "Connecting online…" if internet_mode else "Finding the host on your Wi-Fi…"
+	if internet_mode and online_server_url.is_empty():
+		status.text = "Online play is not configured in this build yet. Use Same Wi-Fi for now."
+		return
 	var name_entry := find_child("LobbyPlayerNameEntry", true, false) as LineEdit
 	if name_entry and not name_entry.text.strip_edges().is_empty(): lobby_player_name = name_entry.text.strip_edges().substr(0, 20)
 	_set_connection_busy(true)
-	var result: Error = network_manager.join_room(entry.text, lobby_player_name)
+	var result: Error = network_manager.join_room(entry.text, lobby_player_name, online_server_url if internet_mode else "")
 	if result != OK:
 		_set_connection_busy(false)
 		status.text = "Enter the host's five-character room code, then try again."
@@ -691,7 +711,7 @@ func _create_online_room() -> void:
 	var result: Error = network_manager.create_room(selected_map, lobby_player_name, server_address)
 	if result != OK and status:
 		_set_connection_busy(false)
-		status.text = "Could not create the Wi-Fi room. Keep the host's game open and try again."
+		status.text = "Could not create the room. Check your connection and try again."
 
 
 func _start_local_practice_lobby() -> void:
@@ -1314,7 +1334,7 @@ func build_waiting_room() -> void:
 	var ready_note := _make_child_label(self, "Game starts after a 15-second wait\nwhen everyone is ready.", 12, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(996, 664, 260, 40))
 	ready_note.name = "LobbyReadyWaitNote"
 	ready_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lobby_note_text := "Same Wi-Fi · friends join with the room code" if network_room else "Offline practice lobby"
+	var lobby_note_text := ("Online · friends join with the room code" if internet_mode else "Same Wi-Fi · friends join with the room code") if network_room else "Offline practice lobby"
 	var lobby_note := _make_child_label(self, lobby_note_text, 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(650, 578, 575, 24))
 	lobby_note.clip_text = true
 

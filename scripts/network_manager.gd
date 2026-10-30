@@ -1,5 +1,5 @@
 extends Node
-## Authoritative ENet room service shared by the game client and headless server.
+## Authoritative room service: ENet for Wi-Fi, WebSocket for internet play.
 
 signal connection_changed(connected: bool, message: String)
 signal room_opened(code: String, map_index: int, members: Array, is_host: bool)
@@ -51,6 +51,8 @@ var _server_random := RandomNumberGenerator.new()
 var _position_broadcast_timer := 0.0
 var connection_pending := false
 var _connection_deadline := 0
+var _warmup: HTTPRequest
+var _connection_generation := 0
 
 
 func _ready() -> void:
@@ -62,13 +64,17 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	multiplayer.peer_connected.connect(_on_peer_connected)
 	var arguments := OS.get_cmdline_user_args()
 	if "--server" in arguments:
 		var port := server_port
 		var port_index := arguments.find("--port")
 		if port_index >= 0 and port_index + 1 < arguments.size():
 			port = int(arguments[port_index + 1])
-		start_server(port)
+		var result := start_server(port, "--websocket" in arguments)
+		if result != OK:
+			push_error("Room server could not start: %s" % error_string(result))
+			get_tree().quit(1)
 
 
 func _process(delta: float) -> void:
@@ -112,24 +118,33 @@ func _process(delta: float) -> void:
 			var room: Dictionary = rooms[code]
 			if bool(room.get("started", false)) and not bool(room.get("finished", false)): _broadcast_positions(str(code))
 
-func start_server(port: int = PORT) -> Error:
+func start_server(port: int = PORT, websocket: bool = false) -> Error:
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
 		return ERR_ALREADY_IN_USE
 	# All gameplay travels through this server. Clients do not need direct peer
 	# relays, including relay notifications racing simultaneous disconnects.
 	var scene_api := multiplayer as SceneMultiplayer
 	if scene_api: scene_api.server_relay = false
-	var peer := ENetMultiplayerPeer.new()
-	var result := peer.create_server(port, MAX_SERVER_CLIENTS)
+	var peer: MultiplayerPeer
+	var result: Error
+	if websocket:
+		var socket := WebSocketMultiplayerPeer.new()
+		result = socket.create_server(port, "127.0.0.1")
+		peer = socket
+	else:
+		var enet := ENetMultiplayerPeer.new()
+		result = enet.create_server(port, MAX_SERVER_CLIENTS)
+		peer = enet
 	if result != OK:
 		return result
-	var discovery_result := _ensure_discovery().listen(discovery_port,_discovery_room)
-	if discovery_result!=OK:
-		peer.close()
-		return discovery_result
+	if not websocket:
+		var discovery_result := _ensure_discovery().listen(discovery_port,_discovery_room)
+		if discovery_result!=OK:
+			peer.close()
+			return discovery_result
 	server_port = port
 	multiplayer.multiplayer_peer = peer
-	print("Nenek Kebayan room server listening on UDP %d" % port)
+	print("Nenek Kebayan room server listening on %s %d" % ["WebSocket" if websocket else "UDP", port])
 	return OK
 
 
@@ -141,6 +156,27 @@ func connect_to_server(address: String, port: int = PORT) -> Error:
 	_disconnect_peer()
 	server_address = destination
 	server_port = port
+	if destination.begins_with("wss://") or destination.begins_with("ws://"):
+		connection_pending = true
+		_connection_deadline = Time.get_ticks_msec() + 120000
+		if destination.begins_with("wss://"):
+			_warmup = HTTPRequest.new()
+			_warmup.timeout = 110.0
+			add_child(_warmup)
+			var generation := _connection_generation
+			_warmup.request_completed.connect(func(result_code: int, response: int, _headers: PackedStringArray, _body: PackedByteArray):
+				if generation != _connection_generation or not connection_pending: return
+				if result_code != HTTPRequest.RESULT_SUCCESS or response != 200:
+					_on_connection_failed()
+					return
+				if _connect_websocket(destination) != OK: _on_connection_failed()
+			)
+			var origin := destination.trim_prefix("wss://").get_slice("/", 0)
+			var warm_result := _warmup.request("https://" + origin + "/healthz")
+			if warm_result != OK: _disconnect_peer(); return warm_result
+			connection_changed.emit(false, "Connecting online… A sleeping server may take up to two minutes to start.")
+			return OK
+		return _connect_websocket(destination)
 	var peer := ENetMultiplayerPeer.new()
 	var result := peer.create_client(server_address, server_port)
 	if result != OK:
@@ -150,6 +186,26 @@ func connect_to_server(address: String, port: int = PORT) -> Error:
 	_connection_deadline = Time.get_ticks_msec() + 8000
 	connection_changed.emit(false, "Connecting to room server…")
 	return OK
+
+
+func _connect_websocket(url: String) -> Error:
+	var peer := WebSocketMultiplayerPeer.new()
+	peer.handshake_timeout = 20.0
+	var result := peer.create_client(url)
+	if result != OK: return result
+	multiplayer.multiplayer_peer = peer
+	connection_pending = true
+	_connection_deadline = Time.get_ticks_msec() + 20000
+	connection_changed.emit(false, "Connecting to online room server…")
+	return OK
+
+
+func _on_peer_connected(peer_id: int) -> void:
+	var transport := multiplayer.multiplayer_peer as WebSocketMultiplayerPeer
+	if transport:
+		transport.get_peer(peer_id).heartbeat_interval = 10.0
+	if multiplayer.is_server() and multiplayer.get_peers().size() > MAX_SERVER_CLIENTS:
+		multiplayer.disconnect_peer(peer_id)
 
 
 func create_room(map_index: int, player_name: String, address: String = "") -> Error:
@@ -295,6 +351,11 @@ func leave_room() -> void:
 
 
 func _disconnect_peer() -> void:
+	_connection_generation += 1
+	if is_instance_valid(_warmup):
+		_warmup.cancel_request()
+		_warmup.queue_free()
+		_warmup = null
 	if is_instance_valid(lan_discovery): lan_discovery.cancel_search()
 	lobby_countdown = -1.0
 	connection_pending = false
@@ -315,13 +376,14 @@ func local_peer_id() -> int:
 
 func is_connected_to_room_server() -> bool:
 	var peer := multiplayer.get_multiplayer_peer()
-	return peer is ENetMultiplayerPeer and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	return (peer is ENetMultiplayerPeer or peer is WebSocketMultiplayerPeer) and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 
 func _on_connection_failed() -> void:
+	var online := server_address.begins_with("ws")
 	_pending_action.clear()
 	_disconnect_peer()
-	connection_changed.emit(false, "Cannot reach the host. Use the same Wi-Fi, keep the host's game open, and allow the game on Private networks if Windows asks.")
+	connection_changed.emit(false, "Cannot reach the online server. Check your internet connection and try again. The server may be restarting." if online else "Cannot reach the host. Use the same Wi-Fi, keep the host's game open, and allow the game on Private networks if Windows asks.")
 
 
 func _on_server_disconnected() -> void:
@@ -405,6 +467,10 @@ func _send_room_state(code: String) -> void:
 
 func _can_send_to(peer_id: int) -> bool:
 	if peer_id not in multiplayer.get_peers(): return false
+	var websocket := multiplayer.multiplayer_peer as WebSocketMultiplayerPeer
+	if websocket:
+		var socket := websocket.get_peer(peer_id)
+		return socket != null and socket.get_ready_state() == WebSocketPeer.STATE_OPEN
 	var transport := multiplayer.multiplayer_peer as ENetMultiplayerPeer
 	if transport == null: return false
 	var peer := transport.get_peer(peer_id)

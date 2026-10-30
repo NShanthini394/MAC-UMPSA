@@ -53,7 +53,7 @@ func run_checks() -> void:
 	server = Network.new()
 	server.name = "NetworkManager"
 	server_branch.add_child(server)
-	check(server.call("start_server", 17765) == OK, "Room server starts for animation integration")
+	check(_start_room_server() == OK, "Room server starts for animation integration")
 	for slot in 5:
 		var app: Control = load("res://scenes/main.tscn").instantiate()
 		app.name = "CastClient%d" % slot
@@ -62,13 +62,13 @@ func run_checks() -> void:
 		await process_frame
 		await process_frame
 		app.get("network_manager").server_port = 17765
-		app.get("network_manager").connect_to_server("127.0.0.1", 17765)
+		app.get("network_manager").connect_to_server(_server_endpoint(), 17765)
 	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("network_manager").is_connected_to_room_server()), "five connected clients"): return
 	var host := apps[0]
-	host.get("network_manager").create_room(1, "Cast Host", "127.0.0.1")
+	host.get("network_manager").create_room(1, "Cast Host", _server_endpoint())
 	if not await wait_for(func() -> bool: return not str(host.get("room_code")).is_empty(), "room creation"): return
 	var code: String = host.get("room_code")
-	for slot in range(1, 5): apps[slot].get("network_manager").join_room(code, "Cast Guest %d" % slot, "127.0.0.1")
+	for slot in range(1, 5): apps[slot].get("network_manager").join_room(code, "Cast Guest %d" % slot, _server_endpoint())
 	if not await wait_for(func() -> bool: return server.get("rooms")[code]["players"].size() == 5, "all players join"): return
 	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("lobby_players").size() == 5), "all lobby rosters"): return
 	await host.call("build_waiting_room")
@@ -130,3 +130,11 @@ func run_checks() -> void:
 	await create_timer(0.16).timeout
 	host.call("_stop_move")
 	check(not Geometry.is_position_blocked(1,room["players"][host_id]["position"],14),"Previously stuck LAN position recovers with actual player input")
+
+
+func _start_room_server() -> Error:
+	return server.call("start_server", 17765)
+
+
+func _server_endpoint() -> String:
+	return "127.0.0.1"

@@ -20,6 +20,7 @@ func new_app(slot: int) -> Control:
 	app.network_manager.discovery_port=17821
 	app.lan_host.discovery_port=17821
 	app.lobby_player_name="Code player %d"%slot
+	app.internet_mode=false
 	await app.build_menu()
 	return app
 func run() -> void:
@@ -62,7 +63,8 @@ func validate() -> void:
 			entry=guest.find_child("JoinCodeEntry",true,false) as LineEdit
 			entry.text="ZZZZZ"; guest._join_room_with_code()
 			if not await wait_for(func()->bool:return not guest.network_manager.connection_pending,"missing-room timeout",9.0): return
-			check(guest.find_child("JoinRoomStatusLabel",true,false).text.contains("Room not found"),"Missing room has a useful same-Wi-Fi error")
+			var missing_text: String = guest.find_child("JoinRoomStatusLabel",true,false).text
+			check(missing_text.contains("Local room not found") and missing_text.contains("Internet"),"Missing local room explains Internet mode for shared Wi-Fi")
 			check(not guest.find_child("JoinOnlineRoomButton",true,false).disabled,"Failed lookup can be retried")
 		entry.text=code.to_lower(); guest._join_room_with_code()
 		if not await wait_for(func()->bool:return guest.current_screen=="waiting_room" and guest.room_code==code,"guest joins using only the code"): return

@@ -88,8 +88,8 @@ var network_manager = null
 var lan_host: Node
 var _lobby_refresh_queued := false
 var server_address := "127.0.0.1"
-var internet_mode := false
 var online_server_url := str(ProjectSettings.get_setting("network/online_server_url", ""))
+var internet_mode := not online_server_url.is_empty()
 var clue_points: Array = []
 var network_found_clues: Array[int] = []
 var network_meeting_state := ""
@@ -445,8 +445,12 @@ func clear_screen(screen_name: String) -> void:
 	game_hud = null
 	player_body = null
 	for child in get_children():
-		if child != network_manager and child != page_controls and child != lan_host and child != firebase_auth: child.queue_free()
-	await get_tree().process_frame
+		if child != network_manager and child != page_controls and child != lan_host and child != firebase_auth and child != audio_director:
+			# Detach now so replacement controls can use the same names. Destruction
+			# stays deferred, but page builders finish before the next rendered frame.
+			remove_child(child)
+			child.queue_free()
+	if is_instance_valid(page_controls): page_controls.refresh(true)
 
 
 func build_login_screen() -> void:
@@ -611,6 +615,7 @@ func _host_selected_room() -> void:
 
 func _host_lan_room() -> void:
 	if network_manager.connection_pending: return
+	internet_mode = false
 	var status := find_child("CreateRoomStatusLabel", true, false) as Label
 	var result: Error = lan_host.call("start", network_manager.server_port)
 	if result != OK:
@@ -640,8 +645,9 @@ func _queue_network_lobby_refresh() -> void:
 
 func _refresh_network_lobby() -> void:
 	if not room_code.is_empty():
-		if current_screen == "character_select": await build_character_select()
-		elif current_screen not in ["role_reveal", "game", "meeting", "result"]: await build_waiting_room()
+		if current_screen == "character_select": _refresh_character_select()
+		elif current_screen == "waiting_room": _refresh_waiting_room()
+		elif current_screen not in ["role_reveal", "game", "meeting", "result"]: build_waiting_room()
 	_lobby_refresh_queued = false
 
 
@@ -813,6 +819,8 @@ func _on_network_connection_changed(connected: bool, message: String) -> void:
 	var join_status := find_child("JoinRoomStatusLabel", true, false) as Label
 	if create_status: create_status.text = message
 	if join_status: join_status.text = "Invalid Room Code" if message == "Invalid Room Code" else message
+	if join_status and not internet_mode and message.to_lower().contains("room not found"):
+		join_status.text = "Local room not found. On university/shared Wi-Fi, select Internet on both devices and create a new room."
 
 
 func _on_network_room_opened(code: String, map_index: int, members: Array, is_host: bool) -> void:
@@ -1267,55 +1275,22 @@ func build_waiting_room() -> void:
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 222)
 	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_panel.add_child(map_preview)
-	_make_child_label(map_panel, "Selected character: " + (selected_character if not selected_character.is_empty() else "None") + "\nUse Choose Character to switch.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
+	var selection := _make_child_label(map_panel, "Selected character: " + (selected_character if not selected_character.is_empty() else "None") + "\nUse Choose Character to switch.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 298, 372, 52))
+	selection.name = "LobbySelectedCharacterLabel"
 	_make_child_label(map_panel, "Room code is server-generated." if network_room else "Offline practice lobby.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 358, 372, 34))
 
 	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
+	players_panel.name = "LobbyPlayersPanel"
 	var open_slots := maxi(0, 10 - lobby_players.size())
 	_make_child_label(players_panel, "PLAYERS IN ROOM", 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 10, 300, 34))
-	_make_child_label(players_panel, "%d HERE  •  %d OPEN SLOTS" % [lobby_players.size(), open_slots], 13, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(400, 10, 300, 34))
+	var occupancy := _make_child_label(players_panel, "%d HERE  •  %d OPEN SLOTS" % [lobby_players.size(), open_slots], 13, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(400, 10, 300, 34))
+	occupancy.name = "LobbyOccupancyLabel"
 	for i in 10:
 		var row := floori(float(i) / 5.0)
 		var col := i % 5
 		var slot := _make_child_panel(players_panel, Rect2(22 + col * 138, 52 + row * 174, 124, 160), Color(0.17, 0.12, 0.085, 0.96))
-		if i < lobby_players.size():
-			var member: Dictionary = lobby_players[i]
-			var member_character := str(member.get("character", ""))
-			var member_name := str(member.get("name", "Player"))
-			var is_local := str(member.get("id", "")) == (str(network_manager.local_peer_id()) if network_room else "local")
-			var is_host := bool(member.get("host", false))
-			var is_ready := bool(member.get("ready", false))
-			_add_player_avatar(slot, member_character)
-			if is_local:
-				var name_entry := LineEdit.new()
-				name_entry.name = "LobbyNameEntry"
-				name_entry.text = lobby_player_name
-				name_entry.placeholder_text = "Your name"
-				name_entry.max_length = 20
-				name_entry.editable = not network_room
-				name_entry.position = Vector2(7, 82); name_entry.size = Vector2(110, 28)
-				name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
-				name_entry.add_theme_font_size_override("font_size", 12)
-				name_entry.add_theme_color_override("font_color", CREAM)
-				var field_style := StyleBoxFlat.new()
-				field_style.bg_color = Color("35271c"); field_style.border_color = Color("c5904b")
-				field_style.set_border_width_all(1); field_style.set_corner_radius_all(7)
-				name_entry.add_theme_stylebox_override("normal", field_style)
-				name_entry.add_theme_stylebox_override("focus", field_style)
-				name_entry.text_changed.connect(_on_lobby_name_changed)
-				name_entry.editable = not network_room
-				slot.add_child(name_entry)
-				var host_status := _make_child_label(slot, ("HOST  •  " if is_host else "YOU  •  ") + ("READY" if is_ready else "WAITING"), 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
-				host_status.name = "LocalReadyStatusLabel"
-			else:
-				_make_child_label(slot, member_name + ("  •  HOST" if is_host else ""), 10, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
-				_make_child_label(slot, ("READY" if is_ready else "WAITING"), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
-		else:
-			var empty_avatar := _make_child_panel(slot, Rect2(29, 10, 66, 66), Color(0.20, 0.17, 0.13, 1.0))
-			empty_avatar.add_theme_stylebox_override("panel", _circle_style(Color(0.20, 0.17, 0.13, 1.0), Color("8d785f")))
-			_make_child_label(slot, "+", 30, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(29, 9, 66, 66))
-			_make_child_label(slot, "OPEN SLOT", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
-			_make_child_label(slot, "Waiting", 10, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+		slot.name = "LobbySlot_%d" % i
+		_render_lobby_slot(slot, i, network_room)
 
 	var leave := make_button(self, "LEAVE ROOM", Callable(self, "show_leave_room_confirmation"), 190, 48)
 	leave.name = "LobbyLeaveRoomButton"
@@ -1337,6 +1312,66 @@ func build_waiting_room() -> void:
 	var lobby_note_text := ("Online · friends join with the room code" if internet_mode else "Same Wi-Fi · friends join with the room code") if network_room else "Offline practice lobby"
 	var lobby_note := _make_child_label(self, lobby_note_text, 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(650, 578, 575, 24))
 	lobby_note.clip_text = true
+
+
+func _refresh_waiting_room() -> void:
+	var panel := find_child("LobbyPlayersPanel", true, false) as Panel
+	if panel == null: return
+	var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
+	for i in 10:
+		var slot := panel.get_node_or_null("LobbySlot_%d" % i) as Panel
+		if slot: _render_lobby_slot(slot, i, network_room)
+	var occupancy := panel.get_node_or_null("LobbyOccupancyLabel") as Label
+	if occupancy: occupancy.text = "%d HERE  •  %d OPEN SLOTS" % [lobby_players.size(), maxi(0, 10-lobby_players.size())]
+	var selection := find_child("LobbySelectedCharacterLabel", true, false) as Label
+	if selection: selection.text = "Selected character: " + (selected_character if not selected_character.is_empty() else "None") + "\nUse Choose Character to switch."
+
+
+func _render_lobby_slot(slot: Panel, i: int, network_room: bool) -> void:
+	var snapshot: Dictionary = lobby_players[i].duplicate(true) if i < lobby_players.size() else {}
+	if slot.has_meta("member_snapshot") and slot.get_meta("member_snapshot") == snapshot: return
+	slot.set_meta("member_snapshot", snapshot)
+	for child in slot.get_children():
+		slot.remove_child(child)
+		child.queue_free()
+	if i < lobby_players.size():
+		var member: Dictionary = lobby_players[i]
+		var member_character := str(member.get("character", ""))
+		var member_name := str(member.get("name", "Player"))
+		var is_local := str(member.get("id", "")) == (str(network_manager.local_peer_id()) if network_room else "local")
+		var is_host := bool(member.get("host", false))
+		var is_ready := bool(member.get("ready", false))
+		_add_player_avatar(slot, member_character)
+		if is_local:
+			var name_entry := LineEdit.new()
+			name_entry.name = "LobbyNameEntry"
+			name_entry.text = lobby_player_name
+			name_entry.placeholder_text = "Your name"
+			name_entry.max_length = 20
+			name_entry.editable = not network_room
+			name_entry.position = Vector2(7, 82); name_entry.size = Vector2(110, 28)
+			name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_entry.add_theme_font_size_override("font_size", 12)
+			name_entry.add_theme_color_override("font_color", CREAM)
+			var field_style := StyleBoxFlat.new()
+			field_style.bg_color = Color("35271c"); field_style.border_color = Color("c5904b")
+			field_style.set_border_width_all(1); field_style.set_corner_radius_all(7)
+			name_entry.add_theme_stylebox_override("normal", field_style)
+			name_entry.add_theme_stylebox_override("focus", field_style)
+			name_entry.text_changed.connect(_on_lobby_name_changed)
+			name_entry.editable = not network_room
+			slot.add_child(name_entry)
+			var host_status := _make_child_label(slot, ("HOST  •  " if is_host else "YOU  •  ") + ("READY" if is_ready else "WAITING"), 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+			host_status.name = "LocalReadyStatusLabel"
+		else:
+			_make_child_label(slot, member_name + ("  •  HOST" if is_host else ""), 10, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+			_make_child_label(slot, ("READY" if is_ready else "WAITING"), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+	else:
+		var empty_avatar := _make_child_panel(slot, Rect2(29, 10, 66, 66), Color(0.20, 0.17, 0.13, 1.0))
+		empty_avatar.add_theme_stylebox_override("panel", _circle_style(Color(0.20, 0.17, 0.13, 1.0), Color("8d785f")))
+		_make_child_label(slot, "+", 30, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(29, 9, 66, 66))
+		_make_child_label(slot, "OPEN SLOT", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+		_make_child_label(slot, "Waiting", 10, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 
 
 func _leave_room_to_menu() -> void:
@@ -1452,8 +1487,8 @@ func update_lobby_players(players: Array) -> void:
 		if local_index >= 0:
 			lobby_players[local_index]["character"] = ""
 			lobby_players[local_index]["ready"] = false
-	if current_screen == "waiting_room": build_waiting_room()
-	elif current_screen == "character_select": build_character_select()
+	if current_screen == "waiting_room": _refresh_waiting_room()
+	elif current_screen == "character_select": _refresh_character_select()
 
 
 func _add_player_avatar(parent: Control, character: String) -> void:
@@ -1532,14 +1567,37 @@ func build_character_select() -> void:
 		var is_selected := selected_character == character
 		var button_text := "SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT")
 		var select := make_button(card, button_text, Callable(self, "_select_character").bind(character), 108, 38, is_selected)
+		select.name = "CharacterSelect_%d" % i
 		select.position = Vector2(43, 174)
 		select.disabled = is_selected or reserved
 		if reserved: select.tooltip_text = "Selected by " + str(character_reservations[character])
 	var selection_text := selected_character if not selected_character.is_empty() else "Choose one character"
-	_make_child_label(self, "Selected: " + selection_text, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(220, 590, 620, 30))
+	var selected_label := _make_child_label(self, "Selected: " + selection_text, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(220, 590, 620, 30))
+	selected_label.name = "CharacterSelectionLabel"
 	var return_room := make_button(self, "RETURN TO ROOM", Callable(self, "build_waiting_room"), 230, 48, true)
+	return_room.name = "CharacterReturnButton"
 	return_room.position = Vector2(1000, 590); return_room.disabled = selected_character.is_empty()
 	_make_child_label(self, "Characters are reserved by the server in online rooms.", 12, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(330, 650, 620, 22))
+
+
+func _refresh_character_select() -> void:
+	for i in CHARACTERS.size():
+		var character: String = CHARACTERS[i]
+		var button := find_child("CharacterSelect_%d" % i, true, false) as Button
+		if button == null: continue
+		var reserved := character_reservations.has(character)
+		var is_selected := selected_character == character
+		var view_state := [reserved, is_selected, str(character_reservations.get(character, ""))]
+		if button.has_meta("selection_state") and button.get_meta("selection_state") == view_state: continue
+		button.set_meta("selection_state", view_state)
+		button.text = "SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT")
+		button.disabled = is_selected or reserved
+		button.tooltip_text = "Selected by " + str(character_reservations[character]) if reserved else ""
+		GameUI.apply_menu_button(button, "red" if is_selected else "wood")
+	var label := find_child("CharacterSelectionLabel", true, false) as Label
+	if label: label.text = "Selected: " + (selected_character if not selected_character.is_empty() else "Choose one character")
+	var return_button := find_child("CharacterReturnButton", true, false) as Button
+	if return_button: return_button.disabled = selected_character.is_empty()
 
 
 func _select_character(character: String) -> void:
@@ -1578,7 +1636,7 @@ func _confirm_character_selection(character: String, overlay: Control) -> void:
 	if index >= 0:
 		lobby_players[index]["character"] = character
 		lobby_players[index]["ready"] = false
-	build_character_select()
+	_refresh_character_select()
 
 
 func update_character_reservations(reservations: Dictionary) -> void:
@@ -1589,7 +1647,7 @@ func update_character_reservations(reservations: Dictionary) -> void:
 		if local_index >= 0:
 			lobby_players[local_index]["character"] = ""
 			lobby_players[local_index]["ready"] = false
-	if current_screen == "character_select": build_character_select()
+	if current_screen == "character_select": _refresh_character_select()
 
 
 func _character_sigil(index: int) -> String:

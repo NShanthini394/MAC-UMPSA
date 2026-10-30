@@ -94,8 +94,8 @@ static func show_disconnected(app: Control, message: String) -> void:
 static func connection_picker(parent: Control, app: Control, rect: Rect2, label: Label, joining: bool) -> void:
 	var picker := OptionButton.new()
 	picker.name = "ConnectionMode"
-	picker.add_item("Same Wi-Fi")
-	picker.add_item("Internet (different networks)")
+	picker.add_item("Local Wi-Fi / hotspot")
+	picker.add_item("Internet (recommended)")
 	picker.selected = 1 if app.internet_mode else 0
 	picker.position = rect.position; picker.size = rect.size
 	picker.add_theme_font_size_override("font_size", 15)
@@ -105,8 +105,8 @@ static func connection_picker(parent: Control, app: Control, rect: Rect2, label:
 	var update := func(index: int):
 		app.internet_mode = index == 1
 		if joining:
-			label.text = "Internet is required. Friends can use different networks." if app.internet_mode else "Keep both devices on the same Wi-Fi."
+			label.text = "Works on the same or different networks, including university Wi-Fi." if app.internet_mode else "Home Wi-Fi or personal hotspot. University/shared Wi-Fi may block local rooms; use Internet instead."
 		else:
-			label.text = "The online server runs the room.\nFriends can use different networks.\nShare only the room code.\n\n5–10 players · one secret Nenek Kebayan" if app.internet_mode else "This device will host the room.\nFriends join on the same Wi-Fi.\nShare only the room code.\n\n5–10 players · keep the host's game open."
+			label.text = "Works on the same or different networks.\nRecommended for university Wi-Fi.\nShare only the room code.\n\n5–10 players · one secret Nenek Kebayan" if app.internet_mode else "For home Wi-Fi or a personal hotspot.\nUniversity Wi-Fi may block local rooms.\nShare only the room code.\n\n5–10 players · keep the host's game open."
 	picker.item_selected.connect(update)
 	update.call(picker.selected)

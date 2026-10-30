@@ -48,6 +48,22 @@ Do not use this project demo as a paid competitive service without further work.
 Run `python tools/prepare_render_server.py` from the main project after changing
 server logic, then upload the updated generated folder. Do not edit generated
 copies independently. Do not upload `.godot` folders.
-Docker Desktop is not installed on the development PC: the Linux image must still
-be built and verified by Render. Local tests exercise Godot and the same gateway
-on Windows; they do not prove the Linux image or public TLS deployment succeeds.
+Docker Desktop is not installed on the development PC. Render built the Linux
+image successfully on 2026-10-30. The deployed endpoint is
+`https://nenek-kebayan-server.onrender.com`, with the game at
+`wss://nenek-kebayan-server.onrender.com/ws`. A real five-client public WSS test
+passed creation/joining, private roles, the 15-second countdown and movement.
+Android device and university-network testing is still required.
+
+## Understanding deployment logs
+
+"Deploy succeeded / Live" means Render accepted the service's startup and health
+check. It does not mean every subsequent incoming request is valid.
+Godot's `Not enough response headers, got: 3, expected >= 4` message can be
+reproduced by sending a plain HTTP GET directly to the internal game listener.
+That listener expects a WebSocket upgrade. An automated port probe is a possible
+source; the error alone does not identify the caller. Normal HTTP health checks
+must target the public gateway on `$PORT` (10000) at `/healthz`, not game port 7000.
+Repeated requests to the gateway health endpoint did not reproduce the message.
+Do not suppress all Godot errors to hide it. If the health endpoint or real game
+connections fail, inspect the current logs and the selected HTTP port.

@@ -32,7 +32,7 @@ enabled=PackedStringArray("res://addons/kampung_google/plugin.cfg")
 server_address="127.0.0.1"
 server_port=7000
 discovery_port=7001
-online_server_url=""
+online_server_url="wss://nenek-kebayan-server.onrender.com/ws"
 
 [physics]
 

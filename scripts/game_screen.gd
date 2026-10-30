@@ -14,11 +14,19 @@ func build(app) -> void:
 	world.name = "GameWorld"
 	app.game_world = world
 	app.add_child(world)
-	var hud := CanvasLayer.new()
+	var hud_layer := CanvasLayer.new()
+	hud_layer.name = "GameHUDLayer"
+	hud_layer.layer = 10
+	app.add_child(hud_layer)
+	var hud := Control.new()
 	hud.name = "GameHUD"
-	hud.layer = 10
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_layer.add_child(hud)
+	hud.set_anchors_preset(Control.PRESET_CENTER)
+	hud.offset_left = -640; hud.offset_right = 640
+	hud.offset_top = -360; hud.offset_bottom = 360
 	app.game_hud = hud
-	app.add_child(hud)
+	app._update_canvas_layout()
 	var map_region: Rect2 = GameData.MAPS[app.selected_map]["region"]
 	var world_size: Vector2 = MapGeometry.world_size(app.selected_map)
 	var map_scale := maxf(world_size.x / map_region.size.x, world_size.y / map_region.size.y)
@@ -46,7 +54,7 @@ func build(app) -> void:
 	var header: Panel = app.make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	app._make_child_label(header, GameData.MAPS[app.selected_map]["name"], 19, GameData.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(18, 12, 440, 32))
 	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
-	var progress: Label = app._make_child_label(header, "TASKS  %d / %d    •    CLUES  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
+	var progress: Label = app._make_child_label(header, "TASKS  %d / %d    •    CLUES  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.clue_points.size() if not app.room_code.is_empty() else app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
 	progress.name = "ProgressLabel"
 	progress.visible = not app.player_is_impostor
 	var task_panel_height := 438.0 if app.village_tasks_expanded else 68.0
@@ -79,7 +87,6 @@ func build(app) -> void:
 		station.set("task_index",i)
 		station.visible = app.completed_tasks[i] == 0
 		world.add_child(station)
-	_add_world_marker(world, MapGeometry.gong_point(app.selected_map), "◉", Color("ffdb6b"), "MeetingGongMarker")
 	var online_match: bool = not app.room_code.is_empty() and app.network_manager != null and app.network_manager.is_connected_to_room_server()
 	if online_match:
 		var player_scene: PackedScene = load("res://scenes/player.tscn") as PackedScene
@@ -107,7 +114,7 @@ func build(app) -> void:
 				_configure_player_camera_and_vision(actor)
 			actor.call("set_sleeping", bool(member.get("sleeping", false)))
 			actor.set("inactive", not bool(member.get("alive", true)))
-	var clue_points: Array = app.clue_points if app.clue_points.size() == 3 else MapGeometry.clue_candidates(app.selected_map).slice(0, 3)
+	var clue_points: Array = app.clue_points if not app.clue_points.is_empty() else MapGeometry.clue_candidates(app.selected_map).slice(0, 3)
 	var character_clues: Array = GameData.CHARACTER_CLUES.get(app.impostor_character, [])
 	for i in clue_points.size():
 		if app.player_is_impostor: continue

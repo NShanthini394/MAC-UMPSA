@@ -7,6 +7,7 @@ static func menu_button_style(variant: String = "wood", state: String = "normal"
 	if not _button_textures.has(key):
 		var colors: Array = {
 			"wood": ["75421f", "3b2116", "a36132"],
+			"grey": ["77746e", "393937", "a09b91"],
 			"red": ["a43220", "601a14", "d65a2b"],
 			"green": ["416442", "223b29", "63905a"],
 			"light": ["fff8e9", "ead7b4", "fffdf5"]

@@ -86,22 +86,24 @@ func validate_server_countdown() -> void:
 		var room := ready_room(count)
 		server.rooms["TIMER"] = room
 		server.call("_tick_lobby_countdown","TIMER",0.0)
-		check(room["start_countdown"]==15.0 and not room["started"], "%d-player room begins with a full 15 seconds"%count)
+		check(room.get("start_countdown", -1.0) < 0 and not room["started"], "%d ready players wait for the host"%count)
 		server.call("_try_start_room","TIMER",true,2)
 		check(not room["started"], "Host cannot bypass the countdown")
-		server.call("_tick_lobby_countdown","TIMER",14.9)
-		check(not room["started"], "Room stays in lobby before 15 seconds")
-		server.call("_tick_lobby_countdown","TIMER",0.1)
-		check(bool(room["started"]), "Room starts when the 15-second wait finishes")
+		room["start_countdown"] = Network.LOBBY_WAIT_SECONDS
+		server.call("_tick_lobby_countdown","TIMER",4.9)
+		check(not room["started"], "Room stays in lobby before five seconds")
+		server.call("_tick_lobby_countdown","TIMER",0.2)
+		check(bool(room["started"]), "Room starts when the five-second wait finishes")
 	var room := ready_room(5)
 	server.rooms["TIMER"] = room
-	server.call("_tick_lobby_countdown","TIMER",0.0)
+	room["start_countdown"] = Network.LOBBY_WAIT_SECONDS
 	room["players"][3]["ready"] = false
 	server.call("_tick_lobby_countdown","TIMER",4.0)
-	check(room["start_countdown"] < 0 and not room["started"], "Unready cancels the countdown")
+	check(room["start_countdown"] < 0 and not room["started"], "Invalid readiness cancels the countdown defensively")
 	room["players"][3]["ready"] = true
 	server.call("_tick_lobby_countdown","TIMER",0.0)
-	check(room["start_countdown"]==15.0,"Everyone ready again restarts the full wait")
+	check(room["start_countdown"] < 0,"Recovered readiness still needs another host Start")
+	room["start_countdown"] = Network.LOBBY_WAIT_SECONDS
 	room["players"].erase(6)
 	server.call("_tick_lobby_countdown","TIMER",2.0)
 	check(room["start_countdown"] < 0 and not room["started"], "Fewer than five players cancels the LAN countdown")
@@ -145,21 +147,19 @@ func validate_app() -> void:
 	await process_frame
 	app.call("_process",0.0)
 	var action := app.find_child("LobbyActionButton",true,false) as Button
-	check(action != null and action.text == "ARE YOU READY?", "Waiting room asks ARE YOU READY?")
+	check(action != null and action.text == "START", "Practice host has a Start button")
 	app.call("_on_lobby_primary_action")
 	app.call("_process",0.0)
-	check(app.practice_start_countdown==15.0 and action.text.contains("00:15"), "Ready starts the visible offline 15-second countdown")
-	app.call("_process",14.0)
+	check(app.practice_start_countdown==5.0 and action.text.contains("5"), "Start begins the visible five-second practice countdown")
+	app.call("_process",4.0)
 	check(app.current_screen=="waiting_room" and app.practice_start_countdown==1.0,"Offline waits the full duration")
+	var locked_character: String = app.selected_character
 	app.call("_confirm_character_selection","Mahsuri",null)
 	await process_frame
 	await process_frame
-	check(app.practice_start_countdown < 0 and not app.call("_local_player_is_ready"),"Changing characters cancels the old practice countdown")
-	await app.call("build_waiting_room")
-	app.call("_on_lobby_primary_action")
-	app.call("_process",14.0)
+	check(app.selected_character == locked_character and app.practice_start_countdown == 1.0,"Character choice locks during countdown")
 	app.call("_process",1.0)
-	check(app.current_screen=="role_reveal", "Offline leaves the waiting room at 15 seconds")
+	check(app.current_screen=="role_reveal", "Practice leaves the waiting room at five seconds")
 	# Wait for the real role reveal before exercising joystick input in gameplay.
 	var deadline := Time.get_ticks_msec()+8000
 	while app.current_screen != "game" or not is_instance_valid(app.player_body):

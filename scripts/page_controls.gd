@@ -38,7 +38,9 @@ func configure(controller: Control) -> void:
 	name = "PageControls"
 	_root = Control.new()
 	_root.name = "PageControlsRoot"
-	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.set_anchors_preset(Control.PRESET_CENTER)
+	_root.offset_left = -640; _root.offset_right = 640
+	_root.offset_top = -360; _root.offset_bottom = 360
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 	_back = UI.make_button(_root, "< BACK", Callable(app, "navigate_back"), 100, 34)
@@ -104,8 +106,8 @@ func refresh(force: bool = false) -> void:
 	if not is_instance_valid(_root): return
 	var screen: String = app.current_screen
 	var menu := screen == "menu"
-	var playing := screen in ["game", "meeting"]
-	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select"]
+	var playing := screen == "game"
+	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select", "matchmaking", "meeting"]
 	var map_overlay: Node = app.find_child("MapOverlay",true,false)
 	var map_modal := is_instance_valid(map_overlay) and not map_overlay.is_queued_for_deletion()
 	var task_modal := playing and (int(app.task_overlay_index) >= 0 or map_modal)
@@ -218,7 +220,7 @@ func show_help() -> void:
 	guide.add_theme_font_size_override("normal_font_size", 16)
 	guide.add_theme_color_override("default_color", Data.CREAM)
 	guide.add_theme_constant_override("line_separation", 3)
-	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nFinish tasks, inspect clues, and vote at the gong.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nVillagers sleep until the match ends. They can watch nearby events but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers Nenek's nearby surroundings for 20 seconds. Door locking closes every entrance of her current section for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nMove with WASD, arrow keys, or the touch pad. Press E near a task."
+	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nComplete all eight tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 20 seconds, then vote or Skip within 10 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can watch but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
 

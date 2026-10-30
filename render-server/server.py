@@ -53,7 +53,7 @@ async def handle(reader, writer):
             except OSError:
                 await reply(writer, "503 Service Unavailable", "Game server starting\n")
                 return
-            await reply(writer, "200 OK", "Nenek Kebayan server ready\n")
+            await reply(writer, "200 OK", "Nenek Kebayan server ready\nlobby_protocol=3\n")
             return
         if method != "GET" or path.split("?", 1)[0] != "/ws" or headers.get("upgrade") != "websocket":
             await reply(writer, "404 Not Found", "Use /healthz or /ws\n")

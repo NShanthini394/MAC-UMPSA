@@ -1,5 +1,5 @@
 extends RefCounted
-## LAN hosting and joining screens; no provider account is needed for a guest.
+## Code-only online hosting/joining; no provider account is needed for a guest.
 const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
 
@@ -18,10 +18,10 @@ static func show_join(app: Control) -> void:
 	shade.name = "JoinRoomCodeOverlay"
 	shade.color = Color(0, 0, 0, 0.65)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	app.add_child(shade)
+	app._screen_ui_parent().add_child(shade)
 	var panel := UI.make_panel(shade, Rect2(360, 100, 560, 520), Color("24180f"))
 	UI.make_child_label(panel, "JOIN A ROOM", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 18, 510, 42))
-	UI.make_child_label(panel, "Select the same connection mode as your friends.\nEnter the host's five-character room code.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 64, 490, 48))
+	UI.make_child_label(panel, "Enter the host's five-character room code.\nYour devices can use the same or different networks.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 64, 490, 48))
 	UI.make_child_label(panel, "Player name", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 122, 460, 22))
 	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(50, 148, 460, 36)).max_length = 20
 	UI.make_child_label(panel, "Room code", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 212, 460, 22))
@@ -30,7 +30,7 @@ static func show_join(app: Control) -> void:
 	code.text_submitted.connect(func(_value: String): app.call("_join_room_with_code"))
 	var status := UI.make_child_label(panel, "", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 345, 490, 65))
 	status.name = "JoinRoomStatusLabel"
-	connection_picker(panel, app, Rect2(50, 300, 460, 36), status, true)
+	status.text = "Enter the host's code. Works on the same or different networks.\nAn internet connection is required."
 	var join := UI.make_button(panel, "JOIN ROOM", Callable(app, "_join_room_with_code"), 205, 46, true)
 	join.name = "JoinOnlineRoomButton"; join.position = Vector2(55, 430)
 	var close := UI.make_button(panel, "CANCEL", Callable(app, "_cancel_join_room"), 205, 46)
@@ -40,7 +40,7 @@ static func show_join(app: Control) -> void:
 static func build_host(app: Control) -> void:
 	app.add_background(load(Data.MENU_ART))
 	app.add_color_overlay(Color(0.04, 0.05, 0.055, 0.78))
-	var panel := UI.make_panel(app, Rect2(280, 90, 720, 540), Color("24180f"))
+	var panel := UI.make_panel(app._screen_ui_parent(), Rect2(280, 90, 720, 540), Color("24180f"))
 	panel.name = "MultiplayerHostPanel"
 	UI.make_child_label(panel, "PLAY WITH FRIENDS", 28, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(45, 18, 630, 42))
 	var close := UI.make_button(panel, "×", Callable(app, "navigate_back"), 42, 42)
@@ -55,13 +55,12 @@ static func build_host(app: Control) -> void:
 	UI.make_child_label(panel, "Player name", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 100, 310, 26))
 	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(370, 136, 310, 38)).max_length = 20
 	var explanation := UI.make_child_label(panel, "", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 232, 310, 144))
-	connection_picker(panel, app, Rect2(370, 184, 310, 36), explanation, false)
+	explanation.text = "Share the room code with your friends.\nWorks on the same or different networks.\n\n5–10 players · two secret Nenek Kebayan"
 	var status := UI.make_child_label(panel, "No Google or Huawei account is required for this test.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 382, 650, 56))
 	status.name = "CreateRoomStatusLabel"
 	var host := UI.make_button(panel, "CREATE ROOM", Callable(app, "_host_selected_room"), 300, 48, true)
-	host.name = "CreateOnlineRoomButton"; host.position = Vector2(40, 458)
-	var practice := UI.make_button(panel, "PRACTICE OFFLINE", Callable(app, "_start_local_practice_lobby"), 300, 48)
-	practice.name = "PracticeOfflineButton"; practice.position = Vector2(380, 458)
+	host.name = "CreateOnlineRoomButton"; host.position = Vector2(210, 458)
+
 
 
 static func show_created(app: Control) -> void:
@@ -69,12 +68,12 @@ static func show_created(app: Control) -> void:
 	shade.name = "CreateRoomOverlay"
 	shade.color = Color(0, 0, 0, 0.65)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	app.add_child(shade)
+	app._screen_ui_parent().add_child(shade)
 	var panel := UI.make_panel(shade, Rect2(350, 135, 580, 450), Color("24180f"))
 	UI.make_child_label(panel, "ONLINE ROOM CREATED" if app.internet_mode else "WI-FI ROOM CREATED", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 530, 42))
-	UI.make_child_label(panel, "Share this code with friends using Internet mode." if app.internet_mode else "Share this code with friends on the same Wi-Fi.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 70, 510, 36))
+	UI.make_child_label(panel, "Share this code with your friends." if app.internet_mode else "Share this code with friends on the same Wi-Fi.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 70, 510, 36))
 	UI.make_child_label(panel, app.room_code, 48, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 118, 510, 70))
-	UI.make_child_label(panel, "Friends only need this room code.\nUse Internet mode on each device." if app.internet_mode else "Friends only need this room code.\nTheir game will find your device automatically.", 17, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 204, 510, 64))
+	UI.make_child_label(panel, "Friends only need this room code.\nWorks on the same or different networks." if app.internet_mode else "Friends only need this room code.\nTheir game will find your device automatically.", 17, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 204, 510, 64))
 	UI.make_child_label(panel, "Keep the game open. Matches require 5–10 players.\nAn internet connection is required on every device." if app.internet_mode else "Allow the game on Private networks if Windows asks.\nKeep the host's game open. Matches require 5–10 players.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 277, 510, 58))
 	var copy := UI.make_button(panel, "COPY ROOM CODE", Callable(app, "_copy_created_room_code"), 205, 48)
 	copy.name = "CopyCreatedRoomCodeButton"; copy.position = Vector2(55, 362)
@@ -83,30 +82,10 @@ static func show_created(app: Control) -> void:
 
 
 static func show_disconnected(app: Control, message: String) -> void:
-	var panel := UI.make_panel(app, Rect2(360, 205, 560, 310), Color("24180f"))
+	var panel := UI.make_panel(app._screen_ui_parent(), Rect2(360, 205, 560, 310), Color("24180f"))
 	panel.name = "ConnectionLostOverlay"
 	UI.make_child_label(panel, "CONNECTION LOST", 25, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 510, 42))
 	UI.make_child_label(panel, message, 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(40, 88, 480, 100))
 	var close := UI.make_button(panel, "OK", func(): panel.queue_free(), 160, 44, true)
 	close.position = Vector2(200, 225)
 
-
-static func connection_picker(parent: Control, app: Control, rect: Rect2, label: Label, joining: bool) -> void:
-	var picker := OptionButton.new()
-	picker.name = "ConnectionMode"
-	picker.add_item("Local Wi-Fi / hotspot")
-	picker.add_item("Internet (recommended)")
-	picker.selected = 1 if app.internet_mode else 0
-	picker.position = rect.position; picker.size = rect.size
-	picker.add_theme_font_size_override("font_size", 15)
-	picker.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UI.apply_menu_button(picker)
-	parent.add_child(picker)
-	var update := func(index: int):
-		app.internet_mode = index == 1
-		if joining:
-			label.text = "Works on the same or different networks, including university Wi-Fi." if app.internet_mode else "Home Wi-Fi or personal hotspot. University/shared Wi-Fi may block local rooms; use Internet instead."
-		else:
-			label.text = "Works on the same or different networks.\nRecommended for university Wi-Fi.\nShare only the room code.\n\n5–10 players · one secret Nenek Kebayan" if app.internet_mode else "For home Wi-Fi or a personal hotspot.\nUniversity Wi-Fi may block local rooms.\nShare only the room code.\n\n5–10 players · keep the host's game open."
-	picker.item_selected.connect(update)
-	update.call(picker.selected)

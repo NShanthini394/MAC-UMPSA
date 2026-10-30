@@ -2,6 +2,7 @@ extends RefCounted
 ## Shared match rules. Time is supplied by the server (or local practice clock).
 
 const MapGeometry = preload("res://scripts/map_geometry.gd")
+const MatchRules = preload("res://scripts/match_rules.gd")
 const SLEEP_RANGE := 105.0
 const SLEEP_COOLDOWN := 25.0
 const SABOTAGE_COOLDOWN := 120.0
@@ -91,15 +92,7 @@ static func try_sabotage(room: Dictionary, caster_id: int, kind: String, now: fl
 
 
 static func winner(room: Dictionary) -> String:
-	var villagers := 0
-	var nenek := 0
-	for player in room.get("players", {}).values():
-		if not is_active(player): continue
-		if str(player.get("role", "villager")) == "nenek_kebayan": nenek += 1
-		else: villagers += 1
-	if nenek == 0: return "villagers"
-	if villagers == 0: return "nenek_kebayan"
-	return ""
+	return MatchRules.winner(room)
 
 
 static func snapshot(room: Dictionary, player: Dictionary, now: float) -> Dictionary:

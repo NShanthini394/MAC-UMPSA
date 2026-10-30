@@ -72,25 +72,19 @@ func run_checks() -> void:
 	if not await wait_for(func() -> bool: return server.get("rooms")[code]["players"].size() == 5, "all players join"): return
 	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("lobby_players").size() == 5), "all lobby rosters"): return
 	await host.call("build_waiting_room")
-	for app in apps: app.get("network_manager").toggle_ready()
-	if not await wait_for(func() -> bool: return server.call("_all_ready", server.get("rooms")[code]), "ready players"): return
-	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown > 0), "synchronized countdown"): return
-	check(apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown > 13 and a.get("network_manager").lobby_countdown <= 15), "All five clients receive the same 15-second lobby wait")
+	for app in apps.slice(1): app.get("network_manager").toggle_ready()
+	if not await wait_for(func() -> bool: return server.call("_all_ready", server.get("rooms")[code]), "ready guests"): return
+	check(apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown < 0), "Guests ready does not auto-start the match")
 	apps[1].get("network_manager").toggle_ready()
-	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown < 0), "countdown cancellation for everyone"): return
-	check(not server.get("rooms")[code]["started"], "Unready cancels the real network countdown")
+	await create_timer(0.1).timeout
+	check(server.get("rooms")[code]["players"][apps[1].network_manager.local_peer_id()]["ready"], "Guest cannot undo readiness")
 	var ready_at := Time.get_ticks_msec()
-	apps[1].get("network_manager").toggle_ready()
-	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown > 0), "restarted countdown"): return
-	await process_frame
-	await process_frame
-	for app in apps:
-		var status := app.find_child("LobbyStatusLabel",true,false) as Label
-		check(status != null and status.text.contains("STARTING IN"), "Each waiting-room screen displays the server countdown")
 	host.get("network_manager").start_match()
+	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown > 0), "host starts five-second countdown"): return
+	check(apps.all(func(a: Control) -> bool: return a.get("network_manager").lobby_countdown > 3 and a.get("network_manager").lobby_countdown <= 5), "All clients receive the host's five-second countdown")
 	if not await wait_for(func() -> bool: return apps.all(func(a: Control) -> bool: return a.get("current_screen") == "game" and is_instance_valid(a.get("player_body"))), "game views after lobby countdown and role reveal", 32.0): return
 	check(true, "Five real app screens enter the match")
-	check(Time.get_ticks_msec()-ready_at >= 15000,"LAN match does not bypass the 15-second waiting period")
+	check(Time.get_ticks_msec()-ready_at >= 5000,"Match does not bypass the five-second countdown")
 	for app in apps:
 		var players: Array = app.get("lobby_players")
 		for member in players:

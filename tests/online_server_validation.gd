@@ -65,15 +65,17 @@ func validate(url: String) -> void:
 	check(clients.all(func(client: Node) -> bool: return client.active_room_code == clients[0].active_room_code), "Five clients join the same public-server room")
 	if not await wait_for(func() -> bool: return state.all(func(s: Dictionary) -> bool: return s["members"].size() == 5), "five lobby rosters"): return
 	check(state.all(func(s: Dictionary) -> bool: return s["members"].all(func(m: Dictionary) -> bool: return not m.has("role"))), "Lobby rosters keep roles private")
-	for client in clients: client.toggle_ready()
-	if not await wait_for(func() -> bool: return clients.all(func(c: Node) -> bool: return c.lobby_countdown > 0), "all ready countdown"): return
+	for client in clients.slice(1): client.toggle_ready()
+	if not await wait_for(func() -> bool: return state[0]["members"].all(func(m: Dictionary) -> bool: return m["host"] or m["ready"]), "ready guests"): return
+	check(clients[0].lobby_countdown < 0, "Guests ready waits for host Start")
 	var ready_at := Time.get_ticks_msec()
 	clients[0].start_match()
+	if not await wait_for(func() -> bool: return clients.all(func(c: Node) -> bool: return c.lobby_countdown > 0), "five-second countdown"): return
 	await create_timer(0.3).timeout
-	check(state.all(func(s: Dictionary) -> bool: return not s["started"]), "Start request cannot bypass the 15-second wait")
+	check(state.all(func(s: Dictionary) -> bool: return not s["started"]), "Start request cannot bypass the five-second wait")
 	if not await wait_for(func() -> bool: return state.all(func(s: Dictionary) -> bool: return s["started"]), "five active game clients", 25.0): return
-	check(Time.get_ticks_msec() - ready_at >= 14000, "Public server honours the lobby countdown")
-	check(state.filter(func(s: Dictionary) -> bool: return s["role"] == "nenek_kebayan").size() == 1, "Exactly one private Nenek role")
+	check(Time.get_ticks_msec() - ready_at >= 4900, "Public server honours the lobby countdown")
+	check(state.filter(func(s: Dictionary) -> bool: return s["role"] == "nenek_kebayan").size() == 2, "Exactly two private Nenek roles")
 	if not await wait_for(func() -> bool: return not state[0]["positions"].is_empty(), "initial position snapshot"): return
 	var peer_id: int = clients[0].local_peer_id()
 	var origin := Vector2.ZERO

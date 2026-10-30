@@ -4,6 +4,7 @@ extends Node
 const MUSIC_PATH := "res://assets/audio/kampung_misteri_bgm.wav"
 const SFX_PATHS := {
 	"ui": "res://assets/audio/ui_click.wav",
+	"gong": "res://assets/audio/gong.mp3",
 	"open": "res://assets/audio/task_open.wav",
 	"collect": "res://assets/audio/object_pickup.wav",
 	"clue": "res://assets/audio/clue_found.wav",
@@ -17,6 +18,8 @@ var music_player: AudioStreamPlayer
 var sfx_players: Array[AudioStreamPlayer] = []
 var cached_streams: Dictionary = {}
 var next_player := 0
+var gong_player: AudioStreamPlayer
+var gong_fade: Tween
 
 
 func _ready() -> void:
@@ -40,9 +43,24 @@ func _ready() -> void:
 		add_child(player)
 		sfx_players.append(player)
 	call_deferred("play_sfx", "ui")
+	gong_player = AudioStreamPlayer.new()
+	gong_player.name = "MeetingGongAudio"
+	gong_player.stream = load(SFX_PATHS["gong"])
+	add_child(gong_player)
 
 
 func play_sfx(kind: String) -> void:
+	if kind == "gong":
+		if gong_fade and gong_fade.is_valid(): gong_fade.kill()
+		gong_player.volume_db = -1.0
+		gong_player.play()
+		# The supplied recording is 54 seconds long. Keep one clear strike and
+		# fade its tail so it does not drown out the discussion or overlap later hits.
+		gong_fade = create_tween()
+		gong_fade.tween_interval(4.5)
+		gong_fade.tween_property(gong_player,"volume_db",-40.0,2.5)
+		gong_fade.tween_callback(gong_player.stop)
+		return
 	if not SFX_PATHS.has(kind) or sfx_players.is_empty():
 		return
 	if not cached_streams.has(kind):

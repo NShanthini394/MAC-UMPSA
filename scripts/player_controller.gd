@@ -31,17 +31,17 @@ func configure(character: String, player_name: String, local_player: bool, netwo
 
 
 func set_input_direction(direction: Vector2) -> void:
-	_move_direction = Vector2.ZERO if inactive or sleeping else direction.limit_length(1.0)
+	_move_direction = Vector2.ZERO if inactive else direction.limit_length(1.0)
 
 
-func set_sleeping(value: bool) -> void:
-	if sleeping == value and _sleep_badge != null: return
+func set_sleeping(value: bool, animate: bool = false) -> void:
+	if sleeping == value: return
 	sleeping = value
 	if sleeping:
 		_move_direction = Vector2.ZERO
 		velocity = Vector2.ZERO
 		if _has_network_target: global_position = _network_target
-	character_actor.call("set_sleeping", sleeping)
+	character_actor.call("set_sleeping", sleeping, animate)
 	if _sleep_badge == null:
 		_sleep_badge = Label.new()
 		_sleep_badge.text = "Z z z"
@@ -57,6 +57,16 @@ func set_sleeping(value: bool) -> void:
 		_sleep_badge.material = badge_material
 		add_child(_sleep_badge)
 	_sleep_badge.visible = sleeping
+	if animate and sleeping:
+		_sleep_badge.modulate.a = 0.0
+		var badge_tween := create_tween()
+		badge_tween.tween_property(_sleep_badge, "modulate:a", 1.0, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	else:
+		_sleep_badge.modulate.a = 1.0
+
+
+func play_sleep_spell_blow(direction: Vector2) -> void:
+	character_actor.call("play_sleep_spell_blow", direction)
 
 
 func set_network_target(target: Vector2) -> void:
@@ -65,6 +75,8 @@ func set_network_target(target: Vector2) -> void:
 
 
 func _ready() -> void:
+	collision_layer = 2
+	collision_mask = 1
 	_network_target = global_position
 	follow_camera.enabled = is_local_player
 	set_physics_process(is_local_player and not is_network_driven)
@@ -74,7 +86,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_local_player or is_network_driven:
 		return
-	if sleeping or inactive:
+	if inactive:
 		velocity = Vector2.ZERO
 		character_actor.call("set_running", false)
 		return
@@ -93,7 +105,7 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	if not is_network_driven or not _has_network_target:
 		return
-	if sleeping or inactive:
+	if inactive:
 		global_position = _network_target
 		character_actor.call("set_running", false)
 		return

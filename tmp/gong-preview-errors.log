@@ -1,0 +1,16 @@
+ERROR: Failed to open log file for writing: user://logs/godot.log
+   at: rotate_file (core/io/logger.cpp:169)
+ERROR: Can't create shader cache folder, no shader caching will happen: user://
+   at: RendererCompositorRD (servers/rendering/renderer_rd/renderer_compositor_rd.cpp:337)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/maps/istana_puteri_gunung_ledang.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+   at: load_from_file (core/io/image.cpp:2780)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tmp/gong_preview.gd:11)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/maps/rumah_pak_kaduk.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+   at: load_from_file (core/io/image.cpp:2780)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tmp/gong_preview.gd:11)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/maps/rumah_mahsuri.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+   at: load_from_file (core/io/image.cpp:2780)
+   GDScript backtrace (most recent call first):
+       [0] run (res://tmp/gong_preview.gd:11)

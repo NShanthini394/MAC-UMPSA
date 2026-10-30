@@ -1,6 +1,6 @@
 # Shared village chores and parchment map
 
-All three maps use the same eight Orang Kampung tasks, defined once in
+All three maps use the same twelve Orang Kampung tasks, defined once in
 `scripts/game_data.gd`. Cooking and lighting firewood are independent tasks;
 neither requires completion of the other. Nenek Kebayan cannot complete them.
 
@@ -14,6 +14,10 @@ neither requires completion of the other. Nenek Kebayan cannot complete them.
 | Masukkan guli dalam bulatan | Pull back to aim and set strength, release, and land four rolling marbles fully inside the circle | 4 |
 | Baiki lampu | Join three matching colored, lettered wire ends | 3 |
 | Susun selipar | Match four left slippers to their right partners | 4 |
+| Tumbuk herba | Add ginger, turmeric and leaves, then pound five times | 4 |
+| Siram tanaman | Move the watering can to each of four dry plants | 4 |
+| Anyam tikar pandan | Place four pandan strips in matching numbered rows | 4 |
+| Baiki jala | Join four loose cords to matching numbered knots | 4 |
 
 The boards support mouse and touch dragging. Object placement also supports
 tapping the source and then its target, except the shooting game. Sweeping
@@ -21,7 +25,7 @@ requires an actual stroke; cooking requires the timing window. Wrong actions do
 not advance progress.
 Input waits for server acknowledgement after each successful LAN step, and
 finger releases are still tracked while waiting. Reopening a board resumes its
-acknowledged stage. Completing all eight tasks wins the match for the villagers.
+acknowledged stage. Completing all twelve tasks wins the match for the villagers.
 
 ### Guli shooting
 
@@ -37,21 +41,25 @@ finish before sending a LAN progress update.
 
 ## Locations
 
-Each map places its eight tasks in eight distinct sections. The precise clear
+Each map places its twelve tasks at distinct stations in suitable rooms and outdoor sections. The precise clear
 floor coordinates and assigned section IDs are in `scripts/map_layouts.gd`.
 The kitchen location is next to the stove, outside its collision footprint.
 Added station symbols identify the relevant activity without blocking paths.
 
 | Task | Palace | Pak Kaduk homestead | Mahsuri coastal house |
 | --- | --- | --- | --- |
-| Masak nasi | Dapur | Dapur | Dapur |
-| Nyalakan kayu api | Taman Timur | Reban Ayam yard | Laman belakang approach |
+| Masak nasi | Dapur | Dapur | Dapur, near the stove |
+| Nyalakan kayu api | Taman Timur, southern paved corner | Reban Ayam yard | Laman belakang approach |
 | Sapu sampah | Balairung Takhta | Ruang Keluarga | Ruang Tamu |
-| Sidai kain | Guest-room drying rack | Perigi dan Halaman Timur | Upper pier clothesline |
-| Cari bunga | Taman Barat | Kebun | Halaman dan Kebun |
-| Masukkan guli dalam bulatan | Dewan Makan | Ruang Makan | Ruang Makan |
+| Sidai kain | Taman Timur, sunny northern walkway | Perigi dan Halaman Timur | Upper pier |
+| Cari bunga | Taman Barat, pavilion steps | Kebun | Halaman dan Kebun |
+| Masukkan guli dalam bulatan | Dewan Makan, clear floor | Ruang Makan | Open front/east yard |
 | Baiki lampu | Bilik Senjata | Bilik Tidur | Bilik Tidur |
-| Susun selipar | Lobi | Serambi | Serambi dan Tangga |
+| Susun kasut | Lobi | Serambi | Front stairs |
+| Tumbuk herba | Dapur, separate preparation corner | Dapur | Dapur, preparation corner |
+| Siram tanaman | Taman Barat, garden walkway | Kebun | Garden edge, west of front stairs |
+| Anyam tikar | Bilik Tetamu, clear floor | Serambi | Serambi |
+| Baiki jala | Taman Barat, walkway beside the pond | East yard | Lower pier |
 
 Local and server task interactions check range and the clear path to a station,
 including locked doors. The nearby-task card, task list, guide routes, station
@@ -67,7 +75,7 @@ connections from the visual reference image. A russet arrow marks the local
 player; numbered task markers become green checks when completed.
 
 PETA shows the legend and the selected task's number, wrapped name, and section.
-TUGAS lists the eight chores without repeating selection details or highlighting
+TUGAS lists the twelve chores without repeating selection details or highlighting
 a selected number. The instruction reads "Pilih nombor tugasan untuk melihat
 lokasinya:"; the old "Seret peta" sentence has been removed. Long names and
 section names occupy separate aligned rows.
@@ -108,8 +116,18 @@ godot --headless --path . --script res://tests/village_network_validation.gd
 - Five-player LAN: 58 checks, zero failures, including real client board input,
   all eight shared tasks, and victory on all clients.
 
-`tests/village_tasks_preview.tscn` renders all three parchment maps, eight task
+`tests/village_tasks_preview.tscn` renders all three parchment maps, twelve task
 boards, and the waiting instruction into `.godot/page-previews/`.
 `tests/marble_map_preview.tscn` captures clean task/PETA tabs, green and red aiming
 previews, and a rolling shot.
 Touch events were tested on Windows; physical phone builds remain untested.
+
+## Additional village tasks (2026-10-30)
+
+All maps now have twelve tasks. The four added boards share the existing mouse, touch, tap-to-place, progress and server acknowledgement rules. The HUD and map task lists scroll to reach every entry. Herbs are prepared in the kitchen; plants are watered in the garden; mats are woven in the guest room or veranda; nets are repaired in the armoury, east yard or pier. The standalone render-server task data and map placements are synchronized; an existing hosted server requires deployment of these updated files.
+
+Validation: village task checks cover all twelve boards, collision clearance, map entries, HUD expand/collapse and offline victory on all three maps.
+
+## Palace and Mahsuri placement review (2026-10-30)
+
+Both maps include all twelve playable tasks with realistic outlined station props. Locations were reviewed against the actual map artwork and synchronized to the standalone server package. All 712 task checks passed, including player clearance, assigned sections, routes from spawn, click/touch station selection and offline completion on all maps. Nearby guidance passed 229 checks. Placement previews are saved in `output/task-art/task-locations-istana.png` and `output/task-art/task-locations-mahsuri.png`. Hosted servers must run the updated map data to use the new authoritative locations.

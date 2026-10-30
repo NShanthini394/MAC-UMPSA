@@ -55,7 +55,7 @@ static func build_host(app: Control) -> void:
 	UI.make_child_label(panel, "Player name", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 100, 310, 26))
 	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(370, 136, 310, 38)).max_length = 20
 	var explanation := UI.make_child_label(panel, "", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(370, 232, 310, 144))
-	explanation.text = "Share the room code with your friends.\nWorks on the same or different networks.\n\n5–10 players · two secret Nenek Kebayan"
+	explanation.text = "Share the room code with your friends.\nWorks on the same or different networks.\n\n1–10 players · bots join after 2 minutes"
 	var status := UI.make_child_label(panel, "No Google or Huawei account is required for this test.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 382, 650, 56))
 	status.name = "CreateRoomStatusLabel"
 	var host := UI.make_button(panel, "CREATE ROOM", Callable(app, "_host_selected_room"), 300, 48, true)
@@ -74,7 +74,7 @@ static func show_created(app: Control) -> void:
 	UI.make_child_label(panel, "Share this code with your friends." if app.internet_mode else "Share this code with friends on the same Wi-Fi.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 70, 510, 36))
 	UI.make_child_label(panel, app.room_code, 48, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 118, 510, 70))
 	UI.make_child_label(panel, "Friends only need this room code.\nWorks on the same or different networks." if app.internet_mode else "Friends only need this room code.\nTheir game will find your device automatically.", 17, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 204, 510, 64))
-	UI.make_child_label(panel, "Keep the game open. Matches require 5–10 players.\nAn internet connection is required on every device." if app.internet_mode else "Allow the game on Private networks if Windows asks.\nKeep the host's game open. Matches require 5–10 players.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 277, 510, 58))
+	UI.make_child_label(panel, "Keep the game open. Empty slots fill with bots after 2 minutes.\nAn internet connection is required on every device." if app.internet_mode else "Allow the game on Private networks if Windows asks.\nKeep the host's game open. Empty slots fill with bots after 2 minutes.", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 277, 510, 58))
 	var copy := UI.make_button(panel, "COPY ROOM CODE", Callable(app, "_copy_created_room_code"), 205, 48)
 	copy.name = "CopyCreatedRoomCodeButton"; copy.position = Vector2(55, 362)
 	var enter := UI.make_button(panel, "ENTER WAITING ROOM", Callable(app, "_enter_waiting_room"), 245, 48, true)

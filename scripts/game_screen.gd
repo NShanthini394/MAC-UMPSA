@@ -8,6 +8,8 @@ const MapGeometry = preload("res://scripts/map_geometry.gd")
 
 func build(app) -> void:
 	await app.clear_screen("game")
+	app.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	app.get_viewport().physics_object_picking = true
 	app.route_active = false
 	app.map_image = app.make_map_texture(load(GameData.map_art_path(app.selected_map)), GameData.MAPS[app.selected_map]["region"])
 	var world := Node2D.new()
@@ -40,6 +42,14 @@ func build(app) -> void:
 	# visibly enlarged square pixels while keeping the character sprites crisp.
 	map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	world.add_child(map_sprite)
+	var gong := preload("res://scripts/gong_marker.gd").new()
+	gong.name = "MeetingGongMarker"
+	gong.map_index = app.selected_map
+	gong.position = MapGeometry.gong_point(app.selected_map)
+	gong.pressed.connect(func():
+		if not app._utility_dialog_open() and app.find_child("MapOverlay", true, false) == null:
+			app.call_meeting())
+	world.add_child(gong)
 	var paths := load("res://scripts/map_paths_visual.gd").new() as Node2D
 	paths.name = "PathsAndEntrances"
 	paths.set("map_index", app.selected_map)
@@ -70,22 +80,34 @@ func build(app) -> void:
 	task_toggle.mouse_filter = Control.MOUSE_FILTER_STOP
 	task_toggle.add_theme_font_size_override("font_size", 17)
 	var tasks: Array = GameData.TASKS[GameData.MAPS[app.selected_map]["name"]]
+	var task_scroll := ScrollContainer.new()
+	task_scroll.name = "VillageTaskScroll"
+	task_scroll.position = Vector2(8,66)
+	task_scroll.size = Vector2(268,362)
+	task_scroll.visible = app.village_tasks_expanded
+	task_panel.add_child(task_scroll)
+	var task_rows := Control.new()
+	task_rows.custom_minimum_size = Vector2(248,tasks.size()*52)
+	task_scroll.add_child(task_rows)
 	for i in tasks.size():
 		var count_text := "" if app.completed_tasks[i] == 1 else " (%d/%d)" % [app.task_progress[i], GameData.TASK_STEPS[GameData.MAPS[app.selected_map]["name"]][i]]
 		var task_text := ("✓ " if app.completed_tasks[i] == 1 else "◇ ") + str(tasks[i]["name"]) + count_text
 		task_text = _wrap_task_text(task_text, 30)
-		var label: Label = app._make_child_label(task_panel, task_text, 13, Color("61f28a") if app.completed_tasks[i] == 1 else GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(16, 66 + i * 44, 254, 40))
+		var label: Label = app._make_child_label(task_rows, task_text, 13, Color("61f28a") if app.completed_tasks[i] == 1 else GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(8, i * 52, 240, 48))
 		label.name = "TaskEntry_%d" % i
 		label.visible = app.village_tasks_expanded
 		label.clip_text = true
 	var task_points: Array = MapGeometry.task_points(app.selected_map)
 	for i in task_points.size():
 		if app.player_is_impostor: continue
-		var station := load("res://scripts/task_station.gd").new() as Node2D
+		var station := load("res://scripts/realistic_task_station.gd").new() as Node2D
 		station.name = "TaskMarker_%d" % i
 		station.position = task_points[i]
 		station.set("task_index",i)
 		station.visible = app.completed_tasks[i] == 0
+		station.connect("interact_requested",func():
+			if app.current_screen == "game" and app.task_overlay_index < 0 and not app._utility_dialog_open() and app.find_child("MapOverlay",true,false)==null:
+				app.open_task(i))
 		world.add_child(station)
 	var online_match: bool = not app.room_code.is_empty() and app.network_manager != null and app.network_manager.is_connected_to_room_server()
 	if online_match:
@@ -120,7 +142,11 @@ func build(app) -> void:
 		if app.player_is_impostor: continue
 		if online_match and i in app.network_found_clues: continue
 		if not online_match and i < character_clues.size() and app.collected_clues.has(character_clues[i]): continue
-		_add_world_marker(world, clue_points[i], "?", Color("8fe4ff"), "ClueMarker_%d" % i)
+		var clue_marker := load("res://scripts/clue_marker.gd").new() as Node2D
+		clue_marker.name = "ClueMarker_%d" % i
+		clue_marker.position = clue_points[i]
+		clue_marker.set("clue_index",i)
+		world.add_child(clue_marker)
 	if not online_match:
 		var player_scene: PackedScene = load("res://scenes/player.tscn") as PackedScene
 		var pawn := player_scene.instantiate() as CharacterBody2D
@@ -248,25 +274,25 @@ func _add_world_marker(world: Node2D, position: Vector2, text: String, color: Co
 
 
 func build_control_bar(app) -> void:
-	var pad := Panel.new()
+	var pad := preload("res://scripts/invisible_joystick_area.gd").new()
 	pad.name = "VirtualJoystick"; pad.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	pad.offset_left = 24; pad.offset_top = -162; pad.offset_right = 172; pad.offset_bottom = -14
-	pad.size = Vector2(148, 148)
-	var pad_style := StyleBoxFlat.new(); pad_style.bg_color = Color(0.12, 0.09, 0.06, 0.70); pad_style.border_color = Color("d3a24e")
-	pad_style.set_border_width_all(2); pad_style.set_corner_radius_all(74); pad.add_theme_stylebox_override("panel", pad_style)
+	pad.offset_left = 0; pad.offset_top = -360; pad.offset_right = 640; pad.offset_bottom = 0
+	pad.size = Vector2(640, 360)
+	pad.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	pad.mouse_filter = Control.MOUSE_FILTER_STOP
-	var knob := Panel.new(); knob.name = "JoystickKnob"; knob.position = Vector2(49, 49); knob.size = Vector2(50, 50)
-	var knob_style := StyleBoxFlat.new(); knob_style.bg_color = Color("e6bd7d", 0.85); knob_style.border_color = Color("fff0cf")
-	knob_style.set_border_width_all(2); knob_style.set_corner_radius_all(25); knob.add_theme_stylebox_override("panel", knob_style)
-	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE; pad.add_child(knob)
+	var knob := Control.new()
+	knob.name = "JoystickKnob"
+	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pad.add_child(knob)
 	pad.gui_input.connect(Callable(app, "_on_joystick_input").bind(pad, knob))
 	app.game_hud.add_child(pad)
+	app.game_hud.move_child(pad, 0)
 	# Map and journal sit high at the right edge; the action cluster stays low
 	# beside the player's right thumb without a large, opaque dock panel.
 	var navigation := VBoxContainer.new()
 	navigation.name = "NavigationButtons"
 	navigation.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	navigation.offset_left = -68; navigation.offset_top = 148
+	navigation.offset_left = -88; navigation.offset_top = 148
 	navigation.offset_right = -12; navigation.offset_bottom = 268
 	navigation.add_theme_constant_override("separation", 8)
 	app.game_hud.add_child(navigation)
@@ -279,14 +305,14 @@ func build_control_bar(app) -> void:
 	# task list, joystick, or other HUD controls behind its child buttons.
 	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	app.game_hud.add_child(actions)
-	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interact · E", Callable(app, "interact_nearest"), true, Vector2(76, 76))
+	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interact · E", Callable(app, "interact_nearest"), true, Vector2(88, 88))
 	interact.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	interact.offset_left = -102; interact.offset_top = -134
+	interact.offset_left = -114; interact.offset_top = -146
 	interact.offset_right = -26; interact.offset_bottom = -58
-	var inspect := _add_dock_button(app, actions, "InspectClueButton", "res://assets/ui/clue_icon.svg", "Inspect clue", Callable(app, "inspect_nearest_clue"), false, Vector2(76, 76))
+	var inspect := _add_dock_button(app, actions, "InspectClueButton", "res://assets/ui/clue_icon.svg", "Inspect clue", Callable(app, "inspect_nearest_clue"), false, Vector2(88, 88))
 	inspect.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	inspect.offset_left = -102; inspect.offset_top = -224
-	inspect.offset_right = -26; inspect.offset_bottom = -148
+	inspect.offset_left = -114; inspect.offset_top = -246
+	inspect.offset_right = -26; inspect.offset_bottom = -158
 	inspect.visible = not app.player_is_impostor
 	if app.player_is_impostor:
 		var powers := HBoxContainer.new()
@@ -304,7 +330,7 @@ func build_control_bar(app) -> void:
 	task_hint.call("configure", app)
 
 
-func _add_dock_button(app, parent: Control, node_name: String, icon_path: String, hint: String, callback: Callable, highlighted: bool, button_size: Vector2 = Vector2(56, 56)) -> Button:
+func _add_dock_button(app, parent: Control, node_name: String, icon_path: String, hint: String, callback: Callable, highlighted: bool, button_size: Vector2 = Vector2(72, 72)) -> Button:
 	var button: Button = app.make_button(parent, "", callback, button_size.x, button_size.y, highlighted)
 	button.name = node_name
 	button.custom_minimum_size = button_size
@@ -313,7 +339,7 @@ func _add_dock_button(app, parent: Control, node_name: String, icon_path: String
 	button.tooltip_text = hint
 	button.accessibility_name = hint
 	UI.apply_menu_button(button)
-	button.add_theme_constant_override("icon_max_width", roundi(button_size.x - 26))
+	button.add_theme_constant_override("icon_max_width", roundi(button_size.x - 16))
 	return button
 
 

@@ -6,12 +6,15 @@ Godot 4.7 landscape Android game with online room-code multiplayer and offline p
 
 Upload the generated `render-server` folder to GitHub and wait for Render to
 redeploy before installing `builds/OnlineTest/NenekKebayan.apk` on every device.
-The server health endpoint must include `lobby_protocol=3`. See the
+The server health endpoint must include `lobby_protocol=4`. See the
 [Render setup guide](docs/RENDER_SETUP.md) for the exact settings.
 
 Play -> Find Match automatically groups searching players once at least five
-real people are available. Keep Waiting continues searching; there is no offline
-practice option in the player flow.
+real people are available. Keep Waiting continues searching.
+
+For testing without internet, choose **OFFLINE PRACTICE** on the main menu,
+select a map, then press **Start** in the practice lobby. The game starts after
+a five-second countdown with a randomly assigned role; no other players are required.
 
 Private host: Create Room -> choose map -> Create Room. Friends: Join Room -> code.
 Creating and joining automatically use the online service on both shared Wi-Fi
@@ -26,10 +29,10 @@ starts a five-second countdown. A departure cancels the countdown. Maps are
 selected before room creation. The two Nenek are always real people. Companions abstain from voting.
 
 Approach the real gong and press Interact to call an emergency meeting. All
-devices receive the supplied gong sound and animation, followed by 20 seconds of
-chat, 10 seconds of voting, and a shared animated reveal. Skip, ties, and
+devices receive the supplied gong sound and animation, followed by 45 seconds of
+chat, a voting introduction, 20 seconds of voting, and a shared animated reveal. Skip, ties, and
 unanswered votes do not eliminate a player. Eliminated humans become spectators.
-Villagers must complete all eight tasks AND eliminate both Nenek to win.
+Villagers must complete all twelve tasks AND eliminate both Nenek to win.
 
 The ENet and local-practice helpers remain for developer validation, without
 player-facing offline/network selectors. The older LAN guides describe that
@@ -42,7 +45,7 @@ invisible floor blockers, visible entrance arrows, and connected rooms. See the
 [map floor guide](docs/MAP_FLOORS.md) for the artwork mapping and validation.
 Nearby unfinished tasks now show a direction arrow and task-name prompt; entering
 a room no longer announces its section name.
-All maps share eight interactive village chores, placed one per section. The map
+All maps share twelve interactive village chores, placed one per section. The map
 button opens a parchment floor plan with rooms, doors, player position, task
 markers, and zoom controls. See the [village tasks guide](docs/VILLAGE_TASKS.md).
 

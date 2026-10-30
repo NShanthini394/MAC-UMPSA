@@ -19,7 +19,7 @@ lobby update; create a fresh room after deployment.
    No environment variables or database are required. Remove any empty variable row.
 5. Deploy. The build downloads the official Godot 4.7.2 Linux binary.
 6. Once Live, open `https://YOUR-SERVICE.onrender.com/healthz`.
-   Expect `Nenek Kebayan server ready` and `lobby_protocol=3` on separate lines.
+   Expect `Nenek Kebayan server ready` and `lobby_protocol=4` on separate lines.
 7. Give the developer the exact Render HTTPS address. In the main game, set
    `network/online_server_url` to `wss://YOUR-SERVICE.onrender.com/ws`, then rebuild
    the APK. Do not guess this address from the requested service name.

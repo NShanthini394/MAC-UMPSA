@@ -31,7 +31,7 @@ func configure(mode: String, reveal: Dictionary = {}) -> void:
 	add_child(artwork)
 	headline = label("", Rect2(120,520,1040,74), 34, Data.GOLD)
 	caption = label("", Rect2(170,602,940,70), 23, Data.CREAM)
-	if kind == "alarm":
+	if kind == "alarm" or kind == "voting_intro":
 		# The source is a storyboard rather than a uniformly padded sprite atlas.
 		# Use the two clean strike poses, then animate the sweep and title ourselves.
 		alarm_sweep = Polygon2D.new()
@@ -46,11 +46,16 @@ func configure(mode: String, reveal: Dictionary = {}) -> void:
 		headline.add_theme_color_override("font_color",Color("fff7df"))
 		headline.text = "EMERGENCY MEETING"
 		caption.text = "The gong has sounded. Gather and share your clues."
+		if kind == "voting_intro":
+			headline.text = "TIME TO VOTE"
+			caption.text = "Choose carefully. Who is Nenek Kebayan?"
+			alarm_sweep.color = Color("7754c4")
 	else:
 		# The departure scene supplies the torch-lit setting. The actual voted
 		# character is rendered separately, with their real name overlaid below.
 		artwork.texture = load("res://assets/meetings/departure_background.png")
-		artwork.position = Vector2(230,40); artwork.size = Vector2(820,461)
+		artwork.position = Vector2(-640,-360); artwork.size = Vector2(2560,1440)
+		artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		artwork.modulate = Color(0.85,0.85,0.90)
 		magic = Node2D.new(); add_child(magic)
 		magic.draw.connect(func(): _draw_magic(magic))
@@ -88,11 +93,12 @@ func label(text: String, rect: Rect2, font_size: int, colour: Color) -> Label:
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	if kind == "alarm":
+	if kind == "alarm" or kind == "voting_intro":
 		var next := 0 if elapsed < 0.35 else 1
 		if next != frame:
 			frame = next
-			artwork.texture = atlas("res://assets/meetings/emergency_meeting.png",Rect2(110,0,330,181) if frame==0 else Rect2(650,0,375,181))
+			if kind == "alarm": artwork.texture = atlas("res://assets/meetings/emergency_meeting.png",Rect2(110,0,330,181) if frame==0 else Rect2(650,0,375,181))
+			else: artwork.texture = load("res://assets/ui/clue_icon.svg")
 		alarm_sweep.scale.x = clampf((elapsed-0.35)/0.45,0.0,1.0)
 		artwork.position.x=320.0+(sin(elapsed*65.0)*4.0 if elapsed>0.35 and elapsed<0.8 else 0.0)
 		headline.modulate.a=clampf((elapsed-0.6)/0.3,0.0,1.0)

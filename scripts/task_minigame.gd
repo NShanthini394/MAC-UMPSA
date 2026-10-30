@@ -1,11 +1,13 @@
 extends Control
-## Eight village chores. Mouse, touch drag, and tap-to-place share the same rules.
+## Twelve village chores. Mouse, touch drag, and tap-to-place share the same rules.
 signal step_completed
 signal sound_requested(kind: String)
 const CREAM := Color("fff0cf")
 const GOLD := Color("edbb63")
 const INK := Color("30251b")
 const MarbleShot = preload("res://scripts/marble_shot.gd")
+const RealisticArt = preload("res://scripts/task_realistic_art.gd")
+var realistic_art: RefCounted
 const ShoeArrangement = preload("res://scripts/shoe_arrangement.gd")
 var shoe_board: Control
 var _shot := MarbleShot.new()
@@ -29,6 +31,8 @@ var _touch_id := -1
 var _pending := false
 
 func configure(data: Dictionary, progress: int, required: int) -> void:
+    realistic_art = RealisticArt.new()
+    texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     task = data
     task_kind = str(task["minigame"])
     required_progress = required
@@ -74,6 +78,10 @@ func set_progress(progress: int) -> void:
     _shot.reset()
     if is_instance_valid(shoe_board): shoe_board.set_progress(progress)
     var lines := {
+        "herbs":["Add ginger to the mortar.","Add turmeric to the mortar.","Add the leaves to the mortar.","Tap the mortar five times to pound the herbs."],
+        "water":["Water the highlighted dry plant."],
+        "weave":["Drag the pandan strip to the row with its matching number."],
+        "net":["Join the loose cord to the knot with its matching number."],
         "rice":["Drag the rice into the pot.","Pour the water into the pot.","Lift the pot when the marker reaches the green zone."],
         "fire":["Place the dry twigs in the fire pit.","Stack the logs on the twigs.","Tap the flint five times to make sparks."],
         "sweep":["Swipe through the dirt. Piles cleared: %d/5"%progress],
@@ -86,7 +94,9 @@ func set_progress(progress: int) -> void:
     var messages: Array = lines.get(task_kind,["Complete the task."])
     _instruction.text = "Task complete!" if progress >= required_progress else messages[mini(progress,messages.size()-1)]
     feedback_label.text = "Swipe with your finger or mouse." if task_kind=="sweep" else "You can also tap the object, then tap its target." if task_kind in ["rice","fire","laundry","marbles","lamp","slippers"] else "Look for petals behind the leaves."
+    if task_kind in ["herbs","water","weave","net"]: feedback_label.text="Drag the object, or tap it and then tap the highlighted target."
     if task_kind=="rice" and progress==2: feedback_label.text="Cooking only: wait for the rice to cook, then lift the pot."
+    if task_kind=="herbs" and progress==3: feedback_label.text="Tap the stone mortar five times to pound the ingredients."
     if task_kind=="fire" and progress==2: feedback_label.text="Tap the flint to light the stacked wood."
     if task_kind=="marbles": feedback_label.text="Pull for power • green: inside • red: miss • land all 4 marbles"
     if task_kind=="slippers": feedback_label.text="Place both shoes of each colour to complete all four pairs."
@@ -98,6 +108,9 @@ func set_input_enabled(enabled: bool) -> void:
     input_enabled = enabled and current_progress < required_progress
 
 func _process(delta: float) -> void:
+    if realistic_art != null:
+        realistic_art.advance(delta)
+        queue_redraw()
     if task_kind=="marbles" and _shot.rolling:
         var outcome := _shot.advance(delta)
         if outcome=="inside": _submit("timing_good")
@@ -125,11 +138,16 @@ func _style(fill: Color, edge: Color) -> StyleBoxFlat:
 
 func _source() -> Vector2:
     if task_kind=="slippers" and is_instance_valid(shoe_board): return shoe_board.next_source()
+    if task_kind=="net": return Vector2(145,100+current_progress*60)
+    if task_kind=="weave": return Vector2(145,115+current_progress*50)
     if task_kind=="lamp": return Vector2(135,106+current_progress*77)
     return Vector2(145,180)
 
 func _target() -> Vector2:
     match task_kind:
+        "water": return Vector2(350+current_progress*110,210)
+        "weave": return Vector2(535,115+current_progress*50)
+        "net": return Vector2(630,100+[2,0,3,1][mini(current_progress,3)]*60)
         "lamp": return Vector2(650,106+([2,0,1][mini(current_progress,2)])*77)
         "laundry": return Vector2(340+current_progress*105,155)
         "slippers": return shoe_board.next_target()
@@ -142,131 +160,12 @@ func _dust_position() -> Vector2:
     return [Vector2(220,140),Vector2(545,245),Vector2(390,180),Vector2(620,115),Vector2(182,272)][mini(current_progress,4)]
 
 func _draw() -> void:
-    _box(Rect2(Vector2.ZERO,Vector2(792,382)),Color("30251c"),Color("b9833f"))
-    _box(Rect2(22,51,748,279),Color("b78a54"),Color("674728"))
-    for i in 10: draw_line(Vector2(24,65+i*27),Vector2(766,65+i*27),Color(0.3,0.2,0.1,0.12),1)
-    if current_progress>=required_progress:
-        _text("✓   TASK COMPLETE",Vector2(250,200),30,CREAM)
-        return
-    var source := _pointer if _dragging else _source()
-    match task_kind:
-        "rice":
-            draw_circle(Vector2(535,220),65,Color("5e3d26"))
-            draw_arc(Vector2(535,220),55,0,PI,24,Color("ed9f4c"),10,true)
-            _box(Rect2(467,134,136,80),Color("525654"),Color("ccd0c1"))
-            _ellipse(Vector2(535,139),Vector2(68,16),Color("d9d6b6"))
-            if current_progress>0:
-                for i in 35: draw_line(Vector2(482+(i*29)%107,136+(i*7)%9),Vector2(487+(i*29)%107,137+(i*7)%9),CREAM,2,true)
-            if current_progress<2:
-                _box(Rect2(source-Vector2(62,40),Vector2(124,80)),Color("795334"))
-                _text("RICE" if current_progress==0 else "WATER",source+Vector2(-35,8),22)
-                _text("RICE POT",Vector2(472,270),18,INK)
-            else:
-                _box(Rect2(92,268,400,23),Color("64533b"))
-                draw_rect(Rect2(92+400*0.55,270,400*0.25,19),Color("66965d"))
-                draw_line(Vector2(92+_heat*400,260),Vector2(92+_heat*400,299),CREAM,5)
-                _box(Rect2(525,269,190,42),Color("784f2f"))
-                _text("LIFT THE POT",Vector2(541,297),18)
-        "fire":
-            draw_circle(Vector2(535,210),90,Color("6f6b59"))
-            draw_circle(Vector2(535,210),70,Color("3e3127"))
-            if current_progress>=1: _logs(Vector2(535,210),Color("cead75"),4)
-            if current_progress>=2: _logs(Vector2(535,200),Color("794c2b"),3)
-            if current_progress<2:
-                _logs(source,Color("cead75") if current_progress==0 else Color("794c2b"),4)
-                _text("TWIGS" if current_progress==0 else "LOGS",Vector2(95,275),18,INK)
-            else:
-                _box(Rect2(73,128,148,105),Color("7a7f78"))
-                _text("FLINT",Vector2(97,188),20)
-                _text("Sparks: %d/5"%_sparks,Vector2(88,270),17,INK)
-                for i in _sparks: draw_line(Vector2(520+i*6,160),Vector2(515+i*11,140-i*4),GOLD,3,true)
-        "sweep":
-            var dust := _dust_position()
-            for i in 24:
-                var point := dust+Vector2(sin(i*3.1)*42,cos(i*2.3)*22)
-                draw_circle(point,3+(i%3),Color("624a2e"))
-            draw_line(_pointer+Vector2(26,-35),_pointer+Vector2(-8,14),Color("6a4028"),7,true)
-            for i in 10: draw_line(_pointer+Vector2(-13+i*3,5),_pointer+Vector2(-30+i*6,30),Color("dfbd73"),3,true)
-            _text("SWEEP",Vector2(640,299),20,INK)
-        "laundry":
-            draw_line(Vector2(280,94),Vector2(730,94),INK,5)
-            draw_line(Vector2(280,75),Vector2(280,278),Color("6b4629"),9)
-            draw_line(Vector2(730,75),Vector2(730,278),Color("6b4629"),9)
-            for i in 4:
-                var at := Vector2(340+i*105,155)
-                if i<current_progress: _cloth(at,COLORS[i])
-                else: draw_rect(Rect2(at-Vector2(33,35),Vector2(66,76)),COLORS[i],false,3)
-            _cloth(source,COLORS[current_progress%4])
-        "flowers":
-            for i in 34:
-                var at := Vector2(66+(i*101)%653,82+(i*47)%220)
-                _ellipse(at,Vector2(32,15),Color("5f7b48") if i%2 else Color("829553"))
-            var flower := _flower_position()
-            for i in 6: draw_circle(flower+Vector2.from_angle(i*TAU/6)*10,8,Color("eee4c3"))
-            draw_circle(flower,6,Color("dda943"))
-            for offset in [Vector2(-17,14),Vector2(14,16),Vector2(22,-5)]: _ellipse(flower+offset,Vector2(17,7),Color("658443"))
-        "marbles":
-            draw_circle(_shot.goal,85,Color("cfaa6e"))
-            draw_arc(_shot.goal,85,0,TAU,48,CREAM,5,true)
-            for i in current_progress: _marble(Vector2(512+i%2*35,163+i/2*34),COLORS[i])
-            var marble_at := _shot.position
-            if _dragging:
-                var pull := _shot.clamped_pull(_source()-_pointer)
-                marble_at = _source()-pull
-                var landing := _shot.prediction(pull)
-                var inside := _shot.inside_goal(landing)
-                var color := Color("679e4b") if inside else Color("b54936")
-                var tip := landing.clamp(Vector2(55,83),Vector2(735,297))
-                var direction := (tip-marble_at).normalized()
-                draw_line(marble_at,_source(),Color(0.3,0.2,0.1,0.4),2,true)
-                draw_dashed_line(marble_at,tip,color,3,8,true)
-                draw_colored_polygon(PackedVector2Array([tip,tip-direction*14+direction.orthogonal()*7,tip-direction*14-direction.orthogonal()*7]),color)
-                draw_arc(tip,18,0,TAU,24,color,2,true)
-                _text("INSIDE" if inside else "MISS",Vector2(300,305),18,color)
-            _marble(marble_at,COLORS[current_progress%4])
-            _text("INSIDE: %d / 4"%current_progress,Vector2(460,307),18,INK)
-        "lamp":
-            for i in 3:
-                var left := Vector2(135,106+i*77)
-                var right := Vector2(650,106+([2,0,1][i])*77)
-                if i<current_progress: draw_line(left,right,COLORS[i],7,true)
-                draw_circle(left,22,COLORS[i]); draw_circle(right,22,COLORS[i])
-                if i==current_progress: draw_arc(left,27,0,TAU,24,CREAM,3,true)
-                _text(["A","B","C"][i],left+Vector2(-6,7),21,INK)
-                _text(["A","B","C"][i],right+Vector2(-6,7),21,INK)
-            if _selected: draw_line(_source(),_pointer,COLORS[current_progress],7,true)
-            draw_circle(Vector2(392,159),31,Color("786949"))
-            _box(Rect2(374,187,36,32),Color("6c6457"))
-            _text("LAMP",Vector2(363,253),18,INK)
-        "slippers":
-            pass # The footwear board draws eight independently movable image sprites.
-    if _pending: _text("Saving progress…",Vector2(285,322),16,CREAM)
+    if realistic_art != null: realistic_art.draw_board(self)
 
 func _ellipse(at: Vector2, radius: Vector2, color: Color) -> void:
     var points := PackedVector2Array()
     for i in 32: points.append(at+Vector2(cos(i*TAU/32)*radius.x,sin(i*TAU/32)*radius.y))
     draw_colored_polygon(points,color)
-
-func _logs(at: Vector2, color: Color, count: int) -> void:
-    for i in count:
-        var start := at+Vector2(-43+i*8,-18+i*13)
-        draw_line(start,start+Vector2(80,-10),Color("513721"),15,true)
-        draw_line(start,start+Vector2(80,-10),color,10,true)
-
-func _cloth(at: Vector2, color: Color) -> void:
-    _box(Rect2(at-Vector2(34,37),Vector2(68,78)),color,INK)
-    for i in 4: draw_line(at+Vector2(-30,-23+i*16),at+Vector2(30,-23+i*16),CREAM,2,true)
-
-func _marble(at: Vector2, color: Color) -> void:
-    draw_circle(at,18,INK); draw_circle(at,15,color)
-    draw_circle(at+Vector2(-5,-5),5,CREAM)
-
-func _slipper(at: Vector2, color: Color, left: bool) -> void:
-    _ellipse(at,Vector2(19,45),INK)
-    _ellipse(at,Vector2(16,41),color)
-    draw_line(at+Vector2(-13,-20),at+Vector2(0,4),CREAM,5,true)
-    draw_line(at+Vector2(13,-20),at+Vector2(0,4),CREAM,5,true)
-    _text("L" if left else "R",at+Vector2(-5,28),14,INK)
 
 func _gui_input(event: InputEvent) -> void:
     if task_kind=="slippers" and is_instance_valid(shoe_board):
@@ -301,6 +200,13 @@ func _press(at: Vector2) -> void:
             queue_redraw()
         else: _miss("Touch the marble first, then pull it back.")
         return
+    if task_kind=="herbs" and current_progress==3:
+        if at.distance_to(_target())<=68:
+            if realistic_art != null: realistic_art.action(task_kind,current_progress,_target() if task_kind=="herbs" else Vector2(145,180))
+            _sparks+=1; sound_requested.emit("ui"); queue_redraw()
+            if _sparks>=5: _submit("timing_good")
+        else: _miss("Tap the mortar to pound the herbs.")
+        return
     if task_kind=="flowers":
         if at.distance_to(_flower_position())<=28: _submit("collect")
         else: _miss("No flower there. Look between the leaves.")
@@ -312,6 +218,7 @@ func _press(at: Vector2) -> void:
         return
     if task_kind=="fire" and current_progress==2:
         if Rect2(73,128,148,105).has_point(at):
+            if realistic_art != null: realistic_art.action(task_kind,current_progress,Vector2(145,180))
             _sparks+=1; sound_requested.emit("ui"); queue_redraw()
             if _sparks>=5: _submit("timing_good")
         return
@@ -344,7 +251,7 @@ func _release(at: Vector2) -> void:
 
 func _drop_valid(at: Vector2) -> bool:
     if task_kind=="marbles": return false
-    if task_kind in ["lamp","slippers","laundry"]: return at.distance_to(_target())<=38
+    if task_kind in ["lamp","slippers","laundry","water","weave","net"]: return at.distance_to(_target())<=38
     return at.distance_to(_target())<=68
 
 func _miss(copy: String) -> void:
@@ -352,6 +259,9 @@ func _miss(copy: String) -> void:
 
 func _submit(sound_kind: String) -> void:
     if not input_enabled or _pending: return
+    if realistic_art != null:
+        var at: Vector2 = _flower_position() if task_kind=="flowers" else _dust_position() if task_kind=="sweep" else _target()
+        realistic_art.action(task_kind,current_progress,at)
     _pending=true; input_enabled=false; _dragging=false; _selected=false
     sound_requested.emit(sound_kind)
     step_completed.emit()

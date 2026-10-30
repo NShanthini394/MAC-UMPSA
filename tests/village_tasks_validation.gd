@@ -3,6 +3,7 @@ const Data = preload("res://scripts/game_data.gd")
 const Geometry = preload("res://scripts/map_geometry.gd")
 const Board = preload("res://scripts/task_minigame.gd")
 const Actions = preload("res://tests/village_task_actions.gd")
+const Navigation = preload("res://scripts/map_navigation.gd")
 var checks := 0
 var failures: Array[String] = []
 var actions := 0
@@ -14,7 +15,7 @@ func check(condition: bool, message: String) -> void:
 func run() -> void:
 	validate_placements()
 	for touch in [false,true]:
-		for index in 8: await validate_board(index,touch)
+		for index in Data.COMMON_TASKS.size(): await validate_board(index,touch)
 	await validate_delayed_touch()
 	await validate_app()
 	print("VILLAGE TASK CHECKS: %d checks; %d failures"%[checks,failures.size()])
@@ -25,13 +26,14 @@ func validate_placements() -> void:
 		var plan := Geometry.floor_plan(map_index)
 		var sections: Array = plan.layout["task_sections"]
 		var used := {}
-		check(Data.TASKS[Data.MAPS[map_index]["name"]]==Data.COMMON_TASKS,"Same eight chores on map %d"%map_index)
-		for index in 8:
+		check(Data.TASKS[Data.MAPS[map_index]["name"]]==Data.COMMON_TASKS,"Same twelve chores on map %d"%map_index)
+		for index in Data.COMMON_TASKS.size():
 			var point: Vector2 = Geometry.task_points(map_index)[index]
-			check(not Geometry.is_position_blocked(map_index,point,14),"Task station has player clearance")
+			check(not Geometry.is_position_blocked(map_index,point,14),"Task station has player clearance: map %d task %d"%[map_index,index])
 			check(Geometry.point_in_area(map_index,sections[index],point),"Station lies in its assigned room or garden")
-			check(not used.has(sections[index]),"No two tasks occupy the same section")
-			used[sections[index]]=true
+			check(Navigation.path(map_index,Geometry.spawn_point(map_index),point).size()>=2,"Task is reachable from spawn: map %d task %d"%[map_index,index])
+			check(not used.has(point),"Task stations have distinct locations")
+			used[point]=true
 		check(plan.layout["sections"][sections[0]]["name"]=="Kitchen","Cooking is in the kitchen")
 		check(sections[0]!=sections[1],"Cooking and lighting wood are separate stations")
 		check(Data.COMMON_TASKS[0]["minigame"]!=Data.COMMON_TASKS[1]["minigame"],"Cooking and lighting wood are separate interactions")
@@ -74,13 +76,18 @@ func validate_app() -> void:
 	app.player_is_impostor=false
 	for map_index in 3:
 		app.selected_map=map_index
-		app.completed_tasks=[0,0,0,0,0,0,0,0] as Array[int]
-		app.task_progress=[0,0,0,0,0,0,0,0] as Array[int]
+		app.completed_tasks=[0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
+		app.task_progress=[0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
 		app.player_position=Geometry.spawn_point(map_index)
 		await app.build_game()
 		app.player_body.set_physics_process(false)
+		app.toggle_village_tasks()
+		check(app.find_child("VillageTaskScroll",true,false).visible,"Expanded task list is scrollable")
+		app.toggle_village_tasks()
+		check(not app.find_child("VillageTaskScroll",true,false).visible,"Collapsed task list hides all twelve rows")
 		app.show_map_overlay()
 		var view := app.find_child("MapOverlay",true,false) as Control
+		check(view.get("_buttons").size()==Data.COMMON_TASKS.size(),"Map lists all twelve tasks")
 		check(view != null and view.get_parent()==app.game_hud,"Parchment map opens above gameplay HUD")
 		var canvas := view.find_child("FloorPlanCanvas",true,false) as Control
 		check(canvas != null,"Map is an actual schematic rather than the artwork preview")
@@ -91,10 +98,26 @@ func validate_app() -> void:
 		canvas.call("change_zoom",1.2); check(canvas.get("zoom")>1,"Map supports zoom controls")
 		canvas.call("reset_view"); check(canvas.get("zoom")==1.0,"Map fit reset works")
 		view.queue_free(); await process_frame
-		for index in 8:
+		for index in Data.COMMON_TASKS.size():
 			app.player_position=Geometry.task_points(map_index)[index]
 			app.player_body.position=app.player_position
-			app.open_task(index)
+			var station: Node = app.game_world.get_node("TaskMarker_%d"%index)
+			if index%2==0:
+				var click := InputEventMouseButton.new()
+				click.button_index=MOUSE_BUTTON_LEFT; click.pressed=true
+				if map_index==0 and index==0:
+					await physics_frame
+					await process_frame
+					click.position=station.get_global_transform_with_canvas()*Vector2(0,-15)
+					root.push_input(click,true)
+					await physics_frame
+					await process_frame
+				else: station.call("_on_input_event",root,click,0)
+			else:
+				var touch := InputEventScreenTouch.new()
+				touch.pressed=true
+				station.call("_on_input_event",root,touch,0)
+			check(app.task_overlay_index==index,"Click or touch opens the corresponding station")
 			check(is_instance_valid(app.task_minigame),"Task opens at its relevant physical station")
 			if map_index==1 and index==3:
 				var cloth_board: Control = app.task_minigame
@@ -109,17 +132,17 @@ func validate_app() -> void:
 				Actions.complete_step(board,true)
 			check(app.completed_tasks[index]==1,"Actual app marks task %d complete on map %d"%[index,map_index])
 			await process_frame
-		check(app.current_screen=="result","Completing all eight tasks wins offline on map %d"%map_index)
+		check(app.current_screen=="result","Completing all twelve tasks wins offline on map %d"%map_index)
 	app._start_local_practice_lobby()
 	await process_frame; await process_frame
 	app._process(0)
 	var button := app.find_child("LobbyActionButton",true,false) as Button
 	var note := app.find_child("LobbyReadyWaitNote",true,false) as Label
-	check(note != null and note.text.contains("15-second"),"Ready instruction is permanently visible once")
+	check(note != null and note.text.contains("5-second"),"Ready instruction is permanently visible once")
 	check(note.position.y>=button.position.y+button.size.y,"Wait sentence sits below the Ready button")
-	check(button.tooltip_text.is_empty(),"No duplicate wait instruction on hover")
+	check(button.tooltip_text.contains("All guests"),"Host tooltip explains online readiness")
 	app._on_lobby_primary_action()
-	check(app.practice_start_countdown==15,"Countdown logic remains unchanged")
+	check(app.practice_start_countdown==5,"Countdown logic remains unchanged")
 	app.queue_free(); await process_frame
 
 func validate_delayed_touch() -> void:

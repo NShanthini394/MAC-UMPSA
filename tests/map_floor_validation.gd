@@ -88,6 +88,13 @@ func validate_map(map_index: int) -> void:
 		check(not Geometry.has_clear_path(map_index, a, b), map_name + ": room wall blocks sight and spells")
 	flood(map_index)
 	var markers: Array = Geometry.task_points(map_index) + Geometry.npc_points(map_index) + Geometry.clue_candidates(map_index) + [Geometry.gong_point(map_index)]
+	var clues := Geometry.clue_candidates(map_index)
+	check(clues.size() >= 6, map_name + ": enough separated clues for online play")
+	for i in clues.size():
+		for task in Geometry.task_points(map_index):
+			check(clues[i].distance_to(task) >= 125.0, map_name + ": clue stays away from task markers")
+		for j in range(i):
+			check(clues[i].distance_to(clues[j]) >= 160.0, map_name + ": clues spread across the map")
 	for i in markers.size():
 		check(not Geometry.is_position_blocked(map_index, markers[i], 14), map_name + ": objective %d is on clear floor" % i)
 		check(can_reach(map_index, markers[i]), map_name + ": objective %d is reachable" % i)

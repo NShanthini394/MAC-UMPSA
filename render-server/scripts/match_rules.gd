@@ -18,12 +18,20 @@ static func remaining_nenek(room: Dictionary) -> int:
 
 static func tasks_complete(room: Dictionary) -> bool:
 	var tasks: Array = room.get("completed_tasks", [])
-	return tasks.size() == 8 and tasks.count(1) == 8
+	return tasks.size() == preload("res://scripts/game_data.gd").COMMON_TASKS.size() and tasks.count(1) == tasks.size()
 
 static func winner(room: Dictionary) -> String:
 	var awake_villagers := 0
-	for id in human_ids(room, true):
+	for id in voter_ids(room):
 		if str(room["players"][id].get("role", "villager")) == "villager": awake_villagers += 1
 	if remaining_nenek(room) == 0 and tasks_complete(room): return "villagers"
 	if awake_villagers == 0: return "nenek_kebayan"
 	return ""
+
+static func voter_ids(room: Dictionary) -> Array[int]:
+	var ids: Array[int] = []
+	for id in room.get("players", {}):
+		var member: Dictionary = room["players"][id]
+		if bool(member.get("is_bot", false)) and not bool(room.get("bot_match", false)): continue
+		if bool(member.get("alive", true)) and not bool(member.get("sleeping", false)): ids.append(int(id))
+	return ids

@@ -17,8 +17,8 @@ func run() -> void:
 	app.set_process(false)
 	app.selected_character="Badang"
 	app.player_is_impostor=false
-	app.completed_tasks=[0,0,0,0,0,0,0,0] as Array[int]
-	app.task_progress=[0,0,0,0,0,0,0,0] as Array[int]
+	app.completed_tasks=[0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
+	app.task_progress=[0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
 	for map_index in 3:
 		app.selected_map=map_index
 		app.player_position=Geometry.spawn_point(map_index)
@@ -33,7 +33,7 @@ func run() -> void:
 			await capture("parchment_tasks_tab")
 		app.find_child("MapOverlay",true,false).queue_free()
 		await get_tree().process_frame
-	for index in 8:
+	for index in Data.COMMON_TASKS.size():
 		app.player_position=Geometry.task_points(app.selected_map)[index]
 		app.player_body.position=app.player_position
 		app.open_task(index)

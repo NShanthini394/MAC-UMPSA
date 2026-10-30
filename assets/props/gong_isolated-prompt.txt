@@ -1,0 +1,2 @@
+Created with built-in imagegen from assets/maps/rumah_pak_kaduk.png.
+Prompt: Isolate the courtyard bronze gong and carved wooden stand, preserve the reference game art style and perspective, transparent background, no map, plants, ground, text or border circle.

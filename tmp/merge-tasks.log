@@ -1,0 +1,24 @@
+ERROR: Failed to open log file for writing: user://logs/godot.log
+   at: rotate_file (core/io/logger.cpp:169)
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Ready instruction is permanently visible once
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/village_tasks_validation.gd:14)
+       [1] validate_app (res://tests/village_tasks_validation.gd:141)
+ERROR: No duplicate wait instruction on hover
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/village_tasks_validation.gd:14)
+       [1] validate_app (res://tests/village_tasks_validation.gd:143)
+ERROR: Countdown logic remains unchanged
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/village_tasks_validation.gd:14)
+       [1] validate_app (res://tests/village_tasks_validation.gd:145)
+VILLAGE TASK CHECKS: 712 checks; 3 failures
+WARNING: 13 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 5 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

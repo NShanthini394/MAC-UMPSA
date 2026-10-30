@@ -23,6 +23,13 @@ static func tick(room: Dictionary, delta: float, now: float, random: RandomNumbe
 			var points: Array = destinations[map_index]
 			if points.is_empty(): continue
 			var target: Vector2 = points[random.randi_range(0, points.size()-1)]
+			if bool(room.get("bot_match", false)) and str(player.get("role", "")) == "villager":
+				var tasks := Geometry.task_points(map_index)
+				var unfinished: Array = []
+				for i in tasks.size():
+					if int(room["completed_tasks"][i]) == 0: unfinished.append(tasks[i])
+				if not unfinished.is_empty(): target = unfinished[random.randi_range(0, unfinished.size()-1)]
+			if bool(room.get("bot_match", false)) and now >= float(room.get("bot_meeting_at", now + 90.0)): target = Geometry.gong_point(map_index)
 			route = Navigation.path(map_index, origin, target, doors)
 			if not route.is_empty(): route.remove_at(0)
 			player["bot_path"] = route

@@ -30,6 +30,10 @@ static func complete_step(board: Control, touch: bool) -> void:
 		"slippers":
 			# Both independently movable shoes are required for one scored pair.
 			for shoe in 2: drag(board,board._source(),board._target(),touch)
+		"herbs":
+			if board.current_progress==3:
+				for index in 5: tap(board,board._target(),touch)
+			else: drag(board,board._source(),board._target(),touch)
 		"rice":
 			if board.current_progress==2:
 				board.set("_heat",0.67); tap(board,Vector2(610,290),touch)

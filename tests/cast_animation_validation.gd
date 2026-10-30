@@ -70,9 +70,13 @@ func validate_character(character: String) -> void:
 		check(sprite.texture == idle and sprite.flip_h == (direction == Vector2.LEFT), character + " stops facing the correct direction")
 	actor.set_running(true)
 	actor.set_sleeping(true)
+	check(is_zero_approx(sprite.rotation) and is_zero_approx(sprite.position.y), character + " remains upright while asleep")
 	var asleep := sprite.texture
 	actor.call("_process", 0.5)
 	check(sprite.texture == asleep and not bool(actor.get("_is_running")), character + " stops walking while asleep")
+	actor.set_running(true)
+	actor.call("_process", 0.125)
+	check(bool(actor.get("_is_running")) and is_zero_approx(sprite.rotation), character + " can animate walking upright while asleep")
 	actor.set_sleeping(false)
 	check(sprite.rotation == 0.0 and sprite.position.y == 0.0, character + " restores the standing pose after waking")
 	for path in [Data.CHARACTER_PORTRAITS[character], Data.CHARACTER_AVATARS[character]]:
@@ -107,7 +111,10 @@ func validate_player_controls() -> void:
 	player.call("set_sleeping", true)
 	var asleep_position := player.position
 	await create_timer(0.18).timeout
-	check(player.position == asleep_position, "Sleeping still blocks physics movement")
+	player.call("set_input_direction", direction)
+	await create_timer(0.18).timeout
+	check(player.position.distance_to(asleep_position) > 1, "Sleeping player can continue walking")
+	check(is_zero_approx(player.get_node("CharacterActor/CharacterSprite").rotation), "Sleeping walker stays upright")
 	player.queue_free()
 	var remote: CharacterBody2D = load("res://scenes/player.tscn").instantiate()
 	root.add_child(remote)

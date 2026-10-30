@@ -1,0 +1,1 @@
+Built-in imagegen. Prompt: Extract only the supplied bronze gong and its wooden stand, preserve the reference design and soft painted texture; remove all background, plants, text, partial figure and black circle; transparent alpha including gaps.

@@ -39,3 +39,17 @@ func _draw() -> void:
 				draw_ellipse(Vector2(x,-8),6,13,Color("ad6748"))
 				draw_line(Vector2(x-4,-13),Vector2(x,-5),CREAM,2)
 				draw_line(Vector2(x+4,-13),Vector2(x,-5),CREAM,2)
+
+		8:
+			draw_rect(Rect2(-16,-18,32,21),Color("827769"))
+			draw_line(Vector2(5,-14),Vector2(18,-35),CREAM,6,true)
+		9:
+			draw_rect(Rect2(-13,-18,26,21),Color("739fa9"))
+			draw_line(Vector2(12,-14),Vector2(26,-26),Color("739fa9"),5,true)
+		10:
+			draw_rect(Rect2(-20,-26,40,29),Color("b9b36d"))
+			for i in 4: draw_line(Vector2(-18,-22+i*7),Vector2(18,-22+i*7),INK,2,true)
+		11:
+			for i in 5:
+				draw_line(Vector2(-20+i*10,-30),Vector2(-20+i*10,0),CREAM,1,true)
+				draw_line(Vector2(-20,-30+i*7),Vector2(20,-30+i*7),CREAM,1,true)

@@ -13,7 +13,7 @@ func run_checks() -> void:
 		if str(room["players"][peer_id]["role"])=="villager": villager=app; break
 	if villager==null: check(false,"Villager available for real task input"); return
 	var peer_id: int = villager.get("network_manager").local_peer_id()
-	for index in 8:
+	for index in Data.COMMON_TASKS.size():
 		var point: Vector2 = Geometry.task_points(1)[index]
 		room["players"][peer_id]["position"]=point
 		room["players"][peer_id]["direction"]=Vector2.ZERO
@@ -30,8 +30,8 @@ func run_checks() -> void:
 				if not await wait_for(func()->bool:return is_instance_valid(villager.get("task_minigame")) and villager.get("task_minigame").current_progress==step+1 and villager.get("task_minigame").input_enabled,"task acknowledgement resumes input"): return
 		check(room["completed_tasks"][index]==1,"Server completes %s"%Data.COMMON_TASKS[index]["name"])
 		if not await wait_for(func()->bool:return apps.all(func(a:Control)->bool:return a.get("completed_tasks")[index]==1),"all five clients receive task completion"): return
-	check(room["completed_tasks"].count(1)==8,"All eight new chores are authoritative and shared")
-	check(not room.get("finished",false),"All eight tasks still require both Nenek to be found")
+	check(room["completed_tasks"].count(1)==Data.COMMON_TASKS.size(),"All twelve new chores are authoritative and shared")
+	check(not room.get("finished",false),"All twelve tasks still require both Nenek to be found")
 	# Timed real-client voting and reveals are exercised by meeting_matchmaking_validation.
 	for id in room["impostor_ids"]: room["players"][id]["alive"]=false
 	var rules=load("res://scripts/match_rules.gd")

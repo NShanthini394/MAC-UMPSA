@@ -3,8 +3,8 @@ extends Control
 signal pair_completed
 signal feedback(message: String, success: bool)
 
-const TEXTURE_PATHS := ["res://assets/tasks/flip_flop.png","res://assets/tasks/trainer.png","res://assets/tasks/slipper.png","res://assets/tasks/sandal.png"]
-const PAIR_NAMES := ["Blue", "Yellow", "Red", "Green"]
+const FOOTWEAR_ATLAS := "res://assets/tasks/realistic/traditional_footwear.png"
+const PAIR_NAMES := ["Blue · Terompah", "Yellow · Capal", "Red · Kasut sulam", "Green · Anyaman"]
 const SOURCE_CENTRES := [Vector2(87,128),Vector2(208,130),Vector2(322,128),Vector2(145,207),Vector2(300,286),Vector2(192,286),Vector2(78,286),Vector2(303,207)]
 const SOURCE_ANGLES := [-0.35,0.25,0.25,-0.45,0.5,-0.35,-0.2,0.2]
 const SPRITE_SIZE := Vector2(100,100)
@@ -21,13 +21,27 @@ var _pointer := Vector2.ZERO
 var _press_at := Vector2.ZERO
 var _original_slot := -1
 var _initialised := false
+var _visual_clock := 0.0
+var _settling: Dictionary = {}
+
+func _process(delta: float) -> void:
+	_visual_clock += delta
+	for index in _settling.keys():
+		_settling[index]["age"] += delta
+		if _settling[index]["age"]>=0.3: _settling.erase(index)
+	if selected_shoe>=0 or not _settling.is_empty(): queue_redraw()
 
 func configure(progress: int) -> void:
 	name = "ShoeArrangement"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size = Vector2(792,382)
-	for path in TEXTURE_PATHS:
-		var texture := load(path) as Texture2D
+	var atlas := load(FOOTWEAR_ATLAS) as Texture2D
+	var cell := Vector2(atlas.get_size())/2.0
+	for pair in 4:
+		var texture := AtlasTexture.new()
+		texture.atlas = atlas
+		texture.region = Rect2(Vector2(pair%2,pair/2)*cell,cell)
+		texture.filter_clip = true
 		textures.append(texture)
 		images.append(texture.get_image())
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -148,6 +162,7 @@ func _drop(at: Vector2) -> bool:
 		if slot not in slots or slots[selected_shoe]==slot: available.append(slot)
 	if available.is_empty(): return false
 	available.sort_custom(func(a:int,b:int)->bool:return at.distance_squared_to(slot_centre(a))<at.distance_squared_to(slot_centre(b)))
+	_settling[selected_shoe] = {"from":_pointer if _dragging or _moved else shoe_centre(selected_shoe),"age":0.0}
 	slots[selected_shoe]=available[0]
 	selected_shoe=-1; _dragging=false
 	if slots[pair]>=0 and slots[pair+4]>=0 and pair not in credited_pairs:
@@ -181,10 +196,17 @@ func _draw() -> void:
 		_draw_shoe(selected_shoe,_pointer if _dragging else shoe_centre(selected_shoe),0.0,true)
 
 func _draw_shoe(index:int,at:Vector2,angle:float,highlight:bool=false) -> void:
-	draw_set_transform(at,angle,Vector2(-1,1) if index>=4 else Vector2.ONE)
+	var scale_factor := 1.04+sin(_visual_clock*4)*0.015 if highlight else 1.0
+	if _settling.has(index):
+		var t: float = clampf(_settling[index]["age"]/0.3,0.0,1.0)
+		at = Vector2(_settling[index]["from"]).lerp(at,1-pow(1-t,3))+Vector2(0,-sin(t*PI)*10)
+	draw_set_transform(at+Vector2(4,8),angle,Vector2(-1,1)*scale_factor if index>=4 else Vector2.ONE*scale_factor)
+	draw_texture_rect(textures[index%4],Rect2(-SPRITE_SIZE*0.5,SPRITE_SIZE),false,Color(0,0,0,0.2))
+	draw_set_transform(at,angle,Vector2(-1,1)*scale_factor if index>=4 else Vector2.ONE*scale_factor)
 	if highlight: draw_arc(Vector2.ZERO,39,0,TAU,32,Color("ffe8a0"),2,true)
 	draw_texture_rect(textures[index%4],Rect2(-SPRITE_SIZE*0.5,SPRITE_SIZE),false)
 	draw_set_transform(Vector2.ZERO)
 
-func _label(copy:String,at:Vector2,font_size:int,color:Color=Color("3c2b1a")) -> void:
+func _label(copy:String,at:Vector2,font_size:int,color:Color=Color("fff0cf")) -> void:
+	draw_string(ThemeDB.fallback_font,at+Vector2(1,1),copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,Color(0,0,0,0.6))
 	draw_string(ThemeDB.fallback_font,at,copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)

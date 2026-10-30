@@ -16,11 +16,11 @@ var selected := -1
 var _last_completed := -1
 
 func _process(_delta: float) -> void:
-	if not is_instance_valid(app) or app.player_is_impostor or _buttons.size()!=8: return
+	if not is_instance_valid(app) or app.player_is_impostor or _buttons.size()!=Data.COMMON_TASKS.size(): return
 	var state := hash(app.completed_tasks)
 	if state==_last_completed: return
 	_last_completed=state
-	for index in 8:
+	for index in Data.COMMON_TASKS.size():
 		var complete: bool = app.completed_tasks[index]==1
 		_task_badges[index].text="✓" if complete else str(index+1)
 		_buttons[index].modulate=Color("b7d391") if complete else Color.WHITE
@@ -46,17 +46,20 @@ func configure(controller: Control) -> void:
 	close.name="MapCloseButton"; close.position=Vector2(1128,12)
 	_legend=Control.new(); _legend.position=Vector2(22,92); _legend.size=Vector2(228,330); panel.add_child(_legend)
 	UI.make_child_label(_legend,"MAP KEY",17,Data.GOLD,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,0,228,30))
-	var legend_lines := ["▲   Your position","1–8   Unfinished tasks","✓   Completed tasks","▣   Room / area","┄   Door / access"]
+	var legend_lines := ["▲   Your position","1–12   Unfinished tasks","✓   Completed tasks","▣   Room / area","┄   Door / access"]
 	if app.player_is_impostor: legend_lines=["▲   Your position","▣   Room / area","┄   Door / access"]
 	for index in legend_lines.size(): UI.make_child_label(_legend,legend_lines[index],15,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,50+index*40,228,36))
 	var instruction := UI.make_child_label(_legend,"Choose a task number\nto see its location:",14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,270,228,56))
 	instruction.name="MapNumberInstruction"
 	if app.player_is_impostor: instruction.text="View rooms and paths\non the map."
-	_tasks=Control.new(); _tasks.position=Vector2(22,92); _tasks.size=Vector2(228,464); panel.add_child(_tasks)
-	for index in 8:
+	_tasks=ScrollContainer.new(); _tasks.position=Vector2(22,92); _tasks.size=Vector2(228,464); panel.add_child(_tasks)
+	var task_rows := VBoxContainer.new()
+	task_rows.add_theme_constant_override("separation",2)
+	_tasks.add_child(task_rows)
+	for index in Data.COMMON_TASKS.size():
 		# Button text contributes an unwrapped minimum width. Keep it empty and
 		# draw the name in a fixed, wrapping child so every row stays identical.
-		var button := UI.make_button(_tasks,"",_choose.bind(index),228,56)
+		var button := UI.make_button(task_rows,"",_choose.bind(index),208,56)
 		button.position=Vector2(0,index*58)
 		button.clip_contents=true
 		button.accessibility_name=str(Data.COMMON_TASKS[index]["name"])
@@ -64,7 +67,7 @@ func configure(controller: Control) -> void:
 		_task_badges.append(badge)
 		var copy: String = str(Data.COMMON_TASKS[index]["name"])
 		copy=copy.replace("marbles into", "marbles\ninto")
-		var task_name := UI.make_child_label(button,copy,14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(42,6,168,44))
+		var task_name := UI.make_child_label(button,copy,14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(42,6,158,44))
 		task_name.name="TaskEntryName_%d"%index
 		_buttons.append(button)
 	_details=Control.new(); _details.name="SelectedTaskDetails"

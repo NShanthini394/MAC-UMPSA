@@ -10,7 +10,7 @@ func check(ok: bool, message: String) -> void:
 	checks+=1
 	if not ok: failures.append(message);push_error(message)
 func fixture() -> Dictionary:
-	var room := {"map_index":1,"started":true,"players":{},"completed_tasks":[0,0,0,0,0,0,0,0],"task_progress":[0,0,0,0,0,0,0,0],"meeting_state":"voting","votes":{},"host_id":2}
+	var room := {"map_index":1,"started":true,"players":{},"completed_tasks":[0,0,0,0,0,0,0,0,0,0,0,0],"task_progress":[0,0,0,0,0,0,0,0,0,0,0,0],"meeting_state":"voting","votes":{},"host_id":2}
 	for i in 10:
 		room["players"][i+2]={"id":i+2,"name":"Member %d"%i,"character":"Badang","role":"nenek_kebayan" if i<2 else "villager","alive":true,"sleeping":false,"position":Geometry.spawn_point(1),"is_bot":i>=5}
 	return room
@@ -18,12 +18,12 @@ func run() -> void:
 	var service := Network.new();root.add_child(service);service.set_process(false)
 	var room := fixture()
 	check(Rules.human_ids(room).size()==5,"Only real people count toward five-player eligibility")
-	room["completed_tasks"]=[1,1,1,1,1,1,1,1]
+	room["completed_tasks"]=[1,1,1,1,1,1,1,1,1,1,1,1]
 	check(Rules.winner(room)=="","Tasks alone do not win")
 	room["players"][2]["alive"]=false
 	check(Rules.winner(room)=="","One eliminated Nenek does not win")
 	room["players"][3]["alive"]=false
-	check(Rules.winner(room)=="villagers","Both removed plus eight tasks wins")
+	check(Rules.winner(room)=="villagers","Both removed plus twelve tasks wins")
 	room["completed_tasks"][7]=0
 	check(Rules.winner(room)=="","Both removed still require remaining task")
 	room=fixture()

@@ -29,8 +29,8 @@ func run() -> void:
 	await process_frame
 	app.set_process(false)
 	app.selected_character = "Bawang Merah"
-	app.completed_tasks = [0,0,0,0,0,0,0,0] as Array[int]
-	app.task_progress = [0,0,0,0,0,0,0,0] as Array[int]
+	app.completed_tasks = [0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
+	app.task_progress = [0,0,0,0,0,0,0,0,0,0,0,0] as Array[int]
 	for map_index in 3:
 		app.selected_map = map_index
 		app.player_position = Geometry.spawn_point(map_index)

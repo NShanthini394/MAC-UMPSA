@@ -90,6 +90,7 @@ func configure(controller: Control) -> void:
 
 
 func place(button: Button, rect: Rect2, transparent: bool = false) -> void:
+	if _icons.has(button.name): _icons[button.name].material.set_shader_parameter("icon_size", rect.size)
 	button.custom_minimum_size = rect.size
 	button.size = rect.size
 	button.position = rect.position
@@ -127,9 +128,9 @@ func refresh(force: bool = false) -> void:
 			place(_help, Rect2(1200, 22, 54, 54), true)
 		elif playing:
 			_music.text = ""; _settings.text = ""; _help.text = ""
-			place(_settings, Rect2(1072, 78, 54, 54), true)
-			place(_music, Rect2(1137, 78, 52, 54), true)
-			place(_help, Rect2(1200, 78, 54, 54), true)
+			place(_settings, Rect2(1044, 78, 66, 66), true)
+			place(_music, Rect2(1118, 78, 66, 66), true)
+			place(_help, Rect2(1192, 78, 66, 66), true)
 		else:
 			_settings.text = "SETTINGS"
 			place(_back, Rect2(16, 676, 100, 34))
@@ -220,7 +221,7 @@ func show_help() -> void:
 	guide.add_theme_font_size_override("normal_font_size", 16)
 	guide.add_theme_color_override("default_color", Data.CREAM)
 	guide.add_theme_constant_override("line_separation", 3)
-	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nComplete all eight tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 20 seconds, then vote or Skip within 10 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can watch but cannot move, chat, vote, or act.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
+	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nComplete all twelve tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 45 seconds, then vote or Skip within 20 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can move around the map but cannot chat, vote, or do tasks.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
 

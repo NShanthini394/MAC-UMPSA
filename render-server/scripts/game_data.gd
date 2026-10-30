@@ -89,26 +89,30 @@ static func map_art_path(map_index: int) -> String:
 	return str(MAPS[clampi(map_index, 0, 2)]["art"])
 
 const COMMON_TASKS := [
-    {"name":"Cook rice", "place":"Kitchen", "prompt":"Add rice and water to the pot, then lift it when the rice is cooked.", "minigame":"rice"},
-    {"name":"Light a wood fire", "place":"Fire pit", "prompt":"Arrange the twigs and logs, then strike the flint to light the fire.", "minigame":"fire"},
-    {"name":"Sweep the floor", "place":"Indoor area", "prompt":"Sweep through the piles of dirt until the floor is clean.", "minigame":"sweep"},
-    {"name":"Hang the laundry", "place":"Clothesline", "prompt":"Drag each cloth to its matching place on the clothesline.", "minigame":"laundry"},
-    {"name":"Find the flowers", "place":"Garden", "prompt":"Find five flowers hidden among the leaves.", "minigame":"flowers"},
-    {"name":"Shoot marbles into the circle", "place":"Play area", "prompt":"Pull each marble back and release it. All four marbles must stop fully inside the circle.", "minigame":"marbles"},
-    {"name":"Repair the lamp", "place":"Lamp", "prompt":"Connect the wires with matching colours and letters.", "minigame":"lamp"},
-    {"name":"Arrange the shoes", "place":"Entrance", "prompt":"Match the footwear by colour to make four pairs: blue, yellow, red and green.", "minigame":"slippers"}
+	{"name":"Cook rice", "place":"Kitchen", "prompt":"Add rice and water to the pot, then lift it when the rice is cooked.", "minigame":"rice"},
+	{"name":"Light a wood fire", "place":"Fire pit", "prompt":"Arrange the twigs and logs, then strike the flint to light the fire.", "minigame":"fire"},
+	{"name":"Sweep the floor", "place":"Indoor area", "prompt":"Sweep through the piles of dirt until the floor is clean.", "minigame":"sweep"},
+	{"name":"Hang the laundry", "place":"Clothesline", "prompt":"Drag each cloth to its matching place on the clothesline.", "minigame":"laundry"},
+	{"name":"Find the flowers", "place":"Garden", "prompt":"Find five flowers hidden among the leaves.", "minigame":"flowers"},
+	{"name":"Shoot marbles into the circle", "place":"Play area", "prompt":"Pull each marble back and release it. All four marbles must stop fully inside the circle.", "minigame":"marbles"},
+	{"name":"Repair the lamp", "place":"Lamp", "prompt":"Connect the wires with matching colours and letters.", "minigame":"lamp"},
+	{"name":"Arrange the shoes", "place":"Entrance", "prompt":"Match the footwear by colour to make four pairs: blue, yellow, red and green.", "minigame":"slippers"},
+	{"name":"Pound the herbs", "place":"Herbal corner", "prompt":"Add ginger, turmeric and leaves, then pound them five times.", "minigame":"herbs"},
+	{"name":"Water the plants", "place":"Garden", "prompt":"Drag the watering can to each dry plant.", "minigame":"water"},
+	{"name":"Weave a pandan mat", "place":"Veranda", "prompt":"Slide each pandan strip into the matching numbered row.", "minigame":"weave"},
+	{"name":"Mend the fishing net", "place":"Net rack", "prompt":"Join each loose cord to the matching numbered knot.", "minigame":"net"}
 ]
 const TASKS := {
-    "Istana Puteri Gunung Ledang": COMMON_TASKS,
-    "Rumah Pak Kaduk": COMMON_TASKS,
-    "Rumah Mahsuri": COMMON_TASKS
+	"Istana Puteri Gunung Ledang": COMMON_TASKS,
+	"Rumah Pak Kaduk": COMMON_TASKS,
+	"Rumah Mahsuri": COMMON_TASKS
 }
-const TASK_POINTS := [Vector2(580,382),Vector2(1805,435),Vector2(990,236),Vector2(1360,279),Vector2(240,280),Vector2(709,267),Vector2(1340,414),Vector2(850,401)]
-const COMMON_TASK_STEPS := [3,3,5,4,5,4,3,4]
+const TASK_POINTS := [Vector2(580,382),Vector2(1625,540),Vector2(990,236),Vector2(1805,268),Vector2(245,241),Vector2(709,267),Vector2(1340,414),Vector2(850,401),Vector2(640,390),Vector2(242,383),Vector2(1178,275),Vector2(351,359)]
+const COMMON_TASK_STEPS := [3,3,5,4,5,4,3,4,4,4,4,4]
 const TASK_STEPS := {
-    "Istana Puteri Gunung Ledang": COMMON_TASK_STEPS,
-    "Rumah Pak Kaduk": COMMON_TASK_STEPS,
-    "Rumah Mahsuri": COMMON_TASK_STEPS
+	"Istana Puteri Gunung Ledang": COMMON_TASK_STEPS,
+	"Rumah Pak Kaduk": COMMON_TASK_STEPS,
+	"Rumah Mahsuri": COMMON_TASK_STEPS
 }
 const NPC_NAMES := ["Pak Pandir", "Bawang Putih", "Badang", "Mahsuri"]
 const NPC_POINTS := [Vector2(430, 330), Vector2(760, 300), Vector2(990, 475), Vector2(520, 460)]

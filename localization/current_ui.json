@@ -1,0 +1,350 @@
+[
+  [
+    "START GAME",
+    "MULA PERMAINAN",
+    "开始游戏",
+    "விளையாட்டைத் தொடங்கு"
+  ],
+  [
+    "CHOOSE HOW TO PLAY",
+    "PILIH CARA BERMAIN",
+    "选择游戏模式",
+    "விளையாட்டு முறையைத் தேர்ந்தெடு"
+  ],
+  [
+    "PLAY WITH FRIENDS",
+    "MAIN BERSAMA RAKAN",
+    "与好友游玩",
+    "நண்பர்களுடன் விளையாடு"
+  ],
+  [
+    "SOLO VS BOTS",
+    "SOLO LAWAN BOT",
+    "单人与机器人",
+    "தனியாக பாட்களுடன் விளையாடு"
+  ],
+  [
+    "QUICK MATCH",
+    "PADANAN PANTAS",
+    "快速匹配",
+    "விரைவுப் போட்டி"
+  ],
+  [
+    "Create a private room or join with a room code.\n2–10 human players; bots fill empty spaces.",
+    "Cipta bilik peribadi atau sertai menggunakan kod bilik.\n2–10 pemain manusia; bot mengisi tempat kosong.",
+    "创建私人房间或使用房间代码加入。\n2–10名真人玩家；机器人填补空位。",
+    "தனியறையை உருவாக்கு அல்லது அறைக் குறியீட்டுடன் சேர்.\n2–10 மனித வீரர்கள்; மீதமுள்ள இடங்களில் பாட்கள் சேரும்."
+  ],
+  [
+    "1 human and 9 bots.\nYou play as a Villager.\nNo internet or search wait.",
+    "1 manusia dan 9 bot.\nAnda bermain sebagai Penduduk Kampung.\nTiada internet atau masa menunggu.",
+    "1名真人与9个AI角色。\n你将扮演村民。\n无需网络或等待匹配。",
+    "1 மனிதர் + 9 AI கதாபாத்திரங்கள்.\nநீங்கள் கிராமவாசியாக விளையாடுவீர்கள்.\nஇணையமும் காத்திருப்பும் தேவையில்லை."
+  ],
+  [
+    "Find other players online.\nSearch for up to 60 seconds, then fill empty spaces with bots.",
+    "Cari pemain lain dalam talian.\nCari sehingga 60 saat, kemudian bot mengisi tempat kosong.",
+    "在线寻找其他玩家。\n最多搜索60秒，然后由机器人填补空位。",
+    "இணையத்தில் மற்ற வீரர்களைத் தேடு.\n60 வினாடிகள் தேடிய பின் மீதமுள்ள இடங்களில் பாட்கள் சேரும்."
+  ],
+  [
+    "Every match: 10 characters · 8 Villagers · 2 Nenek Kebayan",
+    "Setiap perlawanan: 10 watak · 8 Penduduk Kampung · 2 Nenek Kebayan",
+    "每场比赛：10个角色 · 8名村民 · 2名Nenek Kebayan",
+    "ஒவ்வொரு போட்டியிலும்: 10 கதாபாத்திரங்கள் · 8 கிராமவாசிகள் · 2 Nenek Kebayan"
+  ],
+  [
+    "ACCOUNT",
+    "AKAUN",
+    "账号",
+    "கணக்கு"
+  ],
+  [
+    "ACCOUNT INFORMATION",
+    "MAKLUMAT AKAUN",
+    "账号信息",
+    "கணக்கு விவரங்கள்"
+  ],
+  [
+    "Account Information",
+    "Maklumat Akaun",
+    "账号信息",
+    "கணக்கு விவரங்கள்"
+  ],
+  [
+    "GAME SETTINGS",
+    "TETAPAN PERMAINAN",
+    "游戏设置",
+    "விளையாட்டு அமைப்புகள்"
+  ],
+  [
+    "Audio Settings",
+    "Tetapan Audio",
+    "音频设置",
+    "ஒலி அமைப்புகள்"
+  ],
+  [
+    "Controls & Display",
+    "Kawalan & Paparan",
+    "控制与显示",
+    "கட்டுப்பாடுகள் மற்றும் காட்சி"
+  ],
+  [
+    "Language",
+    "Bahasa",
+    "语言",
+    "மொழி"
+  ],
+  [
+    "HELP & ABOUT",
+    "BANTUAN & PERIHAL",
+    "帮助与关于",
+    "உதவி மற்றும் விவரங்கள்"
+  ],
+  [
+    "How to Play",
+    "Cara Bermain",
+    "玩法说明",
+    "விளையாடுவது எப்படி"
+  ],
+  [
+    "Report a Problem",
+    "Laporkan Masalah",
+    "报告问题",
+    "பிரச்சினையைத் தெரிவி"
+  ],
+  [
+    "Data & Privacy",
+    "Data & Privasi",
+    "数据与隐私",
+    "தரவு மற்றும் தனியுரிமை"
+  ],
+  [
+    "About the Game",
+    "Perihal Permainan",
+    "关于游戏",
+    "விளையாட்டைப் பற்றி"
+  ],
+  [
+    "YOUR PROFILE",
+    "PROFIL ANDA",
+    "你的资料",
+    "உங்கள் சுயவிவரம்"
+  ],
+  [
+    "Change Username",
+    "Tukar Nama Pengguna",
+    "修改用户名",
+    "பயனர்பெயரை மாற்று"
+  ],
+  [
+    "Change Avatar",
+    "Tukar Avatar",
+    "修改头像",
+    "அவதாரத்தை மாற்று"
+  ],
+  [
+    "Link Google Account",
+    "Pautkan Akaun Google",
+    "关联Google账号",
+    "Google கணக்கை இணை"
+  ],
+  [
+    "Convert Guest to Email Account",
+    "Tukar Tetamu kepada Akaun E-mel",
+    "将访客转换为邮箱账号",
+    "விருந்தினரை மின்னஞ்சல் கணக்காக மாற்று"
+  ],
+  [
+    "Change Email Address",
+    "Tukar Alamat E-mel",
+    "修改邮箱地址",
+    "மின்னஞ்சல் முகவரியை மாற்று"
+  ],
+  [
+    "Change / Add Game Password",
+    "Tukar / Tambah Kata Laluan Permainan",
+    "修改或添加游戏密码",
+    "விளையாட்டுக் கடவுச்சொல்லை மாற்று அல்லது சேர்"
+  ],
+  [
+    "Account Security",
+    "Keselamatan Akaun",
+    "账号安全",
+    "கணக்குப் பாதுகாப்பு"
+  ],
+  [
+    "Permanently Delete Account",
+    "Padam Akaun Secara Kekal",
+    "永久删除账号",
+    "கணக்கை நிரந்தரமாக நீக்கு"
+  ],
+  [
+    "Log Out",
+    "Log Keluar",
+    "退出登录",
+    "வெளியேறு"
+  ],
+  [
+    "Playing as Guest",
+    "Bermain sebagai Tetamu",
+    "以访客身份游玩",
+    "விருந்தினராக விளையாடுகிறீர்கள்"
+  ],
+  [
+    "GUEST",
+    "TETAMU",
+    "访客",
+    "விருந்தினர்"
+  ],
+  [
+    "SIGNED IN",
+    "TELAH LOG MASUK",
+    "已登录",
+    "உள்நுழைந்துள்ளீர்கள்"
+  ],
+  [
+    "SETTINGS  /  ACCOUNT",
+    "TETAPAN  /  AKAUN",
+    "设置  /  账号",
+    "அமைப்புகள் / கணக்கு"
+  ],
+  [
+    "SETTINGS  /  LANGUAGE",
+    "TETAPAN  /  BAHASA",
+    "设置  /  语言",
+    "அமைப்புகள் / மொழி"
+  ],
+  [
+    "‹  SETTINGS",
+    "‹  TETAPAN",
+    "‹  设置",
+    "‹  அமைப்புகள்"
+  ],
+  [
+    "‹  ACCOUNT",
+    "‹  AKAUN",
+    "‹  账号",
+    "‹  கணக்கு"
+  ],
+  [
+    "Cook rice",
+    "Masak nasi",
+    "煮饭",
+    "சோறு சமை"
+  ],
+  [
+    "Light a wood fire",
+    "Nyalakan kayu api",
+    "点燃柴火",
+    "விறகு நெருப்பை மூட்டு"
+  ],
+  [
+    "Sweep the floor",
+    "Sapu lantai",
+    "扫地",
+    "தரையைப் பெருக்கு"
+  ],
+  [
+    "Hang the laundry",
+    "Sidai kain",
+    "晾衣服",
+    "துணிகளை உலர வை"
+  ],
+  [
+    "Find the flowers",
+    "Cari bunga",
+    "寻找花朵",
+    "பூக்களைத் தேடு"
+  ],
+  [
+    "Shoot marbles\ninto the circle",
+    "Tembak guli\nke dalam bulatan",
+    "将弹珠\n射入圆圈",
+    "வட்டத்திற்குள்\nகோலிகளை எய்"
+  ],
+  [
+    "Repair the lamp",
+    "Baiki lampu",
+    "修理灯具",
+    "விளக்கைப் பழுதுபார்"
+  ],
+  [
+    "Arrange the\nshoes",
+    "Susun\nkasut",
+    "整理\n鞋子",
+    "காலணிகளை\nஅடுக்கு"
+  ],
+  [
+    "MAP KEY",
+    "PETUNJUK PETA",
+    "地图图例",
+    "வரைபடக் குறியீடுகள்"
+  ],
+  [
+    "SHOW ROUTE",
+    "TUNJUK LALUAN",
+    "显示路线",
+    "பாதையைக் காட்டு"
+  ],
+  [
+    "Choose a task number\nto see its location:",
+    "Pilih nombor tugasan\nuntuk melihat lokasinya:",
+    "选择任务编号\n查看其位置：",
+    "பணியின் இடத்தைக் காண\nஅதன் எண்ணைத் தேர்ந்தெடு:"
+  ],
+  [
+    "English and bundled translations work offline. Additional Chinese and Tamil game text uses Huawei ML Kit and requires internet. Player names, chat, passwords and account details are not sent for automatic translation.",
+    "Bahasa Inggeris dan terjemahan terbina dalam tersedia di luar talian. Teks tambahan bahasa Cina dan Tamil menggunakan Huawei ML Kit dan memerlukan internet. Nama pemain, sembang, kata laluan dan maklumat akaun tidak dihantar untuk terjemahan automatik.",
+    "英语和内置翻译可离线使用。额外的中文和泰米尔语游戏文本使用Huawei ML Kit，需要网络。玩家姓名、聊天、密码和账号详情不会被发送用于自动翻译。",
+    "ஆங்கிலமும் உள்ளமைந்த மொழிபெயர்ப்புகளும் இணையமின்றி இயங்கும். கூடுதல் சீன மற்றும் தமிழ் உரைக்கு Huawei ML Kit மற்றும் இணையம் தேவை. வீரர் பெயர்கள், அரட்டை, கடவுச்சொற்கள், கணக்கு விவரங்கள் தானியங்கி மொழிபெயர்ப்புக்கு அனுப்பப்படாது."
+  ],
+  [
+    "JOYSTICK DISPLAY",
+    "PAPARAN JOYSTICK",
+    "摇杆显示",
+    "ஜாய்ஸ்டிக் காட்சி"
+  ],
+  [
+    "Always Visible",
+    "Sentiasa Kelihatan",
+    "始终显示",
+    "எப்போதும் காட்டு"
+  ],
+  [
+    "Always Hidden",
+    "Sentiasa Tersembunyi",
+    "始终隐藏",
+    "எப்போதும் மறை"
+  ],
+  [
+    "Show on Touch (Default)",
+    "Tunjuk apabila Disentuh (Lalai)",
+    "触摸时显示（默认）",
+    "தொடும்போது காட்டு (இயல்பு)"
+  ],
+  [
+    "All three options keep movement enabled. In Show on Touch mode, the joystick appears where your finger touches the lower-left area and hides when released.",
+    "Ketiga-tiga pilihan masih membenarkan pergerakan. Dalam mod Tunjuk apabila Disentuh, joystick muncul di tempat jari menyentuh kawasan kiri bawah dan hilang apabila dilepaskan.",
+    "三种选项均可控制移动。在触摸显示模式下，摇杆出现在手指触摸的左下区域，松开后隐藏。",
+    "மூன்று விருப்பங்களிலும் நகரலாம். தொடும்போது காட்டும் முறையில், கீழ் இடப்பகுதியில் விரல் தொடும் இடத்தில் ஜாய்ஸ்டிக் தோன்றும்; விரலை எடுத்தால் மறையும்."
+  ],
+  [
+    "✓  Always Visible",
+    "✓  Sentiasa Kelihatan",
+    "✓  始终显示",
+    "✓  எப்போதும் காட்டு"
+  ],
+  [
+    "✓  Always Hidden",
+    "✓  Sentiasa Tersembunyi",
+    "✓  始终隐藏",
+    "✓  எப்போதும் மறை"
+  ],
+  [
+    "✓  Show on Touch (Default)",
+    "✓  Tunjuk apabila Disentuh (Lalai)",
+    "✓  触摸时显示（默认）",
+    "✓  தொடும்போது காட்டு (இயல்பு)"
+  ]
+]

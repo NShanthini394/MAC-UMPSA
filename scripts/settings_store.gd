@@ -1,5 +1,5 @@
 extends RefCounted
-const DEFAULTS = {"music": 100.0, "effects": 100.0, "muted": false, "sensitivity": 1.0, "text_size": 20.0, "language": "en"}
+const DEFAULTS = {"music": 100.0, "effects": 100.0, "muted": false, "sensitivity": 1.0, "text_size": 20.0, "language": "en", "joystick_visibility": "touch"}
 static var values: Dictionary = {}
 static func load_values() -> void:
 	if not values.is_empty(): return

@@ -46,7 +46,7 @@ func run() -> void:
   check(store.get_value("language")=="ms","Malay choice saves its preference")
   var language_config:=ConfigFile.new()
   check(language_config.load("user://preferences.cfg")==OK and language_config.get_value("settings","language")=="ms","Malay preference persists")
-  check(page.status.text.contains("Huawei ML Kit"),"Pending translation is explained")
+  check(app.huawei_translation.app_language.selected==1,"Malay is connected to the language service")
   page.find_child("LanguageEnglish",true,false).pressed.emit(); await settle()
   check(store.get_value("language")=="en","Can switch back to English")
   page.show_section("AUDIO"); await settle()

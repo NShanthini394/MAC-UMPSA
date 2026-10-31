@@ -38,6 +38,7 @@ static func discussion(app: Control) -> void:
 		var card := UI.make_panel(body, Rect2(30 + (index % 5) * 188, 102 + (index / 5) * 62, 180, 58), Data.SECTION_PANEL)
 		avatar(card, member, Rect2(5, 7, 42, 44))
 		var name_label := UI.make_child_label(card, str(member.get("name", "Player")), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(53, 3, 121, 52))
+		name_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		name_label.tooltip_text = name_label.text
 		name_label.max_lines_visible = 2; name_label.clip_text = true
 		index += 1
@@ -75,6 +76,7 @@ static func voting(app: Control, members: Array) -> void:
 		button.position = Vector2(32 + (index % 2) * 480, 128 + (index / 2) * 76)
 		avatar(button, member, Rect2(10, 11, 48, 48))
 		var title := UI.make_child_label(button, str(member.get("name", "Player")), 18, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(70, 6, 372, 28))
+		title.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		title.autowrap_mode = TextServer.AUTOWRAP_OFF; title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title.clip_text = true; title.tooltip_text = title.text
 		UI.make_child_label(button, str(member.get("character", "")), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(70, 36, 372, 28))

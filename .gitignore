@@ -2,3 +2,7 @@
 .godot/
 /android/
 /builds/
+
+# Keep Huawei registration credentials local.
+/config/agconnect-services.json
+/config/huawei-public.json

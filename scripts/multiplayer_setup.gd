@@ -21,13 +21,15 @@ static func show_join(app: Control) -> void:
 	app._screen_ui_parent().add_child(shade)
 	var panel := UI.make_panel(shade, Rect2(360, 100, 560, 520), Color("24180f"))
 	UI.make_child_label(panel, "JOIN A ROOM", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 18, 510, 42))
-	UI.make_child_label(panel, "Enter the host's five-character room code.\nYour devices can use the same or different networks.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 64, 490, 48))
+	UI.make_child_label(panel, "Type the room code or scan the host's room QR.\nYour devices can use the same or different networks.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 64, 490, 48))
 	UI.make_child_label(panel, "Player name", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 122, 460, 22))
 	field(panel, "LobbyPlayerNameEntry", app.lobby_player_name, "Your name", Rect2(50, 148, 460, 36)).max_length = 20
 	UI.make_child_label(panel, "Room code", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(50, 212, 460, 22))
 	var code := field(panel, "JoinCodeEntry", "", "5-CHARACTER CODE", Rect2(50, 240, 460, 46))
 	code.max_length = 5; code.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	code.text_submitted.connect(func(_value: String): app.call("_join_room_with_code"))
+	var scan := UI.make_button(panel, "SCAN QR", Callable(app, "_scan_room_qr"), 250, 40)
+	scan.name = "ScanRoomQrButton"; scan.position = Vector2(155, 301)
 	var status := UI.make_child_label(panel, "", 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 345, 490, 65))
 	status.name = "JoinRoomStatusLabel"
 	status.text = "Enter the host's code. Works on the same or different networks.\nAn internet connection is required."
@@ -69,7 +71,7 @@ static func show_created(app: Control) -> void:
 	shade.color = Color(0, 0, 0, 0.65)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	app._screen_ui_parent().add_child(shade)
-	var panel := UI.make_panel(shade, Rect2(350, 135, 580, 450), Color("24180f"))
+	var panel := UI.make_panel(shade, Rect2(350, 110, 580, 500), Color("24180f"))
 	UI.make_child_label(panel, "ONLINE ROOM CREATED" if app.internet_mode else "WI-FI ROOM CREATED", 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 530, 42))
 	UI.make_child_label(panel, "Share this code with your friends." if app.internet_mode else "Share this code with friends on the same Wi-Fi.", 15, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 70, 510, 36))
 	UI.make_child_label(panel, app.room_code, 48, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 118, 510, 70))
@@ -79,6 +81,9 @@ static func show_created(app: Control) -> void:
 	copy.name = "CopyCreatedRoomCodeButton"; copy.position = Vector2(55, 362)
 	var enter := UI.make_button(panel, "ENTER WAITING ROOM", Callable(app, "_enter_waiting_room"), 245, 48, true)
 	enter.name = "EnterWaitingRoomButton"; enter.position = Vector2(280, 362)
+	if app.internet_mode:
+		var qr := UI.make_button(panel, "SHOW ROOM QR", Callable(app, "_show_room_qr"), 250, 44, true)
+		qr.name = "ShowRoomQrButton"; qr.position = Vector2(165, 425)
 
 
 static func show_disconnected(app: Control, message: String) -> void:

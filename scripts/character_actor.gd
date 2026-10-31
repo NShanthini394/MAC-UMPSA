@@ -28,6 +28,7 @@ func _ready() -> void:
 	add_child(_sprite)
 	_name_label = Label.new()
 	_name_label.name = "PlayerName"
+	_name_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_name_label.position = Vector2(-20, -24)
 	_name_label.size = Vector2(120, 24)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

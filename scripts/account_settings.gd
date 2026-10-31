@@ -6,6 +6,7 @@ const ACTIONS = ["CHANGE USERNAME", "CHANGE AVATAR", "CHANGE EMAIL", "CHANGE PAS
 
 static func build(page: Control, action: String = "ACCOUNT") -> void:
 	var auth = page.app.firebase_auth
+	var huawei: bool = auth.user.get("provider", "") == "huawei"
 	var guest: bool = auth.user.is_empty() or auth.user.get("anonymous", false)
 	var in_room: bool = not str(page.app.room_code).is_empty()
 	if action == "ACCOUNT":
@@ -17,6 +18,11 @@ static func build(page: Control, action: String = "ACCOUNT") -> void:
 		if guest:
 			page.row("Link Google Account", "security", auth.link_google, "AccountLinkGoogle").disabled = in_room
 			page.row("Convert Guest to Email Account", "security", page.show_section.bind("CREATE ACCOUNT"), "AccountConvertGuest").disabled = in_room
+		elif huawei:
+			page.paragraph("Signed in with Huawei ID. Your game username and avatar are saved on this device.")
+			page.row("Huawei Account Security", "security", page.show_section.bind("ACCOUNT SECURITY"), "AccountSecurity").disabled = in_room
+			page.row("Remove Huawei Profile from This Device", "exit", page.show_section.bind("DELETE ACCOUNT"), "AccountDelete").disabled = in_room
+			page.row("Log Out", "exit", page.app._open_account_settings, "AccountLogout").disabled = in_room
 		else:
 			page.paragraph("Linked email: " + str(auth.user.get("email", "")))
 			page.row("Account ID — tap to copy", "info", func(): DisplayServer.clipboard_set(str(auth.user.uid)); page.status.text = "Account ID copied.", "AccountCopyID")
@@ -27,7 +33,22 @@ static func build(page: Control, action: String = "ACCOUNT") -> void:
 			page.row("Log Out", "exit", page.app._open_account_settings, "AccountLogout").disabled = in_room
 		if in_room: page.paragraph("Leave the room before changing your username or sign-in details.")
 		return
+	if action == "DELETE ACCOUNT" and huawei:
+		if in_room: page.paragraph("Leave the room before changing account details."); return
+		page.paragraph("Remove this game's saved Huawei profile from this device and log out. Your Huawei ID is not deleted. You can sign in again later.")
+		var confirmation := field(page, "Type DELETE to confirm", "AccountDeleteConfirmation", false, "", 6)
+		page.row("REMOVE LOCAL PROFILE", "exit", func():
+			if confirmation.text != "DELETE": page.status.text = "Type DELETE to confirm."; return
+			var uid: String = auth.user.uid
+			auth.sign_out(); page.app._account_deleted(uid), "AccountSubmit")
+		return
 	if action == "CHANGE AVATAR": avatars(page); return
+	if action == "ACCOUNT SECURITY" and huawei:
+		page.heading("HUAWEI ACCOUNT SECURITY")
+		page.paragraph("Huawei manages your Huawei ID email, password and account security. This sign-in is separate from Firebase email and Google accounts.")
+		page.paragraph("Removing this game's local profile does not delete your Huawei ID. Cloud account linking and progress sync are not part of this integration.")
+		page.row("Manage Huawei ID", "security", func(): OS.shell_open("https://id5.cloud.huawei.com/"), "AccountHuaweiSecurity")
+		return
 	if action == "ACCOUNT SECURITY":
 		page.heading("SIGN-IN SECURITY")
 		page.paragraph("Email verified: " + ("Yes" if auth.user.get("email_verified", false) else "Not yet confirmed"))

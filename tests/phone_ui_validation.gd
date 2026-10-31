@@ -52,8 +52,9 @@ func run() -> void:
   await process_frame
  await create_timer(4.5).timeout
  check(app.current_screen=="role_reveal","Role card stays visible for at least 4.5 seconds")
- await create_timer(0.7).timeout
- check(app.current_screen=="game","Five-second reveal enters game without another countdown")
+ var transition_deadline=Time.get_ticks_msec()+1300
+ while app.current_screen!="game" and Time.get_ticks_msec()<transition_deadline: await process_frame
+ check(app.current_screen=="game","Five-second reading time plus card flip enters game without another countdown")
  app.queue_free();await process_frame
  print("PHONE UI CHECKS: %d checks; %d failures"%[checks,failures])
  quit(1 if failures else 0)

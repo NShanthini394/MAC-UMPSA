@@ -11,7 +11,7 @@ static func build(app: Control, friends: bool = false) -> void:
 	app._add_overlay_close(panel,1170,Callable(app,"build_play_modes") if friends else Callable(app,"build_menu"))
 	var entries: Array = [
 		["PLAY WITH FRIENDS","Create a private room or join with a room code.\n2–10 human players; bots fill empty spaces.",Callable(app,"build_friends_menu"),"FriendsModeButton"],
-		["SOLO VS BOTS","1 human + 9 AI characters.\nYou play as a Villager.\nNo internet or search wait.",Callable(app,"_choose_solo_mode"),"SoloModeButton"],
+		["SOLO VS BOTS","1 human and 9 bots.\nYou play as a Villager.\nNo internet or search wait.",Callable(app,"_choose_solo_mode"),"SoloModeButton"],
 		["QUICK MATCH","Find other players online.\nSearch for up to 60 seconds, then fill empty spaces with bots.",Callable(app,"_find_public_match"),"QuickMatchButton"]
 	]
 	if friends:

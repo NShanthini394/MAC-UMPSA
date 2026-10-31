@@ -43,7 +43,7 @@ func validate()->void:
 	check(host.find_child("LobbyActionButton",true,false).disabled,"Private host initially waits for guest Ready")
 	guest._on_lobby_primary_action()
 	if not await wait_for(func():return not host.find_child("LobbyActionButton",true,false).disabled):return
-	check(host.find_child("LobbyActionButton",true,false).text=="START WITH BOTS","Two ready humans can start through UI")
+	check(host.find_child("LobbyActionButton",true,false).text=="START","Two ready humans can start through UI")
 	host._on_lobby_primary_action()
 	if not await wait_for(func():return guest.network_manager.lobby_locked):return
 	await process_frame

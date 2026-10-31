@@ -99,7 +99,7 @@ static func build(app: Control) -> void:
 	google.name = "LoginGoogleButton"; provider_mark(google, "Google")
 	var email := account_button(form, "Sign in with Email", Callable(app, "show_email_sign_in"), Rect2(0, 144, 520, 60))
 	email.name = "LoginEmailButton"
-	var huawei := account_button(form, "Continue with Huawei ID", Callable(app, "_login_provider_unavailable").bind("Huawei"), Rect2(0, 214, 520, 60), true)
+	var huawei := account_button(form, "Continue with Huawei ID", Callable(app.firebase_auth, "huawei_sign_in"), Rect2(0, 214, 520, 60), true)
 	huawei.name = "LoginHuaweiButton"; provider_mark(huawei, "Huawei")
 	var create := account_button(form, "Create Account", Callable(app, "show_create_account"), Rect2(0, 284, 520, 60), false, true)
 	create.name = "LoginCreateAccountButton"

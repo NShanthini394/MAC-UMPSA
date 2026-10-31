@@ -122,9 +122,13 @@ func profile() -> void:
 	var display_name := str(profile_data.username)
 	if display_name.is_empty(): display_name = "Player 1"
 	if Data.CHARACTER_AVATARS.has(str(profile_data.avatar)): avatar.texture = load(Data.CHARACTER_AVATARS[str(profile_data.avatar)])
-	copy.add_child(label_(display_name, 26, Data.GOLD))
-	var identity := str(user.get("email", "Signed in")) if not user.is_empty() else "Playing as Guest"
-	copy.add_child(label_(identity, 18))
+	var name_label := label_(display_name, 26, Data.GOLD)
+	name_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	copy.add_child(name_label)
+	var identity := "Signed in with Huawei ID" if user.get("provider", "") == "huawei" else str(user.get("email", "Signed in")) if not user.is_empty() else "Playing as Guest"
+	var identity_label := label_(identity, 18)
+	identity_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	copy.add_child(identity_label)
 	var badge := label_("GUEST" if user.is_empty() else "SIGNED IN", 18, Color("d8edb2")); badge.custom_minimum_size.x = 130; card.add_child(badge)
 
 func overview() -> void:
@@ -166,12 +170,18 @@ func audio() -> void:
 		Store.apply(app); show_section("AUDIO"))
 
 func controls() -> void:
+	heading("JOYSTICK DISPLAY")
+	var options := [["always", "Always Visible", "JoystickAlways"], ["hidden", "Always Hidden", "JoystickHidden"], ["touch", "Show on Touch (Default)", "JoystickTouch"]]
+	for option in options:
+		row(("✓  " if Store.get_value("joystick_visibility") == option[0] else "") + option[1], "controls", func():
+			Store.set_value("joystick_visibility", option[0]); show_section("CONTROLS & DISPLAY"), option[2])
+	paragraph("All three options keep movement enabled. In Show on Touch mode, the joystick appears where your finger touches the lower-left area and hides when released.")
 	slider("Joystick sensitivity", "sensitivity", 0.6, 1.8, 0.1, "×")
 	paragraph("Higher sensitivity needs less thumb movement. Walking speed and collision rules stay the same.")
 	slider("Chat & guide text size", "text_size", 18, 24, 2, " px")
 	paragraph("Text size applies to discussion messages and How to Play. Other game labels already use the larger phone layout.")
 	row("Restore control defaults", "reset", func():
-		for key in ["sensitivity", "text_size"]: Store.set_value(key, Store.DEFAULTS[key])
+		for key in ["sensitivity", "text_size", "joystick_visibility"]: Store.set_value(key, Store.DEFAULTS[key])
 		show_section("CONTROLS & DISPLAY"))
 
 func guide() -> void:
@@ -198,13 +208,16 @@ func about() -> void:
 	heading(Data.GAME_TITLE)
 	paragraph("A Malaysian folklore social-deduction game. Every match has ten characters: eight Villagers and two Nenek Kebayan.")
 	paragraph("Android landscape edition  •  Built with Godot Engine")
-	paragraph("Build: 0.16  •  Map views and settings update")
+	paragraph("Build: 0.18  •  Huawei combined edition")
 
 func language() -> void:
 	heading("LANGUAGE")
-	var selected := str(Store.get_value("language"))
-	row(("✓  " if selected == "en" else "") + "English (Default)", "language", func():
-		Store.set_value("language", "en"); show_section("LANGUAGE"); status.text = "English selected.", "LanguageEnglish")
-	row(("✓  " if selected == "ms" else "") + "Malay / Bahasa Melayu", "language", func():
-		Store.set_value("language", "ms"); show_section("LANGUAGE"); status.text = "Malay preference saved. Translation will be enabled with Huawei ML Kit.", "LanguageMalay")
-	paragraph("English is available now. Malay translation will be connected through Huawei ML Kit in a later update. Your language preference is saved on this device.")
+	var service: Node = app.huawei_translation.app_language
+	var names := ["English (Default)", "Malay / Bahasa Melayu", "Chinese / 中文", "Tamil / தமிழ்"]
+	var ids := ["LanguageEnglish", "LanguageMalay", "LanguageChinese", "LanguageTamil"]
+	for index in names.size():
+		var item := row(("✓  " if service.selected == index else "") + names[index], "language", func():
+			service.select_language(index); show_section("LANGUAGE"); status.text = service.status_text(), ids[index])
+		item.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	paragraph("English and bundled translations work offline. Additional Chinese and Tamil game text uses Huawei ML Kit and requires internet. Player names, chat, passwords and account details are not sent for automatic translation.")
+	status.text = service.status_text()

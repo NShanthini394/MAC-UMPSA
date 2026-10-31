@@ -1,9 +1,0 @@
-org.kampung.auth-pngs-0 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\generated\res\pngs\release
-org.kampung.auth-updated_navigation_xml-1 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\generated\updated_navigation_xml\release
-org.kampung.auth-mergeReleaseResources-2 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-org.kampung.auth-mergeReleaseResources-3 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-org.kampung.auth-release-4 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\intermediates\merged_res\release\mergeReleaseResources
-org.kampung.auth-release-5 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\build\intermediates\packaged_res\release\packageReleaseResources
-org.kampung.auth-main-6 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\main\res
-org.kampung.auth-release-7 C:\Users\shant\Documents\Godot\mac-umpsa-main\native\google_sign_in\src\release\res
-gradleHome-0 C:\Users\shant\.gradle

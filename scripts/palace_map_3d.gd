@@ -303,7 +303,7 @@ func _draw_markers() -> void:
 	occupied.append(Rect2(player_at-Vector2(20,20),Vector2(40,40)))
 	for section in _plan.layout["sections"]:
 		var rect: Rect2=section["zones"][0]
-		var copy: String=section["name"]
+		var copy: String=preload("res://scripts/app_language.gd").text(section["name"])
 		if copy.length()>12: copy=copy.replace(" and "," & ")
 		if copy.contains(" "): copy=copy.replace(" ","\n")
 		var lines := copy.split("\n")

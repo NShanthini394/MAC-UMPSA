@@ -62,6 +62,7 @@ var active_power_kind := ""
 var active_power_area := -1
 var active_power_until := 0.0
 var sleep_ready_at := 0.0
+var gong_ready_at := 0.0
 var sabotage_ready_at := 0.0
 var practice_power_room: Dictionary = {}
 var active_fog_origin := Vector2.ZERO
@@ -200,7 +201,7 @@ func _process(delta: float) -> void:
 		if timer_label and network_meeting_seconds > 0 and network_meeting_tick >= 1.0:
 			network_meeting_tick -= 1.0
 			network_meeting_seconds = maxi(0, network_meeting_seconds - 1)
-			timer_label.text = ("DISCUSSION" if network_meeting_state == "discussion" else "VOTING") + "  •  %ds" % network_meeting_seconds
+			timer_label.text = Lang.text("DISCUSSION  •  %ds") % network_meeting_seconds if network_meeting_state == "discussion" else Lang.text("VOTING  •  %ds") % network_meeting_seconds
 	if current_screen == "waiting_room":
 		waiting_elapsed += delta
 		var network_room: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
@@ -310,6 +311,7 @@ func _reset_power_state() -> void:
 	active_power_area = -1
 	active_power_until = 0.0
 	sleep_ready_at = 0.0
+	gong_ready_at = 0.0
 	sabotage_ready_at = 0.0
 	practice_power_room.clear()
 	active_fog_origin = Vector2.ZERO
@@ -330,6 +332,7 @@ func _apply_power_state(state: Dictionary) -> void:
 	active_power_area = next_area
 	active_power_until = now + remaining
 	sleep_ready_at = now + maxf(0.0, float(state.get("sleep_cooldown", 0.0)))
+	gong_ready_at = now + maxf(0.0, float(state.get("gong_cooldown", 0.0)))
 	sabotage_ready_at = now + maxf(0.0, float(state.get("sabotage_cooldown", 0.0)))
 	if changed: game_screen.refresh_power_effects(self)
 	_update_power_view()
@@ -430,8 +433,9 @@ func _update_interaction_prompt() -> void:
 		prompt.text = ""
 		interact.disabled = completed_tasks.size() > task_index and completed_tasks[task_index] == 1
 	elif gong_near:
-		prompt.text = "Emergency meeting gong • tap INTERACT"
-		interact.disabled = false
+		var gong_seconds := ceili(maxf(0.0, gong_ready_at - Time.get_ticks_msec() / 1000.0))
+		prompt.text = Lang.text("Emergency meeting gong • ready in %ds") % gong_seconds if gong_seconds > 0 else Lang.text("Emergency meeting gong • tap INTERACT")
+		interact.disabled = gong_seconds > 0
 	else:
 		prompt.text = ""
 		interact.disabled = false
@@ -569,25 +573,15 @@ func _continue_as_guest() -> void:
 
 func build_menu() -> void:
 	await clear_screen("menu")
-	add_background(load(MENU_ART))
-	# Blend over the baked button edge exposed above the lowered live panel.
-	var gap_gradient := Gradient.new()
-	gap_gradient.colors = PackedColorArray([Color("24333e"), Color("182334")])
-	var gap_texture := GradientTexture2D.new()
-	gap_texture.gradient = gap_gradient; gap_texture.fill_from = Vector2.ZERO; gap_texture.fill_to = Vector2(0,1)
-	var scenery_gap := TextureRect.new()
-	scenery_gap.texture = gap_texture
-	scenery_gap.position = Vector2(498,274); scenery_gap.size = Vector2(284,26)
-	scenery_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_screen_ui_parent().add_child(scenery_gap)
-	var actions := GameUI.make_panel(_screen_ui_parent(),Rect2(498,294,284,266),Color("24180f"))
+	add_background(load(GameData.MAIN_MENU_ART))
+	var actions := GameUI.make_panel(_screen_ui_parent(),Rect2(498,326,284,230),Color("24180f"))
 	actions.name="MenuActionsPanel"
-	var start:=GameUI.make_button(actions,"START GAME",build_play_modes,272,78,true)
-	start.name="StartGameButton";start.position=Vector2(6,6);start.icon=GameUI.menu_action_icon("play");start.add_theme_font_size_override("font_size",26)
-	var help:=GameUI.make_button(actions,"HOW TO PLAY",show_how_to_play.bind(""),272,78)
-	help.name="MainHelpButton";help.position=Vector2(6,94);help.icon=GameUI.menu_action_icon("book");help.add_theme_font_size_override("font_size",26)
-	var leave:=GameUI.make_button(actions,"EXIT",func():page_controls.confirm("EXIT GAME?","Close Nenek Kebayan?",Callable(get_tree(),"quit")),272,78)
-	leave.name="MainExitButton";leave.position=Vector2(6,182);leave.icon=GameUI.menu_action_icon("exit");leave.add_theme_font_size_override("font_size",26)
+	var start:=GameUI.make_button(actions,"START GAME",build_play_modes,272,64,true)
+	start.name="StartGameButton";start.position=Vector2(6,6);start.icon=GameUI.menu_action_icon("play");start.add_theme_font_size_override("font_size",24)
+	var help:=GameUI.make_button(actions,"HOW TO PLAY",show_how_to_play.bind(""),272,64)
+	help.name="MainHelpButton";help.position=Vector2(6,81);help.icon=GameUI.menu_action_icon("book");help.add_theme_font_size_override("font_size",24)
+	var leave:=GameUI.make_button(actions,"EXIT",func():page_controls.confirm("EXIT GAME?","Close Nenek Kebayan?",Callable(get_tree(),"quit")),272,64)
+	leave.name="MainExitButton";leave.position=Vector2(6,156);leave.icon=GameUI.menu_action_icon("exit");leave.add_theme_font_size_override("font_size",24)
 	var menu_notice := make_label("",14,CREAM,HORIZONTAL_ALIGNMENT_CENTER)
 	menu_notice.name="MenuNoticeLabel";menu_notice.position=Vector2(390,590);menu_notice.size=Vector2(500,44)
 	if is_instance_valid(page_controls): page_controls.call("refresh", true)
@@ -690,10 +684,15 @@ func _find_public_match() -> void:
 	_add_overlay_close(panel,680,Callable(self,"_leave_matchmaking"))
 	var status := _make_child_label(panel,"Connecting to the village…",20,CREAM,HORIZONTAL_ALIGNMENT_CENTER,Rect2(45,125,590,100))
 	status.name = "MatchmakingStatus"
-	_make_child_label(panel,"Waiting for the online server…\nSearch lasts up to 60 seconds once connected.\nBots fill the remaining spaces to make 10 characters.",17,CREAM,HORIZONTAL_ALIGNMENT_CENTER,Rect2(45,240,590,105))
+	_make_child_label(panel,"Your map vote is submitted.\nPlayers are matched by their majority map choice.\nBots fill any open spaces.",17,CREAM,HORIZONTAL_ALIGNMENT_CENTER,Rect2(45,240,590,105))
 	var keep := make_button(panel,"KEEP WAITING",Callable(self,"_keep_waiting"),300,52,true)
 	keep.name = "KeepWaitingButton"; keep.position = Vector2(190,365)
 	_keep_waiting()
+
+
+func _choose_quick_match() -> void:
+	map_selection_mode = "quick"
+	build_map_select()
 
 
 func _keep_waiting() -> void:
@@ -702,14 +701,14 @@ func _keep_waiting() -> void:
 	if network_manager.connection_pending: return
 	if online_server_url.is_empty(): status.text = "Online play is not configured in this build."; return
 	status.text = "Searching for other players…\nYou can keep waiting for a match."
-	var result: Error = network_manager.find_match(lobby_player_name,online_server_url)
+	var result: Error = network_manager.find_match(lobby_player_name,online_server_url,selected_map)
 	if result != OK: status.text = "Cannot start the search. Check your internet and try again."
 
 
 func _on_matchmaking_changed(waiting: int) -> void:
 	if current_screen != "matchmaking": return
 	var status := find_child("MatchmakingStatus",true,false) as Label
-	if status: status.text = "Players found: %d / 10\nPreparing your Quick Match waiting room…" % waiting
+	if status: status.text = "Players searching: %d\nCollecting map votes before opening the waiting room…" % waiting
 
 
 func _leave_matchmaking() -> void:
@@ -908,6 +907,9 @@ func build_map_select() -> void:
 
 func _choose_map(index: int) -> void:
 	selected_map = index
+	if map_selection_mode == "quick":
+		_find_public_match()
+		return
 	selected_character = ""
 	character_reservations.clear()
 	practice_start_countdown = -1.0
@@ -935,6 +937,20 @@ func _on_network_connection_changed(connected: bool, message: String) -> void:
 	if current_screen == "matchmaking":
 		var queue_status := find_child("MatchmakingStatus", true, false) as Label
 		if queue_status: queue_status.text = message
+		return
+	if current_screen in ["game", "meeting"] and not connected and not network_manager.connection_pending:
+		# Keep the player in the current scene on a network drop. The local pawn
+		# remains controllable so an interruption does not eject them to the menu.
+		room_code = ""
+		network_meeting_state = ""
+		_close_meeting_presentation()
+		current_screen = "game"
+		if is_instance_valid(player_body):
+			player_body.set("is_network_driven", false)
+			player_body.set("is_local_player", true)
+			player_body.set_physics_process(true)
+			player_body.global_position = player_position
+		show_notice("The connection dropped. You are still in the game locally; reconnect to continue online.")
 		return
 	if network_manager.connection_pending:
 		_set_connection_busy(true)
@@ -1186,11 +1202,10 @@ func _on_network_meeting_changed(state: String, seconds_left: int, members: Arra
 	if votes_label: votes_label.text = preload("res://scripts/app_language.gd").text("Votes received: %d/%d") % [votes_cast, alive_count]
 
 
-func _on_network_chat_received(_peer_id: int, player_name: String, message: String) -> void:
+func _on_network_chat_received(peer_id: int, player_name: String, message: String) -> void:
 	network_chat_lines.append(player_name + ": " + message)
 	if network_chat_lines.size() > 100: network_chat_lines.pop_front()
-	var chat_log := find_child("MeetingChatLog", true, false) as RichTextLabel
-	if chat_log: chat_log.text = "\n".join(network_chat_lines)
+	preload("res://scripts/meeting_view.gd").append_chat(self, peer_id, player_name, message)
 
 
 func _on_network_meeting_result(target_id: int, _message: String, _winner: String) -> void:
@@ -1519,7 +1534,10 @@ func _render_lobby_slot(slot: Panel, i: int, network_room: bool) -> void:
 			var host_status := _make_child_label(slot, local_status, 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 			host_status.name = "LocalReadyStatusLabel"
 		else:
-			_make_child_label(slot, member_name + ("  •  HOST" if is_host else ""), 10, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28)).auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+			var remote_name := _make_child_label(slot, member_name, 10, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+			remote_name.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+			remote_name.clip_text = true
+			remote_name.tooltip_text = member_name
 			_make_child_label(slot, ("HOST" if is_host else ("READY" if is_ready else "WAITING")), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 	else:
 		var empty_avatar := _make_child_panel(slot, Rect2(29, 10, 66, 66), Color(0.20, 0.17, 0.13, 1.0))
@@ -1599,7 +1617,19 @@ func _refresh_lobby_actions() -> void:
 		timer.text="%02d:%02d"%[int(ceil(countdown))/60,int(ceil(countdown))%60] if searching else str(ceili(countdown)) if locked else "9 bots join when you start" if play_mode=="solo" else "%d human%s · %d bots at start"%[human_count,"" if human_count==1 else "s",10-human_count]
 		timer.add_theme_font_size_override("font_size",32 if searching or locked else 18)
 	var note:=find_child("LobbyReadyWaitNote",true,false) as Label
-	if note:note.text="Bots fill empty slots in %ds."%ceili(countdown) if searching else "Get ready for the village." if locked else "Press Ready once. The host starts." if not room_is_host else "Start when your friends are ready." if play_mode=="friends" else "Press Start to play with 9 bots."
+	if note:
+		if connected and network_manager.lobby_waiting_for_human:
+			note.text = "Waiting for another human player before starting."
+		elif searching:
+			note.text = "Bots fill empty slots in %ds." % ceili(countdown)
+		elif locked:
+			note.text = "Get ready for the village."
+		elif not room_is_host:
+			note.text = "Press Ready once. The host starts."
+		elif play_mode == "friends":
+			note.text = "Start when your friends are ready."
+		else:
+			note.text = "Press Start to play with 9 bots."
 	if locked:
 		action.text="STARTING IN %d"%ceili(countdown);action.disabled=true
 	elif play_mode=="quick":
@@ -2137,6 +2167,10 @@ func show_map_overlay() -> void:
 
 func call_meeting() -> void:
 	if not can_local_act(): return
+	var gong_seconds := ceili(maxf(0.0, gong_ready_at - Time.get_ticks_msec() / 1000.0))
+	if gong_seconds > 0:
+		show_notice(Lang.text("The gong is cooling down. Wait %d seconds.") % gong_seconds)
+		return
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		if player_position.distance_to(MapGeometry.gong_point(selected_map)) > 78.0:
 			show_notice("Move close to the central gong to call a meeting."); return
@@ -2171,6 +2205,7 @@ func show_vote_panel() -> void:
 
 func _cast_vote(suspect: String) -> void:
 	if not can_local_act(): return
+	gong_ready_at = Time.get_ticks_msec() / 1000.0 + preload("res://scripts/network_manager.gd").MEETING_COOLDOWN
 	if suspect.is_empty():
 		var skipped_overlay := find_child("VoteOverlay", true, false)
 		if skipped_overlay: skipped_overlay.queue_free()
@@ -2195,13 +2230,57 @@ func show_result(villagers_win: bool, message: String) -> void:
 		meeting_overlay.get_parent().remove_child(meeting_overlay)
 		meeting_overlay.queue_free()
 	current_screen = "result"
+	page_controls.call("refresh", true)
 	var backdrop := ColorRect.new()
 	backdrop.name = "ResultOverlay"
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.color = Color(0, 0, 0, 0.45)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_screen_ui_parent().add_child(backdrop)
-	var panel := GameUI.make_panel(backdrop, Rect2(310, 200, 660, 330), Color(0.1, 0.07, 0.04, 0.98))
+	var winners: Array[String] = []
+	for member in lobby_players:
+		var role := str(member.get("role", ""))
+		var is_nenek := role == "nenek_kebayan" or str(member.get("character", "")) == impostor_character
+		if is_nenek == (not villagers_win): winners.append(str(member.get("character", "")))
+	if not villagers_win and winners.size() < 2:
+		for secret in [impostor_character, assigned_role_character]:
+			if not str(secret).is_empty() and str(secret) not in winners: winners.append(str(secret))
+	if winners.is_empty():
+		for character in CHARACTERS:
+			var is_nenek := character == impostor_character
+			if is_nenek == (not villagers_win): winners.append(character)
+	var parade := Control.new()
+	parade.name = "WinnerCharacterLineup"
+	parade.position = Vector2(150, 146)
+	parade.size = Vector2(980, 150)
+	parade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop.add_child(parade)
+	var count := mini(winners.size(), 8)
+	for i in count:
+		var character := winners[i]
+		var actor := Control.new()
+		actor.name = "Winner_%d" % i
+		actor.position = Vector2(-95 if i % 2 == 0 else 1060, 18)
+		actor.size = Vector2(80, 100)
+		actor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		parade.add_child(actor)
+		var display := (load("res://scripts/character_actor.gd") as Script).new() as Control
+		display.name = "CharacterActor"
+		display.position = Vector2.ZERO
+		display.size = Vector2(80, 90)
+		actor.add_child(display)
+		display.call("configure", character, "")
+		display.call("set_facing_direction", Vector2.RIGHT if i % 2 == 0 else Vector2.LEFT)
+		display.call("set_running", true)
+		var name_tag := _make_child_label(actor, character, 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-24, 88, 128, 22))
+		name_tag.clip_text = true
+		var spacing := 108.0
+		var start_x := (980.0 - spacing * float(count - 1)) * 0.5
+		var center_x := start_x + i * spacing
+		var tween := create_tween()
+		tween.tween_property(actor, "position", Vector2(center_x - 40, 18), 0.9 + i * 0.08).set_delay(i * 0.07).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(Callable(display, "set_running").bind(false))
+	var panel := GameUI.make_panel(backdrop, Rect2(310, 326, 660, 290), Color(0.1, 0.07, 0.04, 0.98))
 	panel.name = "ResultPanel"
 	_add_overlay_close(panel, 660, Callable(self, "_return_to_menu_cleanly"))
 	var title := _make_child_label(panel, "VILLAGERS WIN!" if villagers_win else "NENEK KEBAYAN WINS!", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 26, 600, 52))
@@ -2209,7 +2288,7 @@ func show_result(villagers_win: bool, message: String) -> void:
 	if message.contains("The host left"): title.text = "GAME ENDED"
 	_make_child_label(panel, Lang.text(message) + (Lang.text("\n\nSecret role character: ") + impostor_character if not impostor_character.is_empty() else ""), 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(45, 105, 570, 90))
 	var again := make_button(panel, "RETURN TO MENU", Callable(self, "_return_to_menu_cleanly"), 220, 48, true)
-	again.position = Vector2(220, 240)
+	again.position = Vector2(220, 218)
 
 
 func show_exit_confirmation() -> void:

@@ -114,4 +114,4 @@ func _process(delta: float) -> void:
 	if distance > 3.0:
 		character_actor.call("set_facing_direction", travel_direction)
 	character_actor.call("set_running", distance > 3.0)
-	global_position = global_position.lerp(_network_target, 1.0 - exp(-16.0 * delta))
+	global_position = global_position.lerp(_network_target, 1.0 - exp(-9.0 * delta))

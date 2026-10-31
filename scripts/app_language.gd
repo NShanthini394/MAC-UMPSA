@@ -164,6 +164,23 @@ func _refresh_current() -> void:
 	if not is_instance_valid(bridge) or not is_instance_valid(bridge.app): return
 	if bridge.app.current_screen == "character_select": bridge.app._refresh_character_select()
 	if bridge.app.current_screen == "waiting_room": bridge.app._refresh_waiting_room()
+	if bridge.app.current_screen == "meeting":
+		var heading := bridge.app.find_child("MeetingHeadingLabel", true, false) as Label
+		var timer := bridge.app.find_child("MeetingTimerLabel", true, false) as Label
+		if bridge.app.network_meeting_state == "discussion":
+			if heading: heading.text = text("EMERGENCY MEETING  •  DISCUSSION")
+			if timer: timer.text = text("DISCUSSION  •  %ds") % bridge.app.network_meeting_seconds
+		else:
+			if heading: heading.text = text("VOTE FOR A PLAYER")
+			if timer: timer.text = text("VOTING  •  %ds") % bridge.app.network_meeting_seconds
+		var chat_input := bridge.app.find_child("MeetingChatInput", true, false) as LineEdit
+		if chat_input: chat_input.placeholder_text = text("Type a message...")
+		var send := bridge.app.find_child("SendMeetingChat", true, false) as Button
+		if send: send.text = text("SEND")
+		var skip := bridge.app.find_child("SkipNetworkVote", true, false) as Button
+		if skip: skip.text = text("SKIP VOTE")
+		var confirm := bridge.app.find_child("ConfirmNetworkVote", true, false) as Button
+		if confirm: confirm.text = text("CONFIRM VOTE")
 	if bridge.app.current_screen == "game" and is_instance_valid(bridge.app.game_world):
 		bridge.app._refresh_task_rows()
 		bridge.app._update_progress()
@@ -193,8 +210,13 @@ func _fit_label(label: Label) -> void:
 	if not label.has_meta("language_font_size"):
 		label.set_meta("language_font_size", label.get_theme_font_size("font_size"))
 	var base_size: int = label.get_meta("language_font_size")
+	var font := label.get_theme_font("font")
 	var fitted := base_size
 	label.add_theme_font_size_override("font_size", fitted)
-	while fitted > mini(14, base_size) and label.get_line_count() * label.get_line_height() > label.size.y + 1:
+	while fitted > 12:
+		var raw_width := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fitted).x
+		var too_wide := label.autowrap_mode == TextServer.AUTOWRAP_OFF and raw_width > label.size.x + 1
+		var too_tall := label.get_line_count() * label.get_line_height() > label.size.y + 1
+		if not too_wide and not too_tall: break
 		fitted -= 1
 		label.add_theme_font_size_override("font_size", fitted)

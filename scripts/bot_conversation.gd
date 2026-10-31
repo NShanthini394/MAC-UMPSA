@@ -11,11 +11,11 @@ static func begin(room: Dictionary, now: float, random: RandomNumberGenerator) -
 	room["bot_chat_next"] = now + 1.5
 	var bots := active_bots(room)
 	# A few people open the conversation; others reply when addressed.
-	for i in mini(bots.size(), 5):
+	for i in mini(bots.size(), 8):
 		var bot: Dictionary = bots[(i + random.randi_range(0, bots.size()-1)) % bots.size()]
 		var queue: Array = room.bot_chat_queue
 		if queue.any(func(event: Dictionary) -> bool: return event.id == bot.id): continue
-		queue.append({"id": bot.id, "due": now + 2.0 + i * random.randf_range(3.5, 5.0), "message": "", "speaker": ""})
+		queue.append({"id": bot.id, "due": now + 1.5 + i * random.randf_range(1.4, 2.3), "message": "", "speaker": ""})
 
 static func active_bots(room: Dictionary) -> Array:
 	var result: Array = []
@@ -42,7 +42,7 @@ static func hear(room: Dictionary, sender: int, message: String, now: float, ran
 		var bot: Dictionary = respondents[i]
 		# Replace that bot's pending opener or old answer with the newest question.
 		queue = queue.filter(func(event: Dictionary) -> bool: return event.id != bot.id)
-		queue.append({"id": bot.id, "due": now + random.randf_range(1.3, 2.5) + i * 3.0, "message": message, "speaker": speaker})
+		queue.append({"id": bot.id, "due": now + random.randf_range(0.8, 1.8) + i * 1.5, "message": message, "speaker": speaker})
 	room["bot_chat_queue"] = queue
 
 static func tick(room: Dictionary, now: float, random: RandomNumberGenerator) -> Dictionary:
@@ -63,7 +63,7 @@ static func tick(room: Dictionary, now: float, random: RandomNumberGenerator) ->
 		history.append(message)
 		if history.size() > 30: history.pop_front()
 		room["bot_chat_history"] = history
-		room["bot_chat_next"] = now + random.randf_range(2.2, 3.8)
+		room["bot_chat_next"] = now + random.randf_range(1.2, 2.1)
 		return {"member": bot, "message": message}
 	return {}
 

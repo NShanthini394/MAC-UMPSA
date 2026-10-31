@@ -677,5 +677,14 @@
   "▣   Room / area",
   "▲   Your position",
   "▷  Play as Guest",
-  "✓   Completed tasks"
+  "✓   Completed tasks",
+  "ASLEEP",
+  "SLEEPING",
+  "The gong is cooling down. Wait %d seconds.",
+  "The gong is cooling down. Wait %d seconds before calling another meeting.",
+  "Emergency meeting gong • ready in %ds",
+  "Emergency meeting gong • tap INTERACT",
+  "The Nenek Kebayan outnumber the remaining awake villagers. Nenek Kebayan wins!",
+  "DISCUSSION  •  %ds",
+  "VOTING  •  %ds"
 ]

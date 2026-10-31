@@ -12,6 +12,7 @@ var _frame_index := 0
 var _facing_mode := "front"
 var _base_sprite_y := 0.0
 var _character := ""
+var _sleep_texture: Texture2D
 var _pose_tween: Tween
 var _blow_tween: Tween
 
@@ -57,6 +58,15 @@ func configure(character: String, display_name: String = "YOU") -> void:
 	_sprite.modulate = Color.WHITE
 	_sprite.material = null
 	_sprite.texture = null
+	_sleep_texture = null
+	var sleep_files := {
+		"Badang":"badang_sleeping.png", "Bawang Merah":"bawang_merah_sleeping.png",
+		"Bawang Putih":"bawang_putih_sleeping.png", "Mahsuri":"mahsuri_sleeping.png",
+		"Orang Kampung Lelaki":"orang_kampung_lelaki_sleeping.png", "Raja Bersiung":"raja_bersiung_sleeping.png",
+		"Puteri Gunung Ledang":"puteri_gunung_ledang_sleeping.png", "Pak Pandir":"pak_pandir_sleeping.png",
+		"Pak Kaduk":"pak_kaduk_sleeping.png", "Orang Kampung Perempuan":"orang_kampung_perempuan_sleeping.png"
+	}
+	if sleep_files.has(character): _sleep_texture = load("res://assets/characters/sleeping/" + str(sleep_files[character])) as Texture2D
 	if GameData.CHARACTER_ANIMATIONS.has(character):
 		_animations = load(GameData.CHARACTER_ANIMATIONS[character]) as SpriteFrames
 	if _animations != null:
@@ -92,19 +102,24 @@ func set_running(running: bool) -> void:
 
 func set_sleeping(value: bool, animate: bool = false) -> void:
 	_sleeping = value
+	queue_redraw()
 	_is_running = false
 	_elapsed = 0.0
 	_frame_index = 0
 	_apply_frame()
+	if value and _sleep_texture != null and not animate:
+		_sprite.texture = _sleep_texture
 	if _pose_tween and _pose_tween.is_running(): _pose_tween.kill()
 	var target_rotation := 0.0
-	var target_y := _base_sprite_y
+	var target_y := _base_sprite_y + (18.0 if value else 0.0)
 	var target_tint := Color("c0d2e8") if value else Color.WHITE
 	if animate:
 		_pose_tween = create_tween().set_parallel(true)
 		_pose_tween.tween_property(_sprite, "rotation", target_rotation, 0.48).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		_pose_tween.tween_property(_sprite, "position:y", target_y, 0.48).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		_pose_tween.tween_property(_sprite, "modulate", target_tint, 0.36).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		if value and _sleep_texture != null:
+			_pose_tween.chain().tween_callback(func(): _sprite.texture = _sleep_texture)
 	else:
 		_sprite.rotation = target_rotation
 		_sprite.position.y = target_y
@@ -118,8 +133,14 @@ func play_sleep_spell_blow(direction: Vector2) -> void:
 	if _blow_tween and _blow_tween.is_running(): _blow_tween.kill()
 	var home := _sprite.scale
 	_blow_tween = create_tween()
-	_blow_tween.tween_property(_sprite, "scale", home * Vector2(0.94, 1.04), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_blow_tween.tween_property(_sprite, "scale", home, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	var base_rotation := _sprite.rotation
+	for _gesture in 2:
+		_blow_tween.tween_property(_sprite, "rotation", base_rotation - 0.09, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_blow_tween.parallel().tween_property(_sprite, "scale", home * Vector2(1.04, 0.97), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_blow_tween.tween_property(_sprite, "rotation", base_rotation + 0.09, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_blow_tween.parallel().tween_property(_sprite, "scale", home * Vector2(0.96, 1.03), 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_blow_tween.tween_property(_sprite, "rotation", base_rotation, 0.14)
+	_blow_tween.parallel().tween_property(_sprite, "scale", home, 0.14)
 
 
 func _animation_name() -> StringName:
@@ -145,3 +166,12 @@ func _process(delta: float) -> void:
 		_elapsed = maxf(0.0, _elapsed - steps / fps)
 		_frame_index = (_frame_index + steps) % _animations.get_frame_count(animation)
 		_apply_frame()
+
+
+func _draw() -> void:
+	if not _sleeping: return
+	var shadow := PackedVector2Array()
+	for i in 32:
+		var angle := TAU * float(i) / 32.0
+		shadow.append(Vector2(40.0 + cos(angle) * 34.0, 78.0 + sin(angle) * 8.0))
+	draw_colored_polygon(shadow, Color(0.055, 0.04, 0.03, 0.52))

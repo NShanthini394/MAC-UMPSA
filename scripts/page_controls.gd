@@ -113,7 +113,7 @@ func refresh(force: bool = false) -> void:
 		_last_screen = "settings"
 		return
 	var playing := screen == "game"
-	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select", "matchmaking", "meeting", "play_modes", "friends_menu", "solo_connect"]
+	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select", "matchmaking", "meeting", "result", "play_modes", "friends_menu", "solo_connect"]
 	var map_overlay: Node = app.find_child("MapOverlay",true,false)
 	var map_modal := is_instance_valid(map_overlay) and not map_overlay.is_queued_for_deletion()
 	var task_modal := playing and (int(app.task_overlay_index) >= 0 or map_modal)

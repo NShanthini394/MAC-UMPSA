@@ -356,6 +356,60 @@ const TEXT := [
     "மீண்டும் விளையாடு"
   ],
   [
+    "ASLEEP",
+    "TERTIDUR",
+    "已睡着",
+    "தூங்குகிறார்"
+  ],
+  [
+    "The gong is cooling down. Wait %d seconds.",
+    "Gong sedang dicas semula. Tunggu %d saat.",
+    "铜锣正在冷却，请等待 %d 秒。",
+    "மணி மீண்டும் தயாராகிறது. %d விநாடிகள் காத்திருக்கவும்."
+  ],
+  [
+    "Emergency meeting gong • ready in %ds",
+    "Gong mesyuarat kecemasan • sedia dalam %ds",
+    "紧急会议铜锣 • %d秒后可用",
+    "அவசரக் கூட்ட மணி • %d வினாடிகளில் தயார்"
+  ],
+  [
+    "Emergency meeting gong • tap INTERACT",
+    "Gong mesyuarat kecemasan • tekan INTERAKSI",
+    "紧急会议铜锣 • 点击互动",
+    "அவசரக் கூட்ட மணி • செயல்படு என்பதைத் தட்டவும்"
+  ],
+  [
+    "The gong is cooling down. Wait %d seconds before calling another meeting.",
+    "Gong sedang dicas semula. Tunggu %d saat sebelum memanggil mesyuarat lagi.",
+    "铜锣正在冷却，请等待 %d 秒后再召开会议。",
+    "மீண்டும் கூட்டத்தை அழைப்பதற்கு முன் %d விநாடிகள் காத்திருக்கவும்."
+  ],
+  [
+    "SLEEPING",
+    "TERTIDUR",
+    "睡着",
+    "தூங்குகிறார்"
+  ],
+  [
+    "The Nenek Kebayan outnumber the remaining awake villagers. Nenek Kebayan wins!",
+    "Bilangan Nenek Kebayan melebihi Orang Kampung yang masih berjaga. Nenek Kebayan menang!",
+    "Nenek Kebayan 的人数超过仍然清醒的村民。Nenek Kebayan 获胜！",
+    "விழித்திருக்கும் கிராமவாசிகளை விட Nenek Kebayan அதிகமாக உள்ளனர். Nenek Kebayan வெற்றி!"
+  ],
+  [
+    "DISCUSSION  •  %ds",
+    "PERBINCANGAN  •  %ds",
+    "讨论  •  %d秒",
+    "கலந்துரையாடல்  •  %d வி"
+  ],
+  [
+    "VOTING  •  %ds",
+    "PENGUNDIAN  •  %ds",
+    "投票  •  %d秒",
+    "வாக்களிப்பு  •  %d வி"
+  ],
+  [
     "MAIN MENU",
     "MENU UTAMA",
     "主菜单",

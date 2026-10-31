@@ -105,6 +105,10 @@ func place(button: Button, rect: Rect2, transparent: bool = false) -> void:
 
 func refresh(force: bool = false) -> void:
 	if not is_instance_valid(_root): return
+	var language_status := _root.find_child("SettingsLanguageStatus", true, false) as Label
+	if language_status: language_status.text = app.huawei_translation.app_language.status_text()
+	var volume_label := _root.find_child("SettingsVolumeLabel", true, false) as Label
+	if volume_label: volume_label.text = preload("res://scripts/app_language.gd").text("VOLUME · %d%%") % int(app.audio_volume)
 	var screen: String = app.current_screen
 	var menu := screen == "menu"
 	var playing := screen == "game"
@@ -161,14 +165,14 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 	close_dialog()
 	app._stop_move()
 	_dialog_kind = kind
-	_dialog = ColorRect.new()
+	_dialog = preload("res://scripts/fullscreen_shade.gd").new()
 	_dialog.name = "UtilityDialog"
 	_dialog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dialog.color = Color(0, 0, 0, 0.50)
 	_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dialog.z_index = 10
 	_root.add_child(_dialog)
-	var panel := UI.make_panel(_dialog, rect, Color(0.12, 0.08, 0.06, 0.99))
+	var panel := UI.make_panel(_dialog.get_node("ShadeContent"), rect, Color(0.12, 0.08, 0.06, 0.99))
 	var close: Button = app.make_button(panel, "×", close_dialog, 42, 42)
 	close.name = "PopupCloseButton"
 	close.position = Vector2(rect.size.x - 52, 10)
@@ -179,12 +183,12 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 
 
 func show_settings() -> void:
-	var panel := dialog_panel("settings", Rect2(375, 160, 530, 400))
+	var panel := dialog_panel("settings", Rect2(335, 35, 610, 650))
 	panel.name = "SettingsOverlay"
 	UI.make_child_label(panel, "SETTINGS", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 420, 42))
 	var audio := UI.make_button(panel, "TURN AUDIO ON" if bool(app.audio_muted) else "MUTE AUDIO", Callable(app, "_toggle_audio"), 220, 42, true)
 	audio.name = "SettingsAudioButton"; audio.position = Vector2(155, 82)
-	var volume_label := UI.make_child_label(panel, "VOLUME · %d%%" % int(app.audio_volume), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 138, 460, 30))
+	var volume_label := UI.make_child_label(panel, preload("res://scripts/app_language.gd").text("VOLUME · %d%%") % int(app.audio_volume), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 138, 460, 30))
 	volume_label.name = "SettingsVolumeLabel"
 	var volume := HSlider.new()
 	volume.name = "SettingsVolumeSlider"
@@ -195,9 +199,25 @@ func show_settings() -> void:
 	panel.add_child(volume)
 	var test_sound := UI.make_button(panel, "TEST SOUND", Callable(app, "_test_audio"), 220, 38, true)
 	test_sound.name = "SettingsTestSoundButton"; test_sound.position = Vector2(155, 218)
-	UI.make_child_label(panel, "WASD / arrow keys or the touch pad to move.", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 260, 460, 26))
+	UI.make_child_label(panel, "WASD / arrow keys or the touch pad to move.", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 260, 460, 48))
 	var help := UI.make_button(panel, "HOW TO PLAY", Callable(app, "show_how_to_play").bind(""), 200, 40)
-	help.position = Vector2(165, 288)
+	help.position = Vector2(165, 312)
+	for child in panel.get_children():
+		if child is Control and child.name != "PopupCloseButton": child.position.x += 40
+	UI.make_child_label(panel, "LANGUAGE", 16, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 366, 540, 26))
+	var language := OptionButton.new()
+	language.name = "SettingsLanguageButton"
+	language.allow_reselect = true
+	language.position = Vector2(135, 400); language.size = Vector2(340, 42)
+	language.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	var service: Node = app.huawei_translation.app_language
+	for title in service.NAMES: language.add_item(title)
+	language.select(service.selected)
+	language.item_selected.connect(Callable(service, "select_language"))
+	panel.add_child(language)
+	var language_status := UI.make_child_label(panel, service.status_text(), 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 448, 550, 56))
+	language_status.name = "SettingsLanguageStatus"
+	UI.make_child_label(panel, "English and Malay work offline. Chinese and Tamil use Huawei translation for additional game text and need internet.", 13, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 508, 550, 66))
 	var playing: bool = app.current_screen in ["game", "meeting"]
 	if playing:
 		var leave := UI.make_button(panel, "LEAVE GAME", Callable(app, "show_exit_confirmation"), 180, 40)

@@ -84,9 +84,9 @@ func set_progress(progress: int) -> void:
         "net":["Join the loose cord to the knot with its matching number."],
         "rice":["Drag the rice into the pot.","Pour the water into the pot.","Lift the pot when the marker reaches the green zone."],
         "fire":["Place the dry twigs in the fire pit.","Stack the logs on the twigs.","Tap the flint five times to make sparks."],
-        "sweep":["Swipe through the dirt. Piles cleared: %d/5"%progress],
+        "sweep":[preload("res://scripts/app_language.gd").text("Swipe through the dirt. Piles cleared: %d/5") %progress],
         "laundry":["Drag the cloth to the matching colour on the line."],
-        "flowers":["Find the hidden flowers. Flowers found: %d/5"%progress],
+        "flowers":[preload("res://scripts/app_language.gd").text("Find the hidden flowers. Flowers found: %d/5") %progress],
         "marbles":["Pull the marble back, aim the arrow, then release."],
         "lamp":["Join the wire ends with matching colours and letters."],
         "slippers":["Drag each shoe to its matching colour on the right."]
@@ -100,7 +100,7 @@ func set_progress(progress: int) -> void:
     if task_kind=="fire" and progress==2: feedback_label.text="Tap the flint to light the stacked wood."
     if task_kind=="marbles": feedback_label.text="Pull for power • green: inside • red: miss • land all 4 marbles"
     if task_kind=="slippers": feedback_label.text="Place both shoes of each colour to complete all four pairs."
-    if task_kind=="lamp" and progress<3: _instruction.text="Connect wire %s to its matching letter and colour."%["A","B","C"][progress]
+    if task_kind=="lamp" and progress<3: _instruction.text=preload("res://scripts/app_language.gd").text("Connect wire %s to its matching letter and colour.") %["A","B","C"][progress]
     queue_redraw()
 
 func set_input_enabled(enabled: bool) -> void:
@@ -125,6 +125,7 @@ func _process(delta: float) -> void:
         queue_redraw()
 
 func _text(copy: String, at: Vector2, font_size: int = 18, color: Color = CREAM) -> void:
+    copy = preload("res://scripts/app_language.gd").text(copy)
     draw_string(ThemeDB.fallback_font,at,copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)
 
 func _box(rect: Rect2, fill: Color, edge: Color = GOLD) -> void:

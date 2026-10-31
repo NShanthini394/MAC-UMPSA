@@ -208,5 +208,6 @@ func _draw_shoe(index:int,at:Vector2,angle:float,highlight:bool=false) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _label(copy:String,at:Vector2,font_size:int,color:Color=Color("fff0cf")) -> void:
+	copy = preload("res://scripts/app_language.gd").text(copy)
 	draw_string(ThemeDB.fallback_font,at+Vector2(1,1),copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,Color(0,0,0,0.6))
 	draw_string(ThemeDB.fallback_font,at,copy,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)

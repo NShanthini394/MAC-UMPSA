@@ -1,0 +1,17 @@
+plugins { id 'com.android.library' version '8.7.2' }
+android {
+    namespace 'org.kampung.huawei'
+    compileSdk 36
+    defaultConfig { minSdk 24 }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies {
+    if (providers.gradleProperty('godotAar').isPresent()) {
+        compileOnly files(providers.gradleProperty('godotAar').get())
+    } else {
+        compileOnly 'org.godotengine:godot:4.7.2.stable'
+    }
+    implementation 'com.huawei.hms:hwid:6.12.0.300'
+    implementation 'com.huawei.hms:scanplus:2.12.0.301'
+    implementation 'com.huawei.hms:ml-computer-translate:3.11.0.302'
+}

@@ -15,6 +15,10 @@ var user: Dictionary = {}
 var _http: HTTPRequest
 var _generation := 0
 var _google: Object
+var _huawei: Object
+var _huawei_pending := false
+const HUAWEI_CONFIG := "res://config/agconnect-services.json"
+const HUAWEI_PUBLIC_CONFIG := "res://config/huawei-public.json"
 
 func _ready() -> void:
 	load_configuration()
@@ -22,6 +26,60 @@ func _ready() -> void:
 		_google = Engine.get_singleton("KampungGoogleSignIn")
 		_google.connect("google_token", _on_google_token)
 		_google.connect("google_error", _on_google_error)
+	if Engine.has_singleton("KampungHuaweiAccount"):
+		_huawei = Engine.get_singleton("KampungHuaweiAccount")
+		_huawei.connect("huawei_account", _on_huawei_account)
+		_huawei.connect("huawei_error", _on_huawei_error)
+
+static func valid_huawei_configuration(path: String = HUAWEI_CONFIG) -> bool:
+	if not FileAccess.file_exists(path): return false
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not data is Dictionary or not data.get("client") is Dictionary: return false
+	var app_id := str(data.client.get("app_id",""))
+	return str(data.client.get("package_name",""))==PACKAGE and app_id.is_valid_int() and app_id.to_int()>0
+
+func huawei_sign_in() -> void:
+	if busy: return
+	if OS.get_name() != "Android":
+		failed.emit("Huawei sign-in is available in the Android APK. On this computer, use email/password or Play as Guest.")
+		return
+	if _huawei == null:
+		failed.emit("Huawei module is missing from this APK. Enable the Kampung Huawei plugin, restart Godot and export using Gradle Build.")
+		return
+	if not (valid_huawei_configuration(HUAWEI_PUBLIC_CONFIG) or (OS.has_feature("editor") and valid_huawei_configuration())):
+		failed.emit("Huawei configuration is missing from this APK. Restart Godot with the Huawei plugin enabled and export again.")
+		return
+	# Huawei authenticates with its own SDK; Firebase configuration is not required.
+	if _huawei.has_method("getHmsStatus") and int(_huawei.call("getHmsStatus")) != 0:
+		failed.emit("Huawei ID needs HMS Core. Install or update HMS Core using Huawei AppGallery, then reopen the game. Tap HMS Core help for instructions.")
+		return
+	_generation += 1
+	_huawei_pending = true
+	busy = true
+	busy_changed.emit(true)
+	_huawei.call("signIn")
+	var generation := _generation
+	get_tree().create_timer(120.0).timeout.connect(func():
+		if generation == _generation and busy and _huawei_pending:
+			cancel()
+			failed.emit("Huawei sign-in timed out. Check HMS Core and your connection, then try again."))
+
+func _on_huawei_account(open_id: String, display_name: String) -> void:
+	if not busy or not _huawei_pending: return
+	_huawei_pending = false
+	_finish()
+	if open_id.strip_edges().is_empty():
+		failed.emit("Huawei returned an incomplete account. Please try again.")
+		return
+	# This is a local SDK session, never a Firebase or multiplayer server token.
+	user = {"uid":"huawei:"+open_id,"provider":"huawei","display_name":display_name.strip_edges().left(48),"email":""}
+	authenticated.emit()
+
+func _on_huawei_error(message: String) -> void:
+	if not busy or not _huawei_pending: return
+	_huawei_pending = false
+	_finish()
+	failed.emit(message)
 
 func load_configuration(path: String = CONFIG_PATH) -> bool:
 	api_key = ""
@@ -52,6 +110,8 @@ func _finish() -> void:
 
 func cancel() -> void:
 	_generation += 1
+	_huawei_pending = false
+	if _huawei != null: _huawei.call("cancelSignIn")
 	if is_instance_valid(_http):
 		var pending := _http
 		pending.cancel_request()
@@ -63,6 +123,7 @@ func cancel() -> void:
 
 func sign_out() -> void:
 	cancel()
+	if _huawei != null and user.get("provider","")=="huawei": _huawei.call("signOut")
 	user.clear()
 
 func email_sign_in(email: String, password: String, create: bool = false) -> void:

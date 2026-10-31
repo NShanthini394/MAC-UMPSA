@@ -2,3 +2,8 @@
 .godot/
 /android/
 /builds/
+/config/agconnect-services.json
+/native/huawei_account/.gradle/
+/native/huawei_account/build/
+/native/huawei_account/local.properties
+/tmp/huawei-gradle-home/

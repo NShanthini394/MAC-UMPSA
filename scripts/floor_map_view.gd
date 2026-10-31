@@ -68,7 +68,7 @@ func configure(controller: Control) -> void:
 		var copy: String = str(Data.COMMON_TASKS[index]["name"])
 		copy=copy.replace("marbles into", "marbles\ninto")
 		var task_name := UI.make_child_label(button,copy,14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(42,6,158,44))
-		task_name.name="TaskEntryName_%d"%index
+		task_name.name="TaskEntryName_%d" %index
 		_buttons.append(button)
 	_details=Control.new(); _details.name="SelectedTaskDetails"
 	_details.position=Vector2(22,430); _details.size=Vector2(228,126); panel.add_child(_details)
@@ -108,7 +108,7 @@ func _choose(index: int) -> void:
 	selected=index; canvas.set("selected",-1 if _tasks.visible else index)
 	var section_id: int = Geometry.floor_plan(app.selected_map).layout["task_sections"][index]
 	var place: String = Geometry.floor_plan(app.selected_map).layout["sections"][section_id]["name"]
-	_selection.text="%d. %s"%[index+1,Data.COMMON_TASKS[index]["name"]]
+	_selection.text=preload("res://scripts/app_language.gd").text("%d. %s") %[index+1,Data.COMMON_TASKS[index]["name"]]
 	_place.text=place
 	_details.visible=not _tasks.visible
 	_route.visible=not _tasks.visible

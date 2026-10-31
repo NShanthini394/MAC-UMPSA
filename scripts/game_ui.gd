@@ -76,7 +76,7 @@ static func add_background(parent: Control, texture: Texture2D) -> void:
 
 
 static func add_color_overlay(parent: Control, color: Color) -> void:
-	var rect := ColorRect.new(); rect.color = color; rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); rect.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(rect)
+	var rect := preload("res://scripts/fullscreen_shade.gd").new(); rect.color = color; rect.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(rect)
 
 
 static func make_map_texture(atlas: Texture2D, region: Rect2) -> Texture2D:

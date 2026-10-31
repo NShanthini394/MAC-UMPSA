@@ -52,6 +52,7 @@ func _polygon(points: PackedVector2Array) -> PackedVector2Array:
 	return result
 
 func _text(copy: String, point: Vector2, font_size: int, color: Color) -> void:
+	copy = preload("res://scripts/app_language.gd").text(copy)
 	var font := ThemeDB.fallback_font
 	var lines := copy.split("\n")
 	for index in lines.size():

@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / "render-server"
 SCRIPTS = ("server_runner", "network_manager", "game_data", "map_geometry",
            "map_layouts", "floor_plan", "nenek_powers", "lan_discovery",
-           "match_rules", "walking_companions", "map_navigation")
+           "match_rules", "walking_companions", "map_navigation", "bot_brain", "bot_conversation")
 
 
 def main():

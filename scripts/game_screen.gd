@@ -3,7 +3,6 @@ extends RefCounted
 
 const GameData = preload("res://scripts/game_data.gd")
 const UI = preload("res://scripts/game_ui.gd")
-const Lang = preload("res://scripts/app_language.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 
 
@@ -59,14 +58,13 @@ func build(app) -> void:
 	_add_map_collisions(world, app.selected_map)
 	var route_line := Line2D.new()
 	route_line.name = "RouteLine"; route_line.width = 6.0
-	route_line.default_color = Color("ffd263"); route_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	route_line.default_color = Color("17151c"); route_line.joint_mode = Line2D.LINE_JOINT_ROUND
 	route_line.begin_cap_mode = Line2D.LINE_CAP_ROUND; route_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	route_line.visible = false; world.add_child(route_line)
 	var header: Panel = app.make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	app._make_child_label(header, GameData.MAPS[app.selected_map]["name"], 19, GameData.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(18, 12, 440, 32))
-	var role: Label = app._make_child_label(header, Lang.text("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
-	role.name = "GameRoleLabel"
-	var progress: Label = app._make_child_label(header, preload("res://scripts/app_language.gd").text("TASKS  %d / %d    •    CLUES  %d / %d") % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.clue_points.size() if not app.room_code.is_empty() else app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
+	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
+	var progress: Label = app._make_child_label(header, "TASKS  %d / %d    •    CLUES  %d / %d" % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.clue_points.size() if not app.room_code.is_empty() else app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
 	progress.name = "ProgressLabel"
 	progress.visible = not app.player_is_impostor
 	var task_panel_height := 438.0 if app.village_tasks_expanded else 68.0
@@ -92,8 +90,8 @@ func build(app) -> void:
 	task_rows.custom_minimum_size = Vector2(248,tasks.size()*52)
 	task_scroll.add_child(task_rows)
 	for i in tasks.size():
-		var count_text := "" if app.completed_tasks[i] == 1 else preload("res://scripts/app_language.gd").text(" (%d/%d)") % [app.task_progress[i], GameData.TASK_STEPS[GameData.MAPS[app.selected_map]["name"]][i]]
-		var task_text := ("✓ " if app.completed_tasks[i] == 1 else "◇ ") + preload("res://scripts/app_language.gd").text(str(tasks[i]["name"])) + count_text
+		var count_text := "" if app.completed_tasks[i] == 1 else " (%d/%d)" % [app.task_progress[i], GameData.TASK_STEPS[GameData.MAPS[app.selected_map]["name"]][i]]
+		var task_text := ("✓ " if app.completed_tasks[i] == 1 else "◇ ") + str(tasks[i]["name"]) + count_text
 		task_text = _wrap_task_text(task_text, 30)
 		var label: Label = app._make_child_label(task_rows, task_text, 13, Color("61f28a") if app.completed_tasks[i] == 1 else GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(8, i * 52, 240, 48))
 		label.name = "TaskEntry_%d" % i

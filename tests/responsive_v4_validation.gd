@@ -42,11 +42,24 @@ func run() -> void:
 			var colour := pixels.get_pixelv(sample)
 			check(colour.r + colour.g + colour.b > 0.02, "Extra screen area contains scenery rather than black bars " + str(size_))
 		await tap(Vector2(640,320))
-		check(app.current_screen == "matchmaking", "Painted Play button opens matchmaking with aligned touch " + str(size_))
-		await app._open_create_room()
+		check(app.current_screen == "matchmaking", "Live Play button opens matchmaking with aligned touch " + str(size_))
+		await app.build_menu(); await tap(Vector2(640,372))
+		check(app.current_screen == "map_select" and app.map_selection_mode == "room_host", "Live Create Room button opens host map selection " + str(size_))
+		await tap(Vector2(230,567))
+		check(app.current_screen == "create_room", "Map choice opens host setup " + str(size_))
 		check(app.find_child("ConnectionMode", true, false) == null, "Network choice removed " + str(size_))
 		await tap(Vector2(962,125))
 		check(app.current_screen == "menu", "Host close button responds after resize " + str(size_))
+		await tap(Vector2(640,420))
+		check(app.find_child("JoinRoomCodeOverlay",true,false)!=null, "Live Join Room button responds " + str(size_))
+		await app.build_menu(); await tap(Vector2(640,468))
+		check(app.page_controls.dialog_open(), "Live How to Play button responds " + str(size_))
+		app.page_controls.close_dialog()
+		await app.build_menu(); await tap(Vector2(640,516))
+		check(app.page_controls.dialog_open(), "Live Exit button responds " + str(size_))
+		app.page_controls.close_dialog()
+		await app.build_menu(); await tap(Vector2(640,576))
+		check(app.current_screen == "map_select", "Offline Practice button responds " + str(size_))
 		app._start_local_practice_lobby()
 		await settle()
 		check(app.find_child("LobbyChangeMapButton", true, false) == null, "No map button in waiting room")
@@ -58,8 +71,8 @@ func run() -> void:
 	root.size = Vector2i(1280,720)
 	await settle()
 	app.selected_character = "Badang"
-	app.completed_tasks = [0,0,0,0,0,0,0,0] as Array[int]
-	app.task_progress = [0,0,0,0,0,0,0,0] as Array[int]
+	app.completed_tasks.resize(load("res://scripts/game_data.gd").COMMON_TASKS.size()); app.completed_tasks.fill(0)
+	app.task_progress.resize(load("res://scripts/game_data.gd").COMMON_TASKS.size()); app.task_progress.fill(0)
 	for map_index in 3:
 		app.selected_map = map_index
 		app.player_position = load("res://scripts/map_geometry.gd").gong_point(map_index)

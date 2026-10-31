@@ -2,41 +2,44 @@
 
 Godot 4.7 landscape Android game with online room-code multiplayer and offline practice.
 
-## Multiplayer testing: v0.5
+## Playing modes: v0.13
 
-Upload the generated `render-server` folder to GitHub and wait for Render to
-redeploy before installing `builds/OnlineTest/NenekKebayan.apk` on every device.
-The server health endpoint must include `lobby_protocol=4`. See the
-[Render setup guide](docs/RENDER_SETUP.md) for the exact settings.
+Main menu: Start Game, How to Play, Exit. Account sign-in/log-out is in Settings.
+Start Game opens Play with Friends, Solo vs Bots and Quick Match.
 
-Play -> Find Match automatically groups searching players once at least five
-real people are available. Keep Waiting continues searching.
+- Friends: Create / Join a room code; at least two humans. The host can start as
+  soon as guests are ready, with bots filling remaining slots. No timeout.
+- Solo vs Bots: local game, no internet; one human Villager and nine bots.
+- Quick Match: public search for up to sixty seconds, or earlier when ten humans
+  are ready. Remaining spaces fill with bots, including when only one human waits.
 
-For testing without internet, choose **OFFLINE PRACTICE** on the main menu,
-select a map, then press **Start** in the practice lobby. The game starts after
-a five-second countdown with a randomly assigned role; no other players are required.
+Each match has ten characters: eight Villagers and two Nenek. A ten-second
+preparation countdown follows bot filling. Locked matches accept no new joins.
+Bots navigate the map, perform tasks, use powers, discuss observations and vote.
+Villagers need all twelve tasks AND both Nenek eliminated to win.
+Meetings retain 45-second chat and 20-second voting. Tutorial work is deferred.
 
-Private host: Create Room -> choose map -> Create Room. Friends: Join Room -> code.
-Creating and joining automatically use the online service on both shared Wi-Fi
-and different networks. All devices need internet access; no network selector or
-IP address is required. Walking companions fill unused character slots to ten once the host starts. They
-do not count toward the five-real-player minimum or perform tasks.
+Online changes require the matching **protocol 5 server** on Render and the
+v0.13 APK on every device. Regenerate the server with
+`python tools/prepare_render_server.py`; see [deployment steps](docs/RENDER_SETUP.md).
+Solo works independently of the cloud service. No public deployment has been
+performed automatically from this workspace.
 
-In the waiting room, tap your own name to rename yourself. Guests choose a
-character and press **Are you ready?** once; Ready and the character then lock.
-With 5–10 players and all guests ready, the host's **Start** turns green. The host
-starts a five-second countdown. A departure cancels the countdown. Maps are
-selected before room creation. The two Nenek are always real people. Companions abstain from voting.
+## Palace map viewer
 
-Approach the real gong and press Interact to call an emergency meeting. All
-devices receive the supplied gong sound and animation, followed by 45 seconds of
-chat, a voting introduction, 20 seconds of voting, and a shared animated reveal. Skip, ties, and
-unanswered votes do not eliminate a player. Eliminated humans become spectators.
-Villagers must complete all twelve tasks AND eliminate both Nenek to win.
+The Istana in-game map now uses an angled 3D cutaway with jade, blue, stone and
+gold colours inside a original dark purple outer frame. Drag to rotate, use + / - to zoom, and FIT to restore the view.
+The two house map viewers remain 2D. MAP / TASKS now highlights the selected tab
+on all three maps. The chosen task row turns red on all maps and automatically opens MAP. SHOW ROUTE gently pulses to guide the player. Private role
+cards retain their large fonts with separate text rows and a five-second display
+whose final three seconds show 3, 2, 1. See [palace map viewer notes](docs/PALACE_MAP_VIEW.md).
 
-The ENet and local-practice helpers remain for developer validation, without
-player-facing offline/network selectors. The older LAN guides describe that
-earlier flow.
+## Account and main menu
+
+Google and Huawei provider labels stay on one line at the intended font size.
+The centre menu uses live gold-trimmed wood/red buttons with hover and press
+feedback, matching Offline Practice and the login controls. Their text and icons
+are separate from the background artwork.
 
 ## Development
 

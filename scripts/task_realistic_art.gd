@@ -45,7 +45,6 @@ func prop(b: Control, index: int, at: Vector2, extent: Vector2, angle: float = 0
     b.draw_set_transform(Vector2.ZERO)
 
 func label(b: Control, copy: String, at: Vector2, size: int = 15, color: Color = CREAM) -> void:
-    copy = preload("res://scripts/app_language.gd").text(copy)
     b.draw_string(ThemeDB.fallback_font,at+Vector2(1,2),copy,HORIZONTAL_ALIGNMENT_LEFT,-1,size,Color(0,0,0,0.65))
     b.draw_string(ThemeDB.fallback_font,at,copy,HORIZONTAL_ALIGNMENT_LEFT,-1,size,color)
 
@@ -116,7 +115,7 @@ func _fire(b: Control, source: Vector2, stage: int) -> void:
     prop(b,3 if stage<2 else 4,source,Vector2(150,135),-0.12*impact)
     if stage==2:
         flame(b,Vector2(535,210),0.15+b._sparks*0.12)
-        label(b,preload("res://scripts/app_language.gd").text("STRIKES  %d / 5") %b._sparks,Vector2(90,280))
+        label(b,"STRIKES  %d / 5"%b._sparks,Vector2(90,280))
     else:
         halo(b,Vector2(535,182),65)
         label(b,"DRY TWIGS" if stage==0 else "FIREWOOD",Vector2(90,280))
@@ -128,7 +127,7 @@ func _sweep(b: Control) -> void:
         for i in 10:
             var life := fmod(clock*1.8+i*0.1,1.0)
             b.draw_circle(b._pointer+Vector2((i-5)*5,-life*35),2+life*3,Color(0.75,0.65,0.43,(1-life)*0.35))
-    label(b,preload("res://scripts/app_language.gd").text("DIRT CLEARED  %d / 5") %b.current_progress,Vector2(530,307))
+    label(b,"DIRT CLEARED  %d / 5"%b.current_progress,Vector2(530,307))
 
 func _laundry(b: Control, source: Vector2, stage: int) -> void:
     b.draw_line(Vector2(280,76),Vector2(280,286),Color("805e3e"),8,true)
@@ -145,7 +144,7 @@ func _laundry(b: Control, source: Vector2, stage: int) -> void:
     prop(b,6,source,Vector2(100,125),-0.1 if b._dragging else 0.0,COLORS[stage])
     b.draw_circle(source+Vector2(36,-37),14,COLORS[stage])
     label(b,str(stage+1),source+Vector2(32,-32),15,INK)
-    label(b,preload("res://scripts/app_language.gd").text("MATCH COLOUR  %d") %(stage+1),Vector2(70,287))
+    label(b,"MATCH COLOUR  %d"%(stage+1),Vector2(70,287))
 
 func _flowers(b: Control) -> void:
     for i in 17:
@@ -155,7 +154,7 @@ func _flowers(b: Control) -> void:
     prop(b,7,at,Vector2(72,72),sin(clock*1.8)*0.05)
     for offset in [Vector2(-26,24),Vector2(28,20)]:
         prop(b,8,at+offset,Vector2(65,45),sin(clock*1.4)*0.03,Color.WHITE,false)
-    label(b,preload("res://scripts/app_language.gd").text("JASMINE COLLECTED  %d / 5") %b.current_progress,Vector2(470,311))
+    label(b,"JASMINE COLLECTED  %d / 5"%b.current_progress,Vector2(470,311))
 
 func _marbles(b: Control) -> void:
     b._ellipse(b._shot.goal+Vector2(0,7),Vector2(91,88),Color(0,0,0,0.13))
@@ -175,7 +174,7 @@ func _marbles(b: Control) -> void:
         b.draw_arc(tip,18,0,TAU,24,color,2,true)
         label(b,"INSIDE" if inside else "MISS",Vector2(300,305),18,color)
     prop(b,9,at,Vector2(44,44),clock*5.0 if b._shot.rolling else 0.0,COLORS[b.current_progress%4])
-    label(b,preload("res://scripts/app_language.gd").text("INSIDE  %d / 4") %b.current_progress,Vector2(485,309))
+    label(b,"INSIDE  %d / 4"%b.current_progress,Vector2(485,309))
 
 func cable(b: Control, from: Vector2, to: Vector2, color: Color, sag: float = 26.0) -> void:
     var points := PackedVector2Array()
@@ -213,7 +212,7 @@ func _herbs(b: Control, source: Vector2, stage: int) -> void:
         halo(b,Vector2(535,182),65)
     else:
         halo(b,Vector2(535,182),65)
-        label(b,preload("res://scripts/app_language.gd").text("POUND HERBS  %d / 5") %b._sparks,Vector2(80,280))
+        label(b,"POUND HERBS  %d / 5"%b._sparks,Vector2(80,280))
 
 func _water(b: Control, source: Vector2, stage: int) -> void:
     for i in 4:

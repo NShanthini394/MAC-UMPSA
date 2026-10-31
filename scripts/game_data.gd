@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Shared immutable content and layout data for the game.
 const GAME_TITLE := "Nenek Kebayan: Siapa Pengkhianat?"
-const MENU_ART := "res://assets/ui/village_background_shared.png"
+const MENU_ART := "res://assets/ui/main_menu_no_center_settings.png"
 const WAITING_ROOM_ART := "res://assets/ui/waiting_room.png"
 const MAP_ART := "res://assets/maps/palace_village_maps.png"
 const CAST_ART := "res://assets/characters/folklore_cast.png"
@@ -10,6 +10,7 @@ const INK := Color("21170f")
 const CREAM := Color("fff0cf")
 const GOLD := Color("f7c35a")
 const PANEL := Color("241b18", 0.94)
+const SECTION_PANEL := Color(0.12, 0.09, 0.07, 1.0)
 
 const CHARACTERS := [
 	"Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Pak Pandir",

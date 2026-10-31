@@ -1,111 +1,101 @@
-# Nenek Kebayan Render test server
+# Nenek Kebayan server: v0.16 / protocol 7
 
-This folder contains the authoritative Godot server, geometry and content data.
-It excludes Firebase configuration, authentication tokens, artwork and Android builds.
-The v0.5 APK and this folder use lobby protocol 3. Update the server before
-installing v0.5 on every player's device. Older APKs are incompatible with this
-lobby update; create a fresh room after deployment.
+Upload this complete generated `render-server` folder to the existing GitHub
+repository and let Render deploy it BEFORE testing online with the v0.16 APK.
+All players need the matching APK. Older versions use incompatible lobby rules.
+Solo vs Bots runs locally and does not require the Render update or internet.
 
-## Deploy
+## Render settings
 
-1. Upload the complete `render-server` folder into the existing GitHub repository root.
-   Upload the folder itself so GitHub shows `render-server/Dockerfile`.
-   Do not replace the main game's root `project.godot` with this server project.
-2. Render service: repository `MAC-UMPSA`, branch `main`, Language `Docker`,
-   Region `Singapore` if available, Compute `Free`.
-3. Set **Root Directory** to `render-server`. Dockerfile Path: `./Dockerfile`.
-   Leave Docker Command blank: the Dockerfile supplies the command.
-4. Under Advanced, set **Health Check Path** to `/healthz`.
-   No environment variables or database are required. Remove any empty variable row.
-5. Deploy. The build downloads the official Godot 4.7.2 Linux binary.
-6. Once Live, open `https://YOUR-SERVICE.onrender.com/healthz`.
-   Expect `Nenek Kebayan server ready` and `lobby_protocol=4` on separate lines.
-7. Give the developer the exact Render HTTPS address. In the main game, set
-   `network/online_server_url` to `wss://YOUR-SERVICE.onrender.com/ws`, then rebuild
-   the APK. Do not guess this address from the requested service name.
-8. Every player installs the matching v0.5 APK. Creating/joining automatically
-   uses the online service on both shared Wi-Fi and different networks. Guests
-   enter only the five-character room code. Every device needs internet access.
-   Local broadcast networking is retained for developer tests, without a player
-   network selector. Local-practice helpers are for developer checks only;
-   there is no offline/practice option in the player menus.
+- Repository: MAC-UMPSA, branch main
+- Root Directory: render-server
+- Language: Docker; Dockerfile Path: ./Dockerfile; Docker Command: blank
+- Region: Singapore; Compute: Free
+- Health Check Path: /healthz
+- No database or additional environment variables are required.
 
-## Waiting room
+Open https://nenek-kebayan-server.onrender.com/healthz after deployment.
+It must show `Nenek Kebayan server ready` and `lobby_protocol=7`.
+The APK uses wss://nenek-kebayan-server.onrender.com/ws.
+The Python gateway handles HTTP health checks and forwards WebSockets to Godot
+on internal port 7000. Render supplies HTTPS/WSS termination.
 
-Each player can edit their own name in their card; press the keyboard's submit
-button or tap outside to save. Name changes appear on all devices. Guests choose
-a character, then press **ARE YOU READY?**. Ready cannot be undone and locks their
-character. The host's **START** stays grey until the room has 5–10 players and all
-guests are ready. It then turns green. Only the host starts the five-second
-countdown. A departure cancels a pending countdown. Names and characters lock
-during the countdown. The map is chosen before a private room is created.
+## Playing modes
 
-Play now joins the public matchmaking queue. At least five real players must be
-online and searching. A short three-second grouping window admits up to ten.
-Searching players can also fill an existing public waiting room before its host
-starts, including replacing someone who leaves. Private rooms never receive
-strangers. There is no offline/practice button in the player flow; Keep Waiting stays in the
-queue and the close button leaves it. Private Create Room / Join Code remains.
+Start Game opens Play with Friends, Solo vs Bots and Quick Match. Friends opens
+Create Room / Join Room. Solo goes to map selection without a network form.
+Main menu centre: Start Game, How to Play, Exit. Sign In / Log Out is in Settings.
+No first-time tutorial or tutorial video is included in this update.
 
-When the host presses Start, unused slots are filled to ten with server-controlled
-walking companions. They use remaining characters and ordinary names. They do
-not perform tasks, count toward the five-human minimum, or affect victory. They
-abstain from voting; only active human votes and human Skips affect the result.
-Bot status and roles are removed from public roster data, although movement and
-lack of chat may still make companions recognizable. Both Nenek are humans.
+Private rooms require two humans and all guests Ready before the host can press
+Start with Bots. There is no forced waiting timeout. Bots fill to ten immediately
+when the host starts, followed by a five-second preparation countdown. Characters
+and names lock during this countdown. Ready cannot be undone.
 
-The gong marker circle has been removed. An active player approaches the actual
-gong and presses Interact: 3.2-second shared alarm and gong sound, 20-second chat,
-10-second voting, then a seven-second synchronized reveal. Voting never ends
-early. A unique leading player is eliminated only when their votes exceed Skip.
-Ties and unanswered human votes produce Skip/no elimination. Spectators can
-watch but cannot chat or vote. Villagers win only after all eight tasks AND both
-Nenek are gone. Nenek win when no active human villagers remain. Six clues cover
-the two hidden identities. The final result follows the reveal animation.
+Quick Match places people in a public waiting room immediately. Search lasts
+up to sixty seconds; joining people do not restart it. Ten ready humans start
+early. At timeout even one human can start with the remaining slots filled by
+bots, followed by the five-second preparation countdown. The search duration
+excludes waking or connecting to the cloud service. Locked matches accept no
+new players. Further searches enter another waiting room.
 
-Render handles the public HTTPS certificate and WSS connection. The Python gateway
-listens on `0.0.0.0:$PORT` (default 10000), forwards `/ws` to Godot on loopback
-port 7000 and serves health checks only while the game listener is reachable.
-If Godot exits, the container exits so Render can restart it.
+Solo uses the same authoritative game service locally on the Android device.
+The human is a Villager with seven Villager bots and two Nenek bots. It needs
+no internet or matchmaking wait. The player chooses a character in the lobby
+and starts the five-second preparation countdown.
 
-## Testing and limits
+Every match has ten characters: eight Villagers and two Nenek Kebayan. Roles
+are randomly assigned among humans and bots; one-human matches keep the human
+a Villager, and two-human matches retain at least one human Villager. Bots use
+ordinary Malay, Chinese and Indian names. Their hidden roles and AI memory are
+removed from public rosters. The AI is rule-based, not human-equivalent chat.
 
-Free instances sleep after 15 minutes with no inbound traffic. First connection
-warms the server via HTTPS and can take up to two minutes. If connection fails,
-retry. Room state is in memory; a restart, sleep or redeploy ends existing rooms.
-This is a test/demo deployment, not guaranteed continuous hosting. Stay within
-Render's free usage limits. Do not deploy changes during an active demonstration.
-University networks can still block the service; test on the actual university
-Wi-Fi and mobile data before the demonstration. Internet mode requires internet.
+Villager bots navigate to task stations and perform timed task steps. Nenek
+bots pursue awake Villagers, cast Sleep Spell, and use fog or locks. Villager
+bots can witness nearby visible spells and discuss them. Votes use observations
+and public human nominations; an uninformed Villager bot may Skip. Bots cannot
+perform tasks through walls and obey the same mapped walkable geometry.
 
-The server retains the current project's gameplay validation; adding WebSockets
-does not add stronger verification of minigame input or a cloud save system.
-Do not use this project demo as a paid competitive service without further work.
+Emergency meetings retain the gong sound/cinematic, 45-second discussion,
+voting introduction, 20-second voting and seven-second reveal. Sleeping or
+eliminated players cannot act or vote. Sleeping humans can still move. Villagers
+win only after completing all twelve tasks AND eliminating both Nenek. Nenek
+win when no awake Villagers remain. Host departure ends an active match for
+all participants. A public waiting-room host may be replaced before play starts.
 
-## Developer maintenance
+## Packaging and validation
 
-Run `python tools/prepare_render_server.py` from the main project after changing
-server logic, then upload the updated generated folder. Do not edit generated
-copies independently. Do not upload `.godot` folders.
-Docker Desktop is not installed on the development PC. Render built the Linux
-image successfully on 2026-10-30. The deployed endpoint is
-`https://nenek-kebayan-server.onrender.com`, with the game at
-`wss://nenek-kebayan-server.onrender.com/ws`. A previous five-client public WSS test
-passed creation/joining, private roles and movement. The user also confirmed
-mobile-data and mixed university-Wi-Fi connections. Protocol 3 has passed local
-five-client name, Ready, host Start, five-second countdown, gameplay and map
-checks. Public testing of v0.5 must be repeated after uploading this folder and
-installing the matching APKs.
+Run `python tools/prepare_render_server.py` from the main project after changes.
+It creates an allowlisted server package without artwork, Firebase configuration,
+authentication tokens or APKs. Upload the folder itself, not its contents into
+the main game's project root. Do not upload .godot caches.
 
-## Understanding deployment logs
+Local UDP and WebSocket tests cover private readiness, two-person starts,
+sixty-second public searches, five-second start countdowns, late-join rejection,
+solo roles, ten-human early starts, bot tasks/powers/votes and host departure.
+Movement simulations cover all three maps. Real Android devices and the deployed
+Render endpoint must be checked after uploading this package.
 
-"Deploy succeeded / Live" means Render accepted the service's startup and health
-check. It does not mean every subsequent incoming request is valid.
-Godot's `Not enough response headers, got: 3, expected >= 4` message can be
-reproduced by sending a plain HTTP GET directly to the internal game listener.
-That listener expects a WebSocket upgrade. An automated port probe is a possible
-source; the error alone does not identify the caller. Normal HTTP health checks
-must target the public gateway on `$PORT` (10000) at `/healthz`, not game port 7000.
-Repeated requests to the gateway health endpoint did not reproduce the message.
-Do not suppress all Godot errors to hide it. If the health endpoint or real game
-connections fail, inspect the current logs and the selected HTTP port.
+The free Render service can sleep or restart; rooms are stored in memory and
+will be lost. Avoid deploying during a match. Cold startup may take up to two
+minutes before the sixty-second search begins. Check the service health path
+if connection fails. Plain HTTP probes reaching the internal WebSocket listener
+can produce Godot header errors; the health endpoint belongs to the public
+Python gateway, not internal game port 7000.
+
+## v0.16 changes
+
+The preparation countdown is five seconds in Friends, Solo and Quick Match.
+Quick Match still searches for sixty seconds before bot filling. Protocol 7
+prevents connecting this APK to older ten-second servers. All three in-game
+map viewers now use 3D cutaways; gameplay collision and walking paths are unchanged.
+Purple panels use the dark brown map-selection palette. Settings has English
+(default) and Malay language preferences; actual Malay translation awaits Huawei
+ML Kit. Guest IDs are no longer shown, but internal profile identities remain.
+
+## Previous changes
+
+Bots coordinate unfinished tasks and reply to human chat on staggered schedules.
+Confirmed Vote or Skip cannot be changed. Results begin when every eligible
+awake human and bot has submitted; otherwise the 20-second deadline applies.
+Settings is a full-screen page. Preferences remain local to each device.

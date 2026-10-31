@@ -32,8 +32,8 @@ static func provider_mark(button: Button, provider: String) -> void:
 	var font := button.get_theme_font("font")
 	var title_width := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
 	var group := Control.new()
-	group.position = Vector2(0, (button.size.y - 34) * 0.5)
-	group.size = Vector2(button.size.x, 34)
+	group.position = Vector2((button.size.x - title_width - 40) * 0.5, (button.size.y - 34) * 0.5)
+	group.size = Vector2(title_width + 40, 34)
 	group.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(group)
 	var mark := TextureRect.new()
@@ -43,47 +43,77 @@ static func provider_mark(button: Button, provider: String) -> void:
 	mark.texture = logo if provider == "Google" else UI.make_map_texture(logo, Rect2(100, 0, 300, 281))
 	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	mark.position = Vector2(18, 3); mark.size = Vector2(28, 28)
+	mark.position = Vector2(0, 3); mark.size = Vector2(28, 28)
 	mark.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	group.add_child(mark)
-	var label := UI.make_child_label(group, title, 24, Color("302015"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(54, 0, button.size.x-70, 34))
+	var label := Label.new()
+	label.name = "ProviderTitle"
+	# Use the same size as the width measurement. Shared labels normally enlarge
+	# their font, which wrapped the provider name below this single-line button.
 	label.add_theme_font_size_override("font_size", 24)
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.text = title
+	label.position = Vector2(40, 0); label.size = Vector2(title_width + 2, 34)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_color_override("font_color", Color("302015"))
 	label.add_theme_color_override("font_shadow_color", Color.TRANSPARENT)
+	group.add_child(label)
 
 
 static func build(app: Control) -> void:
-	app.add_background(load(Data.MENU_ART))
-	app.screen_root.get_node("PageArtwork").name = "LoginBackground"
+	var background := TextureRect.new()
+	background.name = "LoginBackground"
+	background.texture = load("res://assets/ui/login_background.png") as Texture2D
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(background)
 	var layout := centered_layout(app)
+	var hero := UI.make_panel(layout, Rect2(420, 12, 440, 210), SURFACE)
+	hero.name = "LoginHero"
+	hero.clip_contents = true
+	hero.add_theme_stylebox_override("panel", flat_style(SURFACE, BORDER))
+	var art := load("res://assets/ui/login_nenek_banner.png") as Texture2D
+	var hero_image := TextureRect.new()
+	hero_image.name = "LoginTitleArtwork"
+	# Frame Nenek's face and shoulders at the centre of the wide banner.
+	hero_image.texture = UI.make_map_texture(art, Rect2(650, 0, 1296, 408))
+	hero_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hero_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	hero_image.position = Vector2(4, 4); hero_image.size = Vector2(432, 136)
+	hero_image.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	hero_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hero.add_child(hero_image)
+	UI.make_child_label(hero, "Nenek Kebayan", 28, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 144, 416, 36))
+	UI.make_child_label(hero, "Siapa Pengkhianat?", 18, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 179, 416, 24))
 	var form := Control.new()
 	form.name = "LoginPanel"
-	form.position = Vector2(380, 282); form.size = Vector2(520, 430)
+	form.position = Vector2(380, 228); form.size = Vector2(520, 480)
 	layout.add_child(form)
 	UI.make_child_label(form, "Welcome, Player!", 28, WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-40, 0, 600, 36))
 	UI.make_child_label(form, "Sign in, create an account, or join as a guest.", 21, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-40, 38, 600, 28))
-	var google := account_button(form, "Continue with Google", Callable(app.firebase_auth, "google_sign_in"), Rect2(0, 74, 520, 48), true)
+	var google := account_button(form, "Continue with Google", Callable(app.firebase_auth, "google_sign_in"), Rect2(0, 74, 520, 60), true)
 	google.name = "LoginGoogleButton"; provider_mark(google, "Google")
-	var email := account_button(form, "Sign in with Email", Callable(app, "show_email_sign_in"), Rect2(0, 130, 520, 48))
+	var email := account_button(form, "Sign in with Email", Callable(app, "show_email_sign_in"), Rect2(0, 144, 520, 60))
 	email.name = "LoginEmailButton"
-	var huawei := account_button(form, "Continue with Huawei ID", Callable(app.firebase_auth, "huawei_sign_in"), Rect2(0, 186, 520, 48), true)
+	var huawei := account_button(form, "Continue with Huawei ID", Callable(app, "_login_provider_unavailable").bind("Huawei"), Rect2(0, 214, 520, 60), true)
 	huawei.name = "LoginHuaweiButton"; provider_mark(huawei, "Huawei")
-	var create := account_button(form, "Create Account", Callable(app, "show_create_account"), Rect2(0, 242, 520, 48), false, true)
+	var create := account_button(form, "Create Account", Callable(app, "show_create_account"), Rect2(0, 284, 520, 60), false, true)
 	create.name = "LoginCreateAccountButton"
 	var divider := ColorRect.new()
-	divider.position = Vector2(12, 300); divider.size = Vector2(496, 1)
+	divider.position = Vector2(12, 354); divider.size = Vector2(496, 1)
 	divider.color = Color("745132"); divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	form.add_child(divider)
-	var guest := account_button(form, "▷  Play as Guest", Callable(app, "_continue_as_guest"), Rect2(0, 310, 520, 48), false, true)
+	var guest := account_button(form, "▷  Play as Guest", Callable(app, "_continue_as_guest"), Rect2(0, 364, 520, 60), false, true)
 	guest.name = "LoginGuestButton"
-	var notice := UI.make_child_label(form, "", 20, Color("ffd79a"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(-180, 366, 880, 64))
+	var notice := UI.make_child_label(form, "", 20, Color("ffd79a"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(-180, 432, 880, 48))
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	notice.name = "LoginNoticeLabel"
-	var footer := UI.make_child_label(form, "Step into the village. Play your part.", 18, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-80, 378, 680, 28))
+	var footer := UI.make_child_label(form, "Step into the village. Play your part.", 18, MUTED, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-80, 440, 680, 28))
 	footer.name = "LoginFooterLabel"
-	var hms_help := UI.make_button(layout, "HMS Core help", func(): OS.shell_open("https://consumer.huawei.com/en/support/content/en-us15841704/"), 180, 32)
-	hms_help.name = "HmsCoreHelpButton"; hms_help.position = Vector2(20, 672)
 
 static func centered_layout(parent: Control) -> Control:
 	var layout := Control.new()

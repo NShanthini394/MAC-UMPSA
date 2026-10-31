@@ -1,12 +1,27 @@
 extends RefCounted
 ## Shared UI construction helpers used by the screen controllers.
 static var _button_textures: Dictionary = {}
+static var _menu_icons: Dictionary = {}
+
+static func menu_action_icon(kind: String) -> Texture2D:
+	if not _menu_icons.has(kind):
+		var shapes: String = {
+			"play": '<path d="M7 3L27 16 7 29Z" fill="#fff0cf"/>',
+			"players": '<g fill="#fff0cf"><circle cx="12" cy="9" r="5"/><circle cx="24" cy="11" r="4"/><path d="M2 27v-7c0-7 20-7 20 0v7ZM24 18c7 0 8 4 8 9h-7v-7Z"/></g>',
+			"book": '<g stroke="#fff0cf" stroke-width="2" fill="none" stroke-linejoin="round"><path d="M16 7C12 3 5 3 2 5v22c5-2 10-2 14 1 4-3 9-3 14-1V5c-3-2-10-2-14 2Z"/><path d="M16 7v21M6 9l6 1M6 14l6 1M20 10l6-1M20 15l6-1"/></g>',
+			"exit": '<g stroke="#fff0cf" stroke-width="2.5" fill="none" stroke-linejoin="round"><path d="M17 5H4v23h13M12 2l9 3v23l-9 3Z"/><path d="M17 16h13m-5-5 5 5-5 5"/></g>'
+		}.get(kind, "")
+		var image := Image.new()
+		image.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 32 32">' + shapes + '</svg>')
+		_menu_icons[kind] = ImageTexture.create_from_image(image)
+	return _menu_icons[kind]
 
 static func menu_button_style(variant: String = "wood", state: String = "normal") -> StyleBoxTexture:
 	var key := variant + ":" + state
 	if not _button_textures.has(key):
 		var colors: Array = {
 			"wood": ["75421f", "3b2116", "a36132"],
+			"jade": ["327078", "163d49", "66a99c"],
 			"grey": ["77746e", "393937", "a09b91"],
 			"red": ["a43220", "601a14", "d65a2b"],
 			"green": ["416442", "223b29", "63905a"],
@@ -76,7 +91,7 @@ static func add_background(parent: Control, texture: Texture2D) -> void:
 
 
 static func add_color_overlay(parent: Control, color: Color) -> void:
-	var rect := preload("res://scripts/fullscreen_shade.gd").new(); rect.color = color; rect.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(rect)
+	var rect := ColorRect.new(); rect.color = color; rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); rect.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(rect)
 
 
 static func make_map_texture(atlas: Texture2D, region: Rect2) -> Texture2D:

@@ -31,10 +31,11 @@ var role_player: AudioStreamPlayer
 
 
 func _ready() -> void:
+	preload("res://scripts/settings_store.gd").ensure_buses()
 	music_player = AudioStreamPlayer.new()
 	music_player.name = "FolkloreBackgroundMusic"
 	music_player.volume_db = -12.0
-	music_player.bus = "Master"
+	music_player.bus = "Music"
 	var music_stream := load(MUSIC_PATH) as AudioStreamMP3
 	if music_stream:
 		music_stream.loop = true
@@ -47,18 +48,20 @@ func _ready() -> void:
 		var player := AudioStreamPlayer.new()
 		player.name = "SoundEffectPlayer%d" % i
 		player.volume_db = -1.0
-		player.bus = "Master"
+		player.bus = "Effects"
 		add_child(player)
 		sfx_players.append(player)
 	# Cache effects before interaction to avoid loading delays on the first gong strike.
 	for kind in SFX_PATHS:
 		cached_streams[kind] = load(str(SFX_PATHS[kind]))
 	role_player = AudioStreamPlayer.new()
+	role_player.bus = "Effects"
 	role_player.name = "PrivateRoleAudio"
 	role_player.volume_db = -4.0
 	add_child(role_player)
 	call_deferred("play_sfx", "ui")
 	gong_player = AudioStreamPlayer.new()
+	gong_player.bus = "Effects"
 	gong_player.name = "MeetingGongAudio"
 	gong_player.stream = load(SFX_PATHS["gong"])
 	add_child(gong_player)
@@ -125,7 +128,7 @@ func _process(_delta: float) -> void:
 	var seconds_left: float = app.practice_start_countdown
 	if not app.room_code.is_empty() and app.network_manager != null:
 		seconds_left = app.network_manager.lobby_countdown
-	var active: bool = screen == "waiting_room" and seconds_left > 0.0 and seconds_left <= 10.0
+	var active: bool = screen == "waiting_room" and seconds_left > 0.0 and seconds_left <= preload("res://scripts/network_manager.gd").LOBBY_WAIT_SECONDS and not app.network_manager.lobby_searching
 	if active and not counting: play_sfx("countdown")
 	if counting and not active:
 		for player in sfx_players:
@@ -136,6 +139,7 @@ func _process(_delta: float) -> void:
 	elif not menu: music_player.stop()
 	if steps == null:
 		steps = AudioStreamPlayer.new()
+		steps.bus = "Effects"
 		var stream := load("res://assets/audio/footsteps.mp3") as AudioStreamMP3
 		stream.loop = true
 		steps.stream = stream

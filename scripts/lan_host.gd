@@ -7,7 +7,7 @@ var _api: MultiplayerAPI
 var _branch: Node
 
 
-func start(port: int = 7000) -> Error:
+func start(port: int = 7000, local_only: bool = false) -> Error:
 	if is_instance_valid(service): return OK
 	# Godot does not allow nested custom MultiplayerAPI roots. The service is a
 	# sibling of client scenes, while this owner controls its lifetime.
@@ -20,7 +20,7 @@ func start(port: int = 7000) -> Error:
 	service.name = "NetworkManager"
 	service.set("discovery_port",discovery_port)
 	_branch.add_child(service)
-	var result: Error = service.call("start_server", port)
+	var result: Error = service.call("start_server", port, false, not local_only)
 	if result != OK:
 		_branch.queue_free()
 		service = null

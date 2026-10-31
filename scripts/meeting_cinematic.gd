@@ -1,5 +1,4 @@
 extends Control
-const Lang = preload("res://scripts/app_language.gd")
 ## Shared timed presentation; the server owns every phase and the final outcome.
 const Data = preload("res://scripts/game_data.gd")
 const Actor = preload("res://scripts/character_actor.gd")
@@ -110,7 +109,7 @@ func _process(delta: float) -> void:
 		var glow := clampf((elapsed-1.0)/1.7,0.0,1.0)
 		actor.modulate.a = 1.0-glow
 		disguise.modulate.a = glow
-		if elapsed > 2.8: headline.text = str(details["name"]) + Lang.text(" was Nenek Kebayan!")
+		if elapsed > 2.8: headline.text = str(details["name"]) + " was Nenek Kebayan!"
 	else:
 		actor.rotation = 0.10
 		actor.modulate = Color(0.72,0.77,0.88)
@@ -120,11 +119,11 @@ func _process(delta: float) -> void:
 		actor.position = Vector2(512,180).lerp(Vector2(626,140),leaving)
 		actor.scale = Vector2.ONE * lerpf(3.2,0.5,leaving)
 		actor.modulate.a = 1.0 - maxf(0.0,(leaving-0.7)/0.3)
-		if elapsed > 2.2: headline.text = str(details["name"]) + Lang.text(" was not Nenek Kebayan.")
+		if elapsed > 2.2: headline.text = str(details["name"]) + " was not Nenek Kebayan."
 	if elapsed > 4.5:
 		var remaining := int(details.get("remaining",2))
 		if remaining == 0:
-			caption.text = Lang.text("Both Nenek Kebayan have been found!") + Lang.text("\nAll tasks are complete. The village is saved." if details.get("tasks_complete",false) else "\nComplete the remaining tasks to save the village.")
+			caption.text = "Both Nenek Kebayan have been found!" + ("\nAll tasks are complete. The village is saved." if details.get("tasks_complete",false) else "\nComplete the remaining tasks to save the village.")
 		elif remaining == 1: caption.text = "One Nenek Kebayan is still among you…"
 		else: caption.text = "Two Nenek Kebayan are still among you…"
 	if magic: magic.queue_redraw()

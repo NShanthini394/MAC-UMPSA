@@ -1,5 +1,5 @@
 extends RefCounted
-## Shared outcome rules. Walking companions never affect human eligibility or victory.
+## Shared outcome rules for human and AI participants.
 
 static func human_ids(room: Dictionary, active_only: bool = false) -> Array[int]:
 	var ids: Array[int] = []
@@ -32,6 +32,5 @@ static func voter_ids(room: Dictionary) -> Array[int]:
 	var ids: Array[int] = []
 	for id in room.get("players", {}):
 		var member: Dictionary = room["players"][id]
-		if bool(member.get("is_bot", false)) and not bool(room.get("bot_match", false)): continue
 		if bool(member.get("alive", true)) and not bool(member.get("sleeping", false)): ids.append(int(id))
 	return ids

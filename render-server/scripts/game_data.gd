@@ -10,6 +10,7 @@ const INK := Color("21170f")
 const CREAM := Color("fff0cf")
 const GOLD := Color("f7c35a")
 const PANEL := Color("241b18", 0.94)
+const SECTION_PANEL := Color(0.12, 0.09, 0.07, 1.0)
 
 const CHARACTERS := [
 	"Puteri Gunung Ledang", "Pak Kaduk", "Badang", "Mahsuri", "Pak Pandir",

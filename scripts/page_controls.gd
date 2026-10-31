@@ -86,6 +86,7 @@ func configure(controller: Control) -> void:
 	_slash.pivot_offset = _slash.size / 2; _slash.rotation_degrees = -45
 	_slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_music.add_child(_slash)
+	preload("res://scripts/settings_store.gd").apply(app)
 	refresh(true)
 
 
@@ -105,14 +106,14 @@ func place(button: Button, rect: Rect2, transparent: bool = false) -> void:
 
 func refresh(force: bool = false) -> void:
 	if not is_instance_valid(_root): return
-	var language_status := _root.find_child("SettingsLanguageStatus", true, false) as Label
-	if language_status: language_status.text = app.huawei_translation.app_language.status_text()
-	var volume_label := _root.find_child("SettingsVolumeLabel", true, false) as Label
-	if volume_label: volume_label.text = preload("res://scripts/app_language.gd").text("VOLUME · %d%%") % int(app.audio_volume)
 	var screen: String = app.current_screen
 	var menu := screen == "menu"
+	if dialog_open() and _dialog_kind == "settings":
+		for button in [_back, _music, _settings, _help]: button.hide()
+		_last_screen = "settings"
+		return
 	var playing := screen == "game"
-	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select", "matchmaking", "meeting"]
+	var quiet := screen in ["login", "map_select", "create_room", "waiting_room", "role_reveal", "character_select", "matchmaking", "meeting", "play_modes", "friends_menu", "solo_connect"]
 	var map_overlay: Node = app.find_child("MapOverlay",true,false)
 	var map_modal := is_instance_valid(map_overlay) and not map_overlay.is_queued_for_deletion()
 	var task_modal := playing and (int(app.task_overlay_index) >= 0 or map_modal)
@@ -154,6 +155,7 @@ func dialog_open() -> bool:
 
 
 func close_dialog() -> void:
+	if _dialog_kind == "settings" and app.firebase_auth.busy: return
 	if is_instance_valid(_dialog):
 		_root.remove_child(_dialog)
 		_dialog.queue_free()
@@ -165,14 +167,14 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 	close_dialog()
 	app._stop_move()
 	_dialog_kind = kind
-	_dialog = preload("res://scripts/fullscreen_shade.gd").new()
+	_dialog = ColorRect.new()
 	_dialog.name = "UtilityDialog"
 	_dialog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dialog.color = Color(0, 0, 0, 0.50)
 	_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dialog.z_index = 10
 	_root.add_child(_dialog)
-	var panel := UI.make_panel(_dialog.get_node("ShadeContent"), rect, Color(0.12, 0.08, 0.06, 0.99))
+	var panel := UI.make_panel(_dialog, rect, Color(0.12, 0.08, 0.06, 0.99))
 	var close: Button = app.make_button(panel, "×", close_dialog, 42, 42)
 	close.name = "PopupCloseButton"
 	close.position = Vector2(rect.size.x - 52, 10)
@@ -183,48 +185,12 @@ func dialog_panel(kind: String, rect: Rect2) -> Panel:
 
 
 func show_settings() -> void:
-	var panel := dialog_panel("settings", Rect2(335, 35, 610, 650))
-	panel.name = "SettingsOverlay"
-	UI.make_child_label(panel, "SETTINGS", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 420, 42))
-	var audio := UI.make_button(panel, "TURN AUDIO ON" if bool(app.audio_muted) else "MUTE AUDIO", Callable(app, "_toggle_audio"), 220, 42, true)
-	audio.name = "SettingsAudioButton"; audio.position = Vector2(155, 82)
-	var volume_label := UI.make_child_label(panel, preload("res://scripts/app_language.gd").text("VOLUME · %d%%") % int(app.audio_volume), 16, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 138, 460, 30))
-	volume_label.name = "SettingsVolumeLabel"
-	var volume := HSlider.new()
-	volume.name = "SettingsVolumeSlider"
-	volume.position = Vector2(65, 177); volume.size = Vector2(400, 28)
-	volume.min_value = 0; volume.max_value = 100; volume.step = 1
-	volume.value = app.audio_volume
-	volume.value_changed.connect(Callable(app, "_set_audio_volume"))
-	panel.add_child(volume)
-	var test_sound := UI.make_button(panel, "TEST SOUND", Callable(app, "_test_audio"), 220, 38, true)
-	test_sound.name = "SettingsTestSoundButton"; test_sound.position = Vector2(155, 218)
-	UI.make_child_label(panel, "WASD / arrow keys or the touch pad to move.", 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 260, 460, 48))
-	var help := UI.make_button(panel, "HOW TO PLAY", Callable(app, "show_how_to_play").bind(""), 200, 40)
-	help.position = Vector2(165, 312)
-	for child in panel.get_children():
-		if child is Control and child.name != "PopupCloseButton": child.position.x += 40
-	UI.make_child_label(panel, "LANGUAGE", 16, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 366, 540, 26))
-	var language := OptionButton.new()
-	language.name = "SettingsLanguageButton"
-	language.allow_reselect = true
-	language.position = Vector2(135, 400); language.size = Vector2(340, 42)
-	language.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	var service: Node = app.huawei_translation.app_language
-	for title in service.NAMES: language.add_item(title)
-	language.select(service.selected)
-	language.item_selected.connect(Callable(service, "select_language"))
-	panel.add_child(language)
-	var language_status := UI.make_child_label(panel, service.status_text(), 14, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 448, 550, 56))
-	language_status.name = "SettingsLanguageStatus"
-	UI.make_child_label(panel, "English and Malay work offline. Chinese and Tamil use Huawei translation for additional game text and need internet.", 13, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 508, 550, 66))
-	var playing: bool = app.current_screen in ["game", "meeting"]
-	if playing:
-		var leave := UI.make_button(panel, "LEAVE GAME", Callable(app, "show_exit_confirmation"), 180, 40)
-		leave.name = "SettingsLeaveGameButton"
-		leave.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-		leave.offset_left = -90; leave.offset_right = 90
-		leave.offset_top = -56; leave.offset_bottom = -16
+	close_dialog()
+	app._stop_move()
+	_dialog_kind = "settings"
+	_dialog = preload("res://scripts/settings_page.gd").new()
+	_root.add_child(_dialog)
+	_dialog.configure(app, self)
 	refresh(true)
 
 
@@ -238,10 +204,10 @@ func show_help() -> void:
 	guide.fit_content = false
 	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	guide.scroll_active = true
-	guide.add_theme_font_size_override("normal_font_size", 16)
+	guide.add_theme_font_size_override("normal_font_size", int(preload("res://scripts/settings_store.gd").get_value("text_size")))
 	guide.add_theme_color_override("default_color", Data.CREAM)
 	guide.add_theme_constant_override("line_separation", 3)
-	guide.text = "[color=#f7c35a][b]Villagers[/b][/color]\nComplete all twelve tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 45 seconds, then vote or Skip within 20 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can move around the map but cannot chat, vote, or do tasks.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
+	guide.text = "[color=#f7c35a][b]Playing modes[/b][/color]\nStart Game → Play with Friends, Solo vs Bots, or Quick Match.\nFriends: create/join a code room; host starts when at least two humans are ready.\nSolo: one Villager and nine bots, with no internet needed.\nQuick Match: up to 60 seconds of searching, then bots fill the spaces.\nEvery match has ten characters and starts after a 5-second countdown.\n\n[color=#f7c35a][b]Villagers[/b][/color]\nComplete all twelve tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 45 seconds, then vote or Skip within 20 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can move around the map but cannot chat, vote, or do tasks.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
 

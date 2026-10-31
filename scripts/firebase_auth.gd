@@ -4,6 +4,8 @@ signal authenticated
 signal failed(message: String)
 signal reset_sent
 signal busy_changed(value: bool)
+signal account_updated(action: String, message: String)
+signal account_deleted(uid: String)
 
 const CONFIG_PATH := "res://config/google-services.json"
 const PACKAGE := "org.godotengine.nenekkebayan"
@@ -15,10 +17,8 @@ var user: Dictionary = {}
 var _http: HTTPRequest
 var _generation := 0
 var _google: Object
-var _huawei: Object
-var _huawei_pending := false
-const HUAWEI_CONFIG := "res://config/agconnect-services.json"
-const HUAWEI_PUBLIC_CONFIG := "res://config/huawei-public.json"
+var _google_action: Dictionary = {}
+var _login_provider := "password"
 
 func _ready() -> void:
 	load_configuration()
@@ -26,60 +26,6 @@ func _ready() -> void:
 		_google = Engine.get_singleton("KampungGoogleSignIn")
 		_google.connect("google_token", _on_google_token)
 		_google.connect("google_error", _on_google_error)
-	if Engine.has_singleton("KampungHuaweiAccount"):
-		_huawei = Engine.get_singleton("KampungHuaweiAccount")
-		_huawei.connect("huawei_account", _on_huawei_account)
-		_huawei.connect("huawei_error", _on_huawei_error)
-
-static func valid_huawei_configuration(path: String = HUAWEI_CONFIG) -> bool:
-	if not FileAccess.file_exists(path): return false
-	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if not data is Dictionary or not data.get("client") is Dictionary: return false
-	var app_id := str(data.client.get("app_id",""))
-	return str(data.client.get("package_name",""))==PACKAGE and app_id.is_valid_int() and app_id.to_int()>0
-
-func huawei_sign_in() -> void:
-	if busy: return
-	if OS.get_name() != "Android":
-		failed.emit("Huawei sign-in is available in the Android APK. On this computer, use email/password or Play as Guest.")
-		return
-	if _huawei == null:
-		failed.emit("Huawei module is missing from this APK. Enable the Kampung Huawei plugin, restart Godot and export using Gradle Build.")
-		return
-	if not (valid_huawei_configuration(HUAWEI_PUBLIC_CONFIG) or (OS.has_feature("editor") and valid_huawei_configuration())):
-		failed.emit("Huawei configuration is missing from this APK. Restart Godot with the Huawei plugin enabled and export again.")
-		return
-	# Huawei authenticates with its own SDK; Firebase configuration is not required.
-	if _huawei.has_method("getHmsStatus") and int(_huawei.call("getHmsStatus")) != 0:
-		failed.emit("Huawei ID needs HMS Core. Install or update HMS Core using Huawei AppGallery, then reopen the game. Tap HMS Core help for instructions.")
-		return
-	_generation += 1
-	_huawei_pending = true
-	busy = true
-	busy_changed.emit(true)
-	_huawei.call("signIn")
-	var generation := _generation
-	get_tree().create_timer(120.0).timeout.connect(func():
-		if generation == _generation and busy and _huawei_pending:
-			cancel()
-			failed.emit("Huawei sign-in timed out. Check HMS Core and your connection, then try again."))
-
-func _on_huawei_account(open_id: String, display_name: String) -> void:
-	if not busy or not _huawei_pending: return
-	_huawei_pending = false
-	_finish()
-	if open_id.strip_edges().is_empty():
-		failed.emit("Huawei returned an incomplete account. Please try again.")
-		return
-	# This is a local SDK session, never a Firebase or multiplayer server token.
-	user = {"uid":"huawei:"+open_id,"provider":"huawei","display_name":display_name.strip_edges().left(48),"email":""}
-	authenticated.emit()
-
-func _on_huawei_error(message: String) -> void:
-	if not busy or not _huawei_pending: return
-	_huawei_pending = false
-	_finish()
-	failed.emit(message)
 
 func load_configuration(path: String = CONFIG_PATH) -> bool:
 	api_key = ""
@@ -109,9 +55,8 @@ func _finish() -> void:
 	busy_changed.emit(false)
 
 func cancel() -> void:
+	_google_action.clear()
 	_generation += 1
-	_huawei_pending = false
-	if _huawei != null: _huawei.call("cancelSignIn")
 	if is_instance_valid(_http):
 		var pending := _http
 		pending.cancel_request()
@@ -123,7 +68,6 @@ func cancel() -> void:
 
 func sign_out() -> void:
 	cancel()
-	if _huawei != null and user.get("provider","")=="huawei": _huawei.call("signOut")
 	user.clear()
 
 func email_sign_in(email: String, password: String, create: bool = false) -> void:
@@ -135,6 +79,7 @@ func email_sign_in(email: String, password: String, create: bool = false) -> voi
 		failed.emit("Use a password with at least 6 characters.")
 		return
 	if not _begin(): return
+	_login_provider = "password"
 	var generation := _generation
 	var result: Dictionary = await _request("accounts:signUp" if create else "accounts:signInWithPassword", {"email": email, "password": password, "returnSecureToken": true})
 	if generation != _generation: return
@@ -162,17 +107,41 @@ func google_sign_in() -> void:
 		failed.emit("Google sign-in is not configured in this Android build.")
 		return
 	if not _begin(): return
+	_login_provider = "google.com"
+	_google_action = {}
 	_google.call("signIn", web_client_id)
 
 func _on_google_token(token: String) -> void:
 	if not busy: return
 	var generation := _generation
-	var result: Dictionary = await _request("accounts:signInWithIdp", {"postBody": "id_token=" + token.uri_encode() + "&providerId=google.com", "requestUri": "http://localhost", "returnSecureToken": true, "returnIdpCredential": true})
+	var operation := _google_action.duplicate(true)
+	_google_action.clear()
+	var payload := {"postBody": "id_token=" + token.uri_encode() + "&providerId=google.com", "requestUri": "http://localhost", "returnSecureToken": true, "returnIdpCredential": true}
+	# A Firebase guest identity, if present, must be linked, not replaced.
+	if operation.get("action", "") == "link_google" and not user.is_empty(): payload["idToken"] = user.id_token
+	if not operation.is_empty() and operation.get("action", "") != "link_google": payload["autoCreate"] = false
+	var result: Dictionary = await _request("accounts:signInWithIdp", payload)
 	if generation != _generation: return
-	_accept(result)
+	if operation.is_empty():
+		_accept(result)
+		return
+	if result.has("error"): _account_error(result); return
+	if str(operation.action) == "link_google":
+		if str(result.get("localId", "")).is_empty() or str(result.get("idToken", "")).is_empty(): _account_error({"error":"SERVICE_UNAVAILABLE"}); return
+		if not user.is_empty() and str(result.get("localId", "")) != str(user.uid): _account_error({"error":"USER_MISMATCH"}); return
+		_adopt_session(result, "google.com")
+		_finish(); authenticated.emit()
+		account_updated.emit("linked", "Google account linked. Your local guest profile is kept.")
+		return
+	# Reauthentication must prove the same account; choosing a different Google
+	# account must never switch the identity being edited or deleted.
+	if str(result.get("localId", "")) != str(operation.uid): _account_error({"error":"USER_MISMATCH"}); return
+	_adopt_session(result, "google.com")
+	await _perform_account_action(str(operation.action), operation.get("fields", {}), generation)
 
 func _on_google_error(message: String) -> void:
 	if not busy: return
+	_google_action.clear()
 	_finish()
 	failed.emit(message)
 
@@ -184,8 +153,118 @@ func _accept(result: Dictionary) -> void:
 	if str(result.get("localId", "")).is_empty() or str(result.get("idToken", "")).is_empty():
 		failed.emit("The sign-in service returned an incomplete response. Please try again.")
 		return
-	user = {"uid": result.localId, "email": result.get("email", ""), "display_name": result.get("displayName", ""), "id_token": result.idToken}
+	_adopt_session(result, _login_provider)
 	authenticated.emit()
+
+func _adopt_session(result: Dictionary, provider: String = "") -> void:
+	user["uid"] = str(result.get("localId", user.get("uid", "")))
+	user["email"] = str(result.get("email", user.get("email", "")))
+	user["display_name"] = str(result.get("displayName", user.get("display_name", "")))
+	user["id_token"] = str(result.get("idToken", user.get("id_token", "")))
+	user["email_verified"] = bool(result.get("emailVerified", user.get("email_verified", false)))
+	if not provider.is_empty(): user["provider"] = provider
+	if result.has("providerUserInfo"):
+		user["providers"] = []
+		for info in result.providerUserInfo: user.providers.append(str(info.get("providerId", "")))
+	elif not provider.is_empty(): user["providers"] = [provider]
+
+func _account_error(result: Dictionary) -> void:
+	_finish()
+	failed.emit(error_message(str(result.get("error", "SERVICE_UNAVAILABLE"))))
+
+func update_username(value: String) -> void:
+	var cleaned := value.strip_edges().substr(0, 20)
+	if cleaned.is_empty(): failed.emit("Enter a username."); return
+	if user.is_empty(): failed.emit("No signed-in account."); return
+	if not _begin(): return
+	var generation := _generation
+	var result := await _request("accounts:update", {"idToken": user.id_token, "displayName": cleaned, "returnSecureToken": true})
+	if generation != _generation: return
+	if result.has("error"): _account_error(result); return
+	_adopt_session(result); user["display_name"] = cleaned
+	_finish(); account_updated.emit("username", "Username updated.")
+
+func convert_guest(email: String, password: String) -> void:
+	if not user.is_empty() and not user.get("anonymous", false): failed.emit("This account is already signed in."); return
+	if not email.strip_edges().contains("@") or password.length() < 6: failed.emit("Enter a valid email and a password with at least 6 characters."); return
+	if not _begin(): return
+	var generation := _generation
+	var previous_uid := str(user.get("uid", ""))
+	var payload := {"email": email.strip_edges(), "password": password, "returnSecureToken": true}
+	# signUp with idToken supports linking with email-enumeration protection.
+	if not user.is_empty(): payload["idToken"] = user.id_token
+	var result := await _request("accounts:signUp", payload)
+	if generation != _generation: return
+	if result.has("error"): _account_error(result); return
+	if str(result.get("localId", "")).is_empty() or str(result.get("idToken", "")).is_empty(): _account_error({"error":"SERVICE_UNAVAILABLE"}); return
+	if not previous_uid.is_empty() and str(result.get("localId", "")) != previous_uid: _account_error({"error":"USER_MISMATCH"}); return
+	_adopt_session(result, "password"); user.erase("anonymous")
+	_finish(); authenticated.emit(); account_updated.emit("linked", "Account created. Your local guest profile is kept.")
+
+func link_google() -> void:
+	if not user.is_empty() and not user.get("anonymous", false): failed.emit("This account is already signed in."); return
+	if not _google_available(): return
+	if not _begin(): return
+	_google_action = {"action":"link_google"}
+	_google.call("signIn", web_client_id)
+
+func _google_available() -> bool:
+	if OS.get_name() != "Android": failed.emit("Google account actions are available in the Android APK."); return false
+	if _google == null or web_client_id.is_empty(): failed.emit("Google sign-in is not configured in this build."); return false
+	return true
+
+func manage_account(action: String, fields: Dictionary, current_password: String = "") -> void:
+	if user.is_empty(): failed.emit("Sign in before managing an account."); return
+	if action not in ["email", "password", "delete", "verify"]: return
+	if action == "email" and (not str(fields.get("email", "")).strip_edges().contains("@") or str(fields.email).strip_edges() == str(user.email)):
+		failed.emit("Enter a different valid email address."); return
+	if action == "password" and str(fields.get("password", "")).length() < 6: failed.emit("Use at least 6 characters for the new password."); return
+	if str(user.get("provider", "password")) == "google.com":
+		if not _google_available(): return
+		if not _begin(): return
+		_google_action = {"action":action, "uid":str(user.uid), "fields":fields.duplicate()}
+		_google.call("signIn", web_client_id)
+		return
+	if current_password.is_empty(): failed.emit("Enter your current password to confirm this action."); return
+	if not _begin(): return
+	var generation := _generation
+	var expected_uid := str(user.uid)
+	var fresh := await _request("accounts:signInWithPassword", {"email":user.email, "password":current_password, "returnSecureToken":true})
+	if generation != _generation: return
+	if fresh.has("error"): _account_error(fresh); return
+	if str(fresh.get("localId", "")) != expected_uid: _account_error({"error":"USER_MISMATCH"}); return
+	_adopt_session(fresh)
+	await _perform_account_action(action, fields, generation)
+
+func _perform_account_action(action: String, fields: Dictionary, generation: int) -> void:
+	var endpoint := "accounts:update"
+	var payload := {"idToken":user.id_token, "returnSecureToken":true}
+	var uid := str(user.uid)
+	match action:
+		"email":
+			endpoint = "accounts:sendOobCode"
+			payload = {"idToken":user.id_token, "requestType":"VERIFY_AND_CHANGE_EMAIL", "newEmail":str(fields.email).strip_edges()}
+		"password": payload["password"] = fields.password
+		"delete": endpoint = "accounts:delete"; payload = {"idToken":user.id_token}
+		"verify": endpoint = "accounts:sendOobCode"; payload = {"idToken":user.id_token, "requestType":"VERIFY_EMAIL"}
+	var result := await _request(endpoint, payload)
+	if generation != _generation: return
+	if result.has("error"): _account_error(result); return
+	if action == "delete":
+		user.clear(); _finish(); account_deleted.emit(uid); return
+	_adopt_session(result)
+	_finish()
+	var message: String = {"email":"Check your new email and confirm the verification link. Then refresh Account Information.", "password":"Game account password updated.", "verify":"Verification email requested. Check your inbox."}.get(action, "Account updated.")
+	account_updated.emit(action, message)
+
+func refresh_account() -> void:
+	if user.is_empty() or not _begin(): return
+	var generation := _generation
+	var result := await _request("accounts:lookup", {"idToken":user.id_token})
+	if generation != _generation: return
+	if result.has("error"): _account_error(result); return
+	if result.get("users", []).is_empty(): _account_error({"error":"USER_NOT_FOUND"}); return
+	_adopt_session(result.users[0]); _finish(); account_updated.emit("refresh", "Account information refreshed.")
 
 func _request(endpoint: String, payload: Dictionary) -> Dictionary:
 	var request := HTTPRequest.new()
@@ -211,6 +290,9 @@ static func error_message(code: String) -> String:
 		"INVALID_LOGIN_CREDENTIALS", "EMAIL_NOT_FOUND", "INVALID_PASSWORD": return "The email or password is incorrect. Please try again."
 		"EMAIL_EXISTS": return "An account already uses this email. Sign in or reset your password."
 		"WEAK_PASSWORD", "PASSWORD_DOES_NOT_MEET_REQUIREMENTS": return "Choose a stronger password that meets this project's password policy."
+		"USER_MISMATCH": return "Choose the same account that is signed in to this game. No changes were made."
+		"CREDENTIAL_TOO_OLD_LOGIN_AGAIN", "TOKEN_EXPIRED", "INVALID_ID_TOKEN": return "Please sign in again to confirm your account, then retry."
+		"USER_NOT_FOUND": return "This account no longer exists. Sign out and return to Sign In."
 		"INVALID_EMAIL": return "Enter a valid email address."
 		"USER_DISABLED": return "This account has been disabled."
 		"TOO_MANY_ATTEMPTS_TRY_LATER", "QUOTA_EXCEEDED": return "Too many attempts. Please wait and try again."

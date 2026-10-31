@@ -82,6 +82,7 @@ func atlas(path: String, region: Rect2) -> AtlasTexture:
 
 func label(text: String, rect: Rect2, font_size: int, colour: Color) -> Label:
 	var result := Label.new(); result.text = text; result.position = rect.position; result.size = rect.size
+	preload("res://scripts/game_typography.gd").apply_label(result, font_size)
 	result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

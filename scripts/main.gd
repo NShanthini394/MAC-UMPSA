@@ -112,6 +112,7 @@ const MeetingCinematic = preload("res://scripts/meeting_cinematic.gd")
 
 
 func _ready() -> void:
+	ThemeDB.fallback_font = preload("res://assets/fonts/body.tres")
 	rng.randomize()
 	# Client and optional LAN server run separate APIs with identical relative RPC paths.
 	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), get_path())
@@ -2247,7 +2248,7 @@ func show_result(villagers_win: bool, message: String) -> void:
 			if not str(secret).is_empty() and str(secret) not in winners: winners.append(str(secret))
 	if winners.is_empty():
 		for character in CHARACTERS:
-			var is_nenek := character == impostor_character
+			var is_nenek: bool = character == impostor_character
 			if is_nenek == (not villagers_win): winners.append(character)
 	var parade := Control.new()
 	parade.name = "WinnerCharacterLineup"

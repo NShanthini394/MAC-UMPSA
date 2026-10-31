@@ -79,7 +79,9 @@ func run() -> void:
  for i in 10:app.lobby_players.append({"id":i+2,"name":"Player With Long Name" if i==0 else ["Mei Ling","Arun Kumar","Siti","Dahlia","Hakim"][i%5],"character":data.CHARACTERS[i],"alive":true,"sleeping":false})
  app._show_network_discussion();await settle()
  for i in 25:app._on_network_chat_received(2,"Mei Ling","I was checking the rooms. Did you see anyone cast a spell near the kitchen?")
- check(app.find_child("MeetingChatLog",true,false) is RichTextLabel,"Long chats use a scrollable log")
+ await settle()
+ var chat_scroll := app.find_child("MeetingChatScroll",true,false) as ScrollContainer
+ check(chat_scroll!=null and chat_scroll.get_v_scroll_bar().max_value>chat_scroll.get_v_scroll_bar().page,"Long chats remain scrollable with the current chat bubble layout")
  for kind in ["discussion","voting"]:
   if kind=="voting":app._show_network_voting(app.lobby_players);await settle()
   var panel:Panel=app.find_child("MeetingPanel",true,false)

@@ -71,7 +71,7 @@ static func discussion(app: Control) -> void:
 static func append_chat(app: Control, peer_id: int, player_name: String, message: String) -> void:
 	var chat := app.find_child("MeetingChatLog", true, false) as VBoxContainer
 	if chat == null: return
-	var own := peer_id == app.network_manager.local_peer_id()
+	var own: bool = peer_id == app.network_manager.local_peer_id()
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(900, 0)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL

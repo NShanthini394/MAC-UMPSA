@@ -148,7 +148,9 @@ func _process(delta: float) -> void:
 			var origin: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
 			var candidate := origin + direction * minf(delta, 0.1) * 250.0
 			candidate = candidate.clamp(Vector2(14, 14), bounds - Vector2(14, 14))
-			origin = MapGeometry.move_position(map_index, origin, candidate - origin, 14.0, entrances)
+			if not bool(player.get("sleeping", false)):
+				candidate = MapGeometry.move_position(map_index, origin, candidate - origin, 14.0, entrances)
+			origin = candidate
 			player["position"] = origin
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
@@ -654,10 +656,20 @@ func _broadcast_positions(code: String, reliable: bool = false, sleep_cast: Dict
 	room["state_sequence"] = int(room.get("state_sequence", 0)) + 1
 	var positions: Array = []
 	for member in room["players"].values():
-		positions.append({"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))})
+		var player_state := {"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))}
+		if bool(member.get("sleeping", false)):
+			player_state["sleep_position"] = member.get("sleep_position", member["position"])
+		positions.append(player_state)
 	for peer_id in room["players"].keys():
 		if not _can_send_to(int(peer_id)): continue
 		var receiver_state := positions.duplicate(true)
+		# Sleepers roam using their real server position, but every other client
+		# keeps rendering their body at the spot where the spell landed.
+		for player_state in receiver_state:
+			var subject_id := int(player_state.get("id", -1))
+			if subject_id == int(peer_id) or not bool(player_state.get("sleeping", false)): continue
+			var subject: Dictionary = room["players"].get(subject_id, {})
+			player_state["position"] = subject.get("sleep_position", player_state["position"])
 		var power_state := NenekPowers.snapshot(room, room["players"][peer_id], now)
 		if str(room["players"][peer_id].get("role", "")) != "nenek_kebayan":
 			power_state["sleep_cooldown"] = 0.0

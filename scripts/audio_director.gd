@@ -15,6 +15,7 @@ const SFX_PATHS := {
 	"open": "res://assets/audio/task_open.wav",
 	"collect": "res://assets/audio/object_pickup.wav",
 	"clue": "res://assets/audio/clue_found.wav",
+	"sleep_spell": "res://assets/audio/sleep_spell_cast.mp3",
 	"task_complete": "res://assets/audio/task_complete.wav",
 	"drag": "res://assets/audio/drag_drop.wav",
 	"timing_good": "res://assets/audio/timing_good.wav",

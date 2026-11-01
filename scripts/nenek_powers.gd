@@ -26,6 +26,7 @@ static func reset_match(room: Dictionary, now: float) -> void:
 	for player in room.get("players", {}).values():
 		player["alive"] = true
 		player["sleeping"] = false
+		player.erase("sleep_position")
 		player["sleep_ready_at"] = now
 
 
@@ -58,6 +59,9 @@ static func try_sleep(room: Dictionary, caster_id: int, target_id: int, now: flo
 	if not MapGeometry.has_clear_path(int(room.get("map_index", 0)), origin, destination, locked_doors(room, now)):
 		return "A wall or locked entrance blocks Sleep Spell."
 	target["sleeping"] = true
+	# Keep the visible sleeper at the impact point while their real position can
+	# continue moving on the server.
+	target["sleep_position"] = destination
 	target["direction"] = Vector2.ZERO
 	room["sleep_ready_at"] = now + SLEEP_COOLDOWN
 	caster["sleep_ready_at"] = now + SLEEP_COOLDOWN
@@ -105,5 +109,6 @@ static func snapshot(room: Dictionary, player: Dictionary, now: float) -> Dictio
 		"fog_origin": room.get("fog_origin", Vector2.ZERO),
 		"fog_radius": FOG_RADIUS,
 		"sleep_cooldown": maxf(0.0, float(room.get("sleep_ready_at", player.get("sleep_ready_at", 0.0))) - now),
-		"sabotage_cooldown": maxf(0.0, float(room.get("sabotage_ready_at", 0.0)) - now)
+		"sabotage_cooldown": maxf(0.0, float(room.get("sabotage_ready_at", 0.0)) - now),
+		"gong_cooldown": maxf(0.0, float(room.get("gong_ready_at", 0.0)) - now)
 	}

@@ -287,6 +287,7 @@ const TEXT := {
   "Discussion started. Share clues you've found.": "Perbincangan bermula. Kongsi klu yang anda temui.",
   "Voting begins when the discussion timer ends.": "Pengundian bermula apabila masa perbincangan tamat.",
   "The gong has sounded. Gather and share your clues.": "Gong telah dibunyikan. Berkumpul dan kongsi klu anda.",
+  "Nenek Kebayan has cast Mantera Tidur on you!": "Nenek Kebayan telah menjampi anda dengan Mantera Tidur!",
   "Move close to the gong to call a meeting.": "Dekati gong untuk memanggil mesyuarat.",
   "Move close to the central gong to call a meeting.": "Dekati gong utama untuk memanggil mesyuarat.",
   "Move close to the gong.": "Dekati gong.",

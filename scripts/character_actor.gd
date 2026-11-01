@@ -13,6 +13,7 @@ var _facing_mode := "front"
 var _base_sprite_y := 0.0
 var _character := ""
 var _sleep_texture: Texture2D
+var _sleep_translucent := false
 var _pose_tween: Tween
 var _blow_tween: Tween
 
@@ -52,6 +53,7 @@ func configure(character: String, display_name: String = "YOU") -> void:
 	_elapsed = 0.0
 	_frame_index = 0
 	_facing_mode = "front"
+	_sleep_translucent = false
 	_sprite.scale = Vector2.ONE
 	_sprite.flip_h = false
 	_sprite.rotation = 0.0
@@ -113,6 +115,7 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 	var target_rotation := 0.0
 	var target_y := _base_sprite_y + (18.0 if value else 0.0)
 	var target_tint := Color("c0d2e8") if value else Color.WHITE
+	target_tint.a = 0.5 if _sleep_translucent else 1.0
 	if animate:
 		_pose_tween = create_tween().set_parallel(true)
 		_pose_tween.tween_property(_sprite, "rotation", target_rotation, 0.48).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -124,6 +127,12 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 		_sprite.rotation = target_rotation
 		_sprite.position.y = target_y
 		_sprite.modulate = target_tint
+
+
+func set_sleep_translucent(value: bool) -> void:
+	_sleep_translucent = value
+	if _sprite != null:
+		_sprite.modulate.a = 0.5 if value else 1.0
 
 
 func play_sleep_spell_blow(direction: Vector2) -> void:

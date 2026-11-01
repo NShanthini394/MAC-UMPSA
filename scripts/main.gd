@@ -363,6 +363,10 @@ func _update_power_hud() -> void:
 	for button_name in ["InteractButton", "InspectClueButton", "GameMapButton", "GameJournalButton"]:
 		var button := find_child(button_name, true, false) as BaseButton
 		if button: button.disabled = watching or meeting
+	var interact_button := find_child("InteractButton", true, false) as BaseButton
+	var gong_seconds := ceili(maxf(0.0, gong_ready_at - now))
+	var gong_near := player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0
+	_set_cooldown_timer(interact_button, gong_seconds, current_screen == "game" and gong_near and not watching and not meeting)
 	var pad := find_child("VirtualJoystick", true, false) as Control
 	if pad: pad.visible = not player_voted_out and not meeting
 	var sleep_button := find_child("SleepSpellButton", true, false) as Button
@@ -371,6 +375,7 @@ func _update_power_hud() -> void:
 		sleep_button.visible = not watching and not meeting
 		sleep_button.tooltip_text = Lang.text("Sleep spell") + (preload("res://scripts/app_language.gd").text(" · ready in %ds") % sleep_seconds if sleep_seconds > 0 else Lang.text(" · ready"))
 		sleep_button.disabled = watching or sleep_seconds > 0 or current_screen != "game"
+		_set_cooldown_timer(sleep_button, sleep_seconds, sleep_button.visible)
 	var sabotage_seconds := ceili(maxf(0.0, sabotage_ready_at - now))
 	for info in [["FogButton", "Fog"], ["DoorLockButton", "Door lock"]]:
 		var button := find_child(info[0], true, false) as Button
@@ -378,6 +383,7 @@ func _update_power_hud() -> void:
 			button.visible = not watching and not meeting
 			button.tooltip_text = info[1] + (preload("res://scripts/app_language.gd").text(" · ready in %ds") % sabotage_seconds if sabotage_seconds > 0 else " · ready")
 			button.disabled = watching or sabotage_seconds > 0 or current_screen != "game"
+			_set_cooldown_timer(button, sabotage_seconds, button.visible)
 	var banner := find_child("WatchingLabel", true, false) as Label
 	if banner:
 		banner.text = ("ASLEEP · You can walk, but cannot do tasks, chat or vote." if player_sleeping else "VOTED OUT · WATCHING ONLY") if watching else ""
@@ -388,6 +394,14 @@ func _update_power_hud() -> void:
 		if active_power_kind != "":
 			var section_name := str(areas[active_power_area]["name"]) if active_power_area >= 0 and active_power_area < areas.size() else "Nearby surroundings"
 			status.text = ("FOG · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
+
+
+func _set_cooldown_timer(button: BaseButton, seconds: int, show_timer: bool) -> void:
+	if button == null: return
+	var timer := button.get_node_or_null("CooldownTimerLabel") as Label
+	if timer == null: return
+	timer.text = "%ds" % seconds
+	timer.visible = show_timer and seconds > 0
 
 
 func _enter_watch_mode() -> void:
@@ -401,7 +415,9 @@ func _enter_watch_mode() -> void:
 	if current_screen == "meeting": current_screen = "game"
 	if is_instance_valid(player_body):
 		player_body.set("inactive", player_voted_out)
-		player_body.call("set_sleeping", player_sleeping)
+		# Sleep disables actions, but the local sleeper is free to roam and should
+		# see their own avatar walking instead of the remote sleeping pose.
+		player_body.call("set_sleeping", false)
 		if player_voted_out: player_body.get_node("CharacterActor").hide()
 	_update_power_hud()
 	_update_interaction_prompt()
@@ -1071,9 +1087,14 @@ func _on_network_positions_changed(members: Array) -> void:
 		if peer_id < 0: continue
 		var point: Vector2 = data.get("position", Vector2.ZERO)
 		var sleeping := bool(data.get("sleeping", false))
+		var sleep_position: Vector2 = data.get("sleep_position", point)
 		var alive := bool(data.get("alive", true))
+		var character := ""
+		var display_name := "Player"
 		for member in lobby_players:
 			if int(member.get("id", -1)) != peer_id: continue
+			character = str(member.get("character", ""))
+			display_name = str(member.get("name", display_name))
 			member["position"] = point
 			member["sleeping"] = sleeping
 			member["alive"] = alive
@@ -1090,14 +1111,48 @@ func _on_network_positions_changed(members: Array) -> void:
 			else:
 				actor.call("set_network_target", point)
 				var animate_sleep := not sleep_cast.is_empty() and int(sleep_cast.get("target_id", -1)) == peer_id and sleeping
-				actor.call("set_sleeping", sleeping, animate_sleep)
+				# Only the sleeper sees their roaming body; other clients see the
+				# pinned sleeping body at full opacity.
+				actor.call("set_sleep_translucent", sleeping and is_local)
+				actor.call("set_sleeping", sleeping and not is_local, animate_sleep and not is_local)
 				actor.set("inactive", not alive)
+		if is_local:
+			_update_local_sleep_echo(peer_id, character, display_name, sleep_position, sleeping and alive)
 	if not sleep_cast.is_empty():
-		_play_sleep_spell_animation(int(sleep_cast.get("caster_id", -1)), int(sleep_cast.get("target_id", -1)))
+		var target_id := int(sleep_cast.get("target_id", -1))
+		_play_sleep_spell_animation(int(sleep_cast.get("caster_id", -1)), target_id)
+		if target_id == network_manager.local_peer_id() and not player_is_impostor:
+			show_notice(Lang.text("Nenek Kebayan has cast Mantera Tidur on you!"))
 	if not was_watching and not can_local_act(): _enter_watch_mode()
 	if current_screen == "game":
 		_update_interaction_prompt()
 	_update_power_hud()
+
+
+func _update_local_sleep_echo(peer_id: int, character: String, display_name: String, sleep_position: Vector2, sleeping: bool) -> void:
+	if not is_instance_valid(game_world): return
+	var echo_name := "SleepEcho_%d" % peer_id
+	var echo := game_world.get_node_or_null(echo_name) as CharacterBody2D
+	if not sleeping:
+		if is_instance_valid(echo): echo.queue_free()
+		return
+	if not is_instance_valid(echo):
+		var player_scene := load("res://scenes/player.tscn") as PackedScene
+		echo = player_scene.instantiate() as CharacterBody2D
+		echo.name = echo_name
+		echo.collision_layer = 0
+		echo.collision_mask = 0
+		echo.set("map_index", selected_map)
+		echo.set("is_local_player", false)
+		echo.set("is_network_driven", false)
+		echo.position = sleep_position
+		game_world.add_child(echo)
+		echo.call("configure", character, display_name, false, false)
+		(echo.get_node("Camera2D") as Camera2D).enabled = false
+		echo.call("set_sleep_translucent", true)
+		echo.call("set_sleeping", true)
+	else:
+		echo.global_position = sleep_position
 
 
 func _play_sleep_spell_animation(caster_id: int, target_id: int) -> void:
@@ -1113,6 +1168,7 @@ func _play_sleep_spell_animation(caster_id: int, target_id: int) -> void:
 			return
 		if not MapGeometry.has_clear_path(selected_map, observer.global_position, caster.global_position, entrances): return
 		if not MapGeometry.has_clear_path(selected_map, observer.global_position, target.global_position, entrances): return
+	_play_sfx("sleep_spell")
 	var direction := target.global_position - caster.global_position
 	caster.call("play_sleep_spell_blow", direction)
 	var effect := (load("res://scripts/sleep_spell_effect.gd") as Script).new() as Node2D

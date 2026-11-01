@@ -61,12 +61,20 @@ public class KampungHuaweiAccount extends GodotPlugin {
         awaitingResult = false;
         if (!accepting) return;
         accepting = false;
-        if (resultCode == Activity.RESULT_CANCELED) { emitSignal("huawei_error", "Huawei sign-in was cancelled."); return; }
+        if (data == null) {
+            if (resultCode == Activity.RESULT_CANCELED) {
+                emitSignal("huawei_error", "Huawei sign-in was cancelled or returned no result. If you did not cancel it, check the APK signing fingerprint and Account Kit configuration.");
+            } else {
+                emitSignal("huawei_error", "Huawei sign-in returned no result (activity code " + resultCode + "). Please try again.");
+            }
+            return;
+        }
         try {
             Task<AuthAccount> task = AccountAuthManager.parseAuthResultFromIntent(data);
             if (!task.isSuccessful()) {
                 Exception error = task.getException();
                 int code = error instanceof ApiException ? ((ApiException) error).getStatusCode() : -1;
+                if (code == 2012) { emitSignal("huawei_error", "Huawei sign-in was cancelled."); return; }
                 emitSignal("huawei_error", "Huawei sign-in failed (" + code + "). Check your connection, Account Kit configuration and APK signing fingerprint.");
                 return;
             }

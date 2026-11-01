@@ -307,6 +307,7 @@ func build_control_bar(app) -> void:
 	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	app.game_hud.add_child(actions)
 	var interact := _add_dock_button(app, actions, "InteractButton", "res://assets/ui/interact_icon.svg", "Interact · E", Callable(app, "interact_nearest"), true, Vector2(88, 88))
+	_add_cooldown_timer(interact)
 	interact.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	interact.offset_left = -114; interact.offset_top = -146
 	interact.offset_right = -26; interact.offset_bottom = -58
@@ -323,9 +324,12 @@ func build_control_bar(app) -> void:
 		powers.offset_right = -20; powers.offset_bottom = -236
 		powers.add_theme_constant_override("separation", 6)
 		app.game_hud.add_child(powers)
-		_add_dock_button(app, powers, "SleepSpellButton", "res://assets/ui/sleep_icon.svg", "Sleep spell", Callable(app, "cast_sleep_spell"), true, Vector2(54, 54))
-		_add_dock_button(app, powers, "FogButton", "res://assets/ui/fog_icon.svg", "Fog", Callable(app, "cast_sabotage").bind("fog"), true, Vector2(54, 54))
-		_add_dock_button(app, powers, "DoorLockButton", "res://assets/ui/lock_icon.svg", "Door lock", Callable(app, "cast_sabotage").bind("lock"), true, Vector2(54, 54))
+		var sleep_button := _add_dock_button(app, powers, "SleepSpellButton", "res://assets/ui/sleep_icon.svg", "Sleep spell", Callable(app, "cast_sleep_spell"), true, Vector2(54, 54))
+		_add_cooldown_timer(sleep_button)
+		var fog_button := _add_dock_button(app, powers, "FogButton", "res://assets/ui/fog_icon.svg", "Fog", Callable(app, "cast_sabotage").bind("fog"), true, Vector2(54, 54))
+		_add_cooldown_timer(fog_button)
+		var lock_button := _add_dock_button(app, powers, "DoorLockButton", "res://assets/ui/lock_icon.svg", "Door lock", Callable(app, "cast_sabotage").bind("lock"), true, Vector2(54, 54))
+		_add_cooldown_timer(lock_button)
 	var task_hint := load("res://scripts/nearby_task_hint.gd").new() as PanelContainer
 	app.game_hud.add_child(task_hint)
 	task_hint.call("configure", app)
@@ -342,6 +346,28 @@ func _add_dock_button(app, parent: Control, node_name: String, icon_path: String
 	UI.apply_menu_button(button)
 	button.add_theme_constant_override("icon_max_width", roundi(button_size.x - 16))
 	return button
+
+
+func _add_cooldown_timer(button: Button) -> void:
+	var timer := Label.new()
+	timer.name = "CooldownTimerLabel"
+	timer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	timer.add_theme_font_size_override("font_size", 12)
+	timer.add_theme_color_override("font_color", Color("fff1ad"))
+	timer.add_theme_color_override("font_outline_color", Color("241b14"))
+	timer.add_theme_constant_override("outline_size", 4)
+	timer.anchor_left = 0.0
+	timer.anchor_right = 1.0
+	timer.anchor_top = 0.0
+	timer.anchor_bottom = 0.0
+	timer.offset_left = -8.0
+	timer.offset_right = 8.0
+	timer.offset_top = -21.0
+	timer.offset_bottom = -1.0
+	timer.visible = false
+	button.add_child(timer)
 
 
 func refresh_power_effects(app) -> void:

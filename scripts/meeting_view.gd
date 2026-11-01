@@ -47,11 +47,13 @@ static func discussion(app: Control) -> void:
 		index += 1
 	var scroll := ScrollContainer.new()
 	scroll.name = "MeetingChatScroll"
+	scroll.set_script(preload("res://scripts/boxed_scroll.gd"))
 	scroll.position = Vector2(30, 232); scroll.size = Vector2(940, 254)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
 	var chat := VBoxContainer.new()
 	chat.name = "MeetingChatLog"
+	chat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chat.add_theme_constant_override("separation", 7)
 	scroll.add_child(chat)
@@ -73,12 +75,15 @@ static func append_chat(app: Control, peer_id: int, player_name: String, message
 	if chat == null: return
 	var own: bool = peer_id == app.network_manager.local_peer_id()
 	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chat.add_child(row)
 	var spacer := Control.new()
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if own: row.add_child(spacer)
 	var bubble := PanelContainer.new()
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bubble.name = "ChatBubble"
 	bubble.custom_minimum_size = Vector2(clampf(170.0 + message.length() * 4.8, 220.0, 680.0), 0)
 	var style := StyleBoxFlat.new()
@@ -89,10 +94,12 @@ static func append_chat(app: Control, peer_id: int, player_name: String, message
 	bubble.add_theme_stylebox_override("panel", style)
 	row.add_child(bubble)
 	var stack := VBoxContainer.new()
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stack.add_theme_constant_override("separation", 5)
 	bubble.add_child(stack)
 	for copy in [player_name, message]:
 		var label := Label.new()
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		label.text = copy
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

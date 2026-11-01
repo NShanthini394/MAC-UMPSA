@@ -2,6 +2,7 @@ extends RefCounted
 ## Account landing page using the game's own title artwork.
 const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
+const Lang = preload("res://scripts/app_language.gd")
 const HEADING_FONT = preload("res://assets/fonts/heading.tres")
 const WHITE := Color("fff8e9")
 const MUTED := Color("d2bc99")
@@ -120,7 +121,7 @@ static func build(app: Control) -> void:
 	google.name = "LoginGoogleButton"; provider_mark(google, "Google")
 	var huawei := account_button(form, "Continue with Huawei ID", Callable(app.firebase_auth, "huawei_sign_in"), Rect2(0, 144, 520, 60), true)
 	huawei.name = "LoginHuaweiButton"; provider_mark(huawei, "Huawei")
-	var email := account_button(form, "Continue with Email", Callable(app, "show_email_sign_in"), Rect2(0, 214, 520, 60))
+	var email := account_button(form, Lang.text("Continue with Email"), Callable(app, "show_email_sign_in"), Rect2(0, 214, 520, 60))
 	email.name = "LoginEmailButton"
 	var guest := account_button(form, "▷  Play as Guest", Callable(app, "_continue_as_guest"), Rect2(0, 284, 520, 60), false, true)
 	guest.name = "LoginGuestButton"

@@ -2,6 +2,7 @@ extends Control
 ## Parchment floor plan derived from the exact gameplay floors and doorways.
 signal task_selected(index: int)
 const Geometry = preload("res://scripts/map_geometry.gd")
+const Lang = preload("res://scripts/app_language.gd")
 const INK := Color("63482c")
 const PAPER := Color("ddc08b")
 const ROOM_COLORS := [Color("d3b678"),Color("ccaa70"),Color("d8bd8e"),Color("be9870"),Color("b7a07e"),Color("b1bb85"),Color("c9ab70"),Color("aeb47a"),Color("a4b384")]
@@ -86,8 +87,10 @@ func _draw() -> void:
 	for index in plan.layout["sections"].size():
 		var section: Dictionary = plan.layout["sections"][index]
 		var rect: Rect2 = section["zones"][0]
-		var copy: String = section["name"]
-		copy = copy.replace("Well and East Yard","Well &\nEast Yard").replace("Veranda and Stairs","Veranda &\nStairs").replace("Yard and Garden","Yard &\nGarden").replace("Beach and Piers","Beach &\nPiers")
+		var source_name: String = str(section["name"])
+		var copy: String = Lang.text(source_name)
+		if copy == source_name:
+			copy = copy.replace("Well and East Yard","Well &\nEast Yard").replace("Veranda and Stairs","Veranda &\nStairs").replace("Yard and Garden","Yard &\nGarden").replace("Beach and Piers","Beach &\nPiers")
 		var width := source_to_screen(rect.end).x-source_to_screen(rect.position).x
 		if width < 145 and not copy.contains("\n"): copy = copy.replace(" ","\n")
 		var label_at := source_to_screen(rect.get_center())

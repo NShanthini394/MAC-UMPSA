@@ -3,6 +3,7 @@ extends PanelContainer
 const Geometry = preload("res://scripts/map_geometry.gd")
 const Navigation = preload("res://scripts/map_navigation.gd")
 const Data = preload("res://scripts/game_data.gd")
+const Lang = preload("res://scripts/app_language.gd")
 const NEARBY_RANGE := 220.0
 const MAX_WALK_DISTANCE := 280.0
 var app: Control
@@ -104,13 +105,13 @@ func refresh(delta: float = 0.0, force_query: bool = false) -> void:
 		visible = false
 		return
 	var in_reach := origin.distance_to(target) <= 72 and Geometry.has_clear_path(app.selected_map,origin,target,doors)
-	_heading.text = "TASK NEARBY"
-	_task_name.text = str(Data.TASKS[Data.MAPS[app.selected_map]["name"]][task_index]["name"])
-	_instruction.text = "Press INTERACT to start" if in_reach else "Follow the arrow to the task"
+	_heading.text = Lang.text("TASK NEARBY")
+	_task_name.text = Lang.text(str(Data.TASKS[Data.MAPS[app.selected_map]["name"]][task_index]["name"]))
+	_instruction.text = Lang.text("Press INTERACT to start") if in_reach else Lang.text("Follow the arrow to the task")
 	var direction: Vector2 = waypoints[1] - origin
 	_arrow.rotation = direction.angle() + PI * 0.5
 	_arrow.visible = direction.length_squared() > 16
-	_arrow.tooltip_text = "Direction to the nearby task"
+	_arrow.tooltip_text = Lang.text("Direction to the nearby task")
 	visible = true
 
 

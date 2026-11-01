@@ -10,6 +10,7 @@ var selected := 0
 var dictionaries: Dictionary = {}
 var translations: Dictionary = {}
 var sources: Dictionary = {}
+var source_aliases: Dictionary = {}
 var queue: Array[String] = []
 var attempted: Dictionary = {}
 var active_source := ""
@@ -44,11 +45,26 @@ func _ready() -> void:
 		dictionaries[code] = messages
 		translations[code] = translation
 		TranslationServer.add_translation(translation)
+		for source in messages:
+			if str(messages[source]) != str(source): source_aliases[str(messages[source])] = str(source)
 	TranslationServer.set_locale(CODES[selected])
 
 static func text(source: String) -> String:
-	if is_instance_valid(instance) and instance.selected != 0: instance._enqueue(source)
+	if is_instance_valid(instance) and instance.selected != 0:
+		var code: String = CODES[instance.selected]
+		var messages: Dictionary = instance.dictionaries.get(code, {})
+		if messages.has(source): return str(messages[source])
+		instance._enqueue(source)
 	return TranslationServer.translate(source)
+
+static func widest_translation_width(source: String, font: Font, font_size: int) -> float:
+	var widest := font.get_string_size(source, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	if not is_instance_valid(instance): return widest
+	for code in CODES:
+		var messages: Dictionary = instance.dictionaries.get(code, {})
+		var candidate := str(messages.get(source, source))
+		widest = maxf(widest, font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	return widest
 
 func _exit_tree() -> void:
 	for translation in translations.values(): TranslationServer.remove_translation(translation)
@@ -57,12 +73,14 @@ func _exit_tree() -> void:
 
 func select_language(index: int) -> void:
 	cancel_job()
+	if is_instance_valid(bridge) and is_instance_valid(bridge.app): _collect(bridge.app)
 	selected = clampi(index, 0, 3)
 	queue.clear(); attempted.clear(); last_error = ""
 	TranslationServer.set_locale(CODES[selected])
 	if selected == 0:
 		for control in bridge.app.find_children("*", "Control", true, false):
 			if control.has_meta("language_font_size"): control.add_theme_font_size_override("font_size", int(control.get_meta("language_font_size")))
+	_refresh_catalogued_controls(bridge.app)
 	preload("res://scripts/settings_store.gd").set_value("language", CODES[selected])
 	_save()
 	_refresh_current()
@@ -119,24 +137,36 @@ func _collect(node: Node) -> void:
 	# Do not send account names, chat, room codes, passwords or player input.
 	# Exact membership in the authored source catalogue is mandatory.
 	if node is Label or node is Button or node is RichTextLabel:
-		_enqueue(str(node.text))
+		var source_text := str(node.text)
+		var source_key := _catalogue_source(source_text)
+		if not source_key.is_empty(): node.set_meta("language_source_text", source_key)
+		_enqueue(source_key if not source_key.is_empty() else source_text)
 		if node is Label: _fit_label(node)
 		if node is Button and not node is OptionButton:
 			_fit_button(node)
-	if node is LineEdit: _enqueue(node.placeholder_text)
+	if node is LineEdit:
+		var placeholder_key := _catalogue_source(node.placeholder_text)
+		if not placeholder_key.is_empty(): node.set_meta("language_placeholder_source", placeholder_key)
+		_enqueue(placeholder_key if not placeholder_key.is_empty() else node.placeholder_text)
 	if node is OptionButton and node.name != "SettingsLanguageButton":
 		for index in node.item_count: _enqueue(node.get_item_text(index))
 	for child in node.get_children():
 		if child != self: _collect(child)
+
+
+func _catalogue_source(value: String) -> String:
+	if sources.has(value): return value
+	return str(source_aliases.get(value, ""))
 
 func _fit_button(button: Button) -> void:
 	if button.text.is_empty(): return
 	if not button.has_meta("language_font_size"):
 		button.set_meta("language_font_size", button.get_theme_font_size("font_size"))
 	var base_size: int = button.get_meta("language_font_size")
+	var preferred_size := maxi(12, roundi(base_size * (0.92 if selected == 3 else 1.0)))
 	var font := button.get_theme_font("font")
-	var width := font.get_string_size(TranslationServer.translate(button.text), HORIZONTAL_ALIGNMENT_LEFT, -1, base_size).x
-	var fitted := clampi(int(base_size * (button.size.x-28) / maxf(width, 1.0)), 12, base_size)
+	var width := font.get_string_size(button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, preferred_size).x
+	var fitted := clampi(int(preferred_size * (button.size.x-28) / maxf(width, 1.0)), 12, preferred_size)
 	button.add_theme_font_size_override("font_size", fitted)
 
 func _on_translated(id: int, text: String) -> bool:
@@ -156,6 +186,7 @@ func _on_translated(id: int, text: String) -> bool:
 	var code: String = CODES[selected]
 	dictionaries[code][active_source] = text
 	translations[code].add_message(active_source, text)
+	source_aliases[text] = active_source
 	active_source = ""
 	TranslationServer.set_locale(code)
 	_refresh_current()
@@ -165,7 +196,12 @@ func _on_translated(id: int, text: String) -> bool:
 func _refresh_current() -> void:
 	if not is_instance_valid(bridge) or not is_instance_valid(bridge.app): return
 	if bridge.app.current_screen == "character_select": bridge.app._refresh_character_select()
-	if bridge.app.current_screen == "waiting_room": bridge.app._refresh_waiting_room()
+	if bridge.app.current_screen == "waiting_room":
+		var lobby_panel := bridge.app.find_child("LobbyPlayersPanel", true, false) as Control
+		if lobby_panel:
+			for slot in lobby_panel.get_children():
+				if slot.has_meta("member_snapshot"): slot.remove_meta("member_snapshot")
+		bridge.app._refresh_waiting_room()
 	if bridge.app.current_screen == "meeting":
 		var heading := bridge.app.find_child("MeetingHeadingLabel", true, false) as Label
 		var timer := bridge.app.find_child("MeetingTimerLabel", true, false) as Label
@@ -190,6 +226,23 @@ func _refresh_current() -> void:
 		if role: role.text = text("NENEK KEBAYAN" if bridge.app.player_is_impostor else "VILLAGER") + "  •  " + bridge.app.selected_character
 	for control in bridge.app.find_children("*", "Control", true, false):
 		control.queue_redraw()
+	_refresh_catalogued_controls(bridge.app)
+
+
+func _refresh_catalogued_controls(root: Node) -> void:
+	for control in root.find_children("*", "Control", true, false):
+		if control.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED: continue
+		if control.has_meta("language_source_text"):
+			var translated_text := text(str(control.get_meta("language_source_text")))
+			if control is Label:
+				(control as Label).text = translated_text
+				_fit_label(control as Label)
+			elif control is Button:
+				(control as Button).text = translated_text
+				_fit_button(control as Button)
+			elif control is RichTextLabel: (control as RichTextLabel).text = translated_text
+		if control is LineEdit and control.has_meta("language_placeholder_source"):
+			control.placeholder_text = text(str(control.get_meta("language_placeholder_source")))
 
 func _on_error(id: int, message: String) -> bool:
 	if id < 1000000: return false
@@ -213,7 +266,7 @@ func _fit_label(label: Label) -> void:
 		label.set_meta("language_font_size", label.get_theme_font_size("font_size"))
 	var base_size: int = label.get_meta("language_font_size")
 	var font := label.get_theme_font("font")
-	var fitted := base_size
+	var fitted := maxi(12, roundi(base_size * (0.92 if selected == 3 else 1.0)))
 	label.add_theme_font_size_override("font_size", fitted)
 	while fitted > 12:
 		var raw_width := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fitted).x

@@ -170,6 +170,18 @@ const TEXT := [
     "தயார்"
   ],
   [
+    "YOU",
+    "ANDA",
+    "你",
+    "நீங்கள்"
+  ],
+  [
+    "HOST",
+    "HOS",
+    "房主",
+    "அறைத் தலைவர்"
+  ],
+  [
     "ARE YOU READY?",
     "ANDA SUDAH SEDIA?",
     "准备好了吗？",

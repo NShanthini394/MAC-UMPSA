@@ -77,7 +77,6 @@ var collected_clues: Array[String] = []
 var task_overlay_index := -1
 var task_minigame = null
 var audio_director = null
-var local_gong_played_at := -10000
 var last_notice := ""
 var last_notice_time := 0.0
 var audio_muted := false
@@ -112,6 +111,7 @@ const MeetingCinematic = preload("res://scripts/meeting_cinematic.gd")
 
 
 func _ready() -> void:
+	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_ALWAYS
 	ThemeDB.fallback_font = preload("res://assets/fonts/body.tres")
 	rng.randomize()
 	# Client and optional LAN server run separate APIs with identical relative RPC paths.
@@ -386,14 +386,14 @@ func _update_power_hud() -> void:
 			_set_cooldown_timer(button, sabotage_seconds, button.visible)
 	var banner := find_child("WatchingLabel", true, false) as Label
 	if banner:
-		banner.text = ("ASLEEP · You can walk, but cannot do tasks, chat or vote." if player_sleeping else "VOTED OUT · WATCHING ONLY") if watching else ""
+		banner.text = Lang.text("ASLEEP · You can walk, but cannot do tasks, chat or vote." if player_sleeping else "VOTED OUT · WATCHING ONLY") if watching else ""
 	var status := find_child("PowerStatusLabel", true, false) as Label
 	if status:
 		status.text = ""
 		var areas := MapGeometry.sabotage_areas(selected_map)
 		if active_power_kind != "":
-			var section_name := str(areas[active_power_area]["name"]) if active_power_area >= 0 and active_power_area < areas.size() else "Nearby surroundings"
-			status.text = ("FOG · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
+			var section_name := Lang.text(str(areas[active_power_area]["name"])) if active_power_area >= 0 and active_power_area < areas.size() else Lang.text("Nearby surroundings")
+			status.text = Lang.text("FOG · " if active_power_kind == "fog" else "ENTRANCES LOCKED · ") + section_name + " · %ds" % ceili(maxf(0.0, active_power_until - now))
 
 
 func _set_cooldown_timer(button: BaseButton, seconds: int, show_timer: bool) -> void:
@@ -443,7 +443,7 @@ func _update_interaction_prompt() -> void:
 	var task_index := -1 if player_is_impostor else _nearest_index(MapGeometry.task_points(selected_map), 72.0)
 	var gong_near := player_position.distance_to(MapGeometry.gong_point(selected_map)) < 78.0
 	if clue_available:
-		prompt.text = "Clue nearby • press INSPECT CLUE"
+		prompt.text = Lang.text("Clue nearby • press INSPECT CLUE")
 		interact.disabled = false
 	elif task_index >= 0:
 		# NearbyTaskHint owns task wording and direction; avoid a second HUD sentence.
@@ -457,14 +457,37 @@ func _update_interaction_prompt() -> void:
 		prompt.text = ""
 		interact.disabled = false
 	if not can_local_act():
-		prompt.text = "Asleep • free to walk; tasks and voting disabled" if player_sleeping else "Voted out • watching only"
+		prompt.text = Lang.text("Asleep • free to walk; tasks and voting disabled" if player_sleeping else "Voted out • watching only")
 		inspect.disabled = true
 		interact.disabled = true
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if current_screen == "game" and player_voted_out and not _utility_dialog_open():
+		_handle_spectator_pan(event)
+		return
 	if current_screen == "game" and can_local_act() and task_overlay_index < 0 and not _utility_dialog_open() and event is InputEventKey and event.pressed and event.keycode == KEY_E:
 		interact_nearest()
+
+
+var spectator_touch_id := -1
+var spectator_mouse_dragging := false
+
+
+func _handle_spectator_pan(event: InputEvent) -> void:
+	var camera := player_body.get_node_or_null("Camera2D") as Camera2D if is_instance_valid(player_body) else null
+	if camera == null: return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		spectator_mouse_dragging = event.pressed
+	elif event is InputEventMouseMotion and spectator_mouse_dragging and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		camera.position -= event.relative / camera.zoom
+	elif event is InputEventScreenTouch:
+		if event.pressed and spectator_touch_id < 0:
+			spectator_touch_id = event.index
+		elif not event.pressed and event.index == spectator_touch_id:
+			spectator_touch_id = -1
+	elif event is InputEventScreenDrag and event.index == spectator_touch_id:
+		camera.position -= event.relative / camera.zoom
 
 
 func clear_screen(screen_name: String) -> void:
@@ -600,14 +623,27 @@ func _continue_as_guest() -> void:
 func build_menu() -> void:
 	await clear_screen("menu")
 	add_background(load(GameData.MAIN_MENU_ART))
-	var actions := GameUI.make_panel(_screen_ui_parent(),Rect2(498,326,284,230),Color("24180f"))
-	actions.name="MenuActionsPanel"
+	var actions := Control.new()
+	actions.name="MenuActions"
+	actions.position=Vector2(498,326)
+	actions.size=Vector2(284,230)
+	_screen_ui_parent().add_child(actions)
 	var start:=GameUI.make_button(actions,"START GAME",build_play_modes,272,64,true)
-	start.name="StartGameButton";start.position=Vector2(6,6);start.icon=GameUI.menu_action_icon("play");start.add_theme_font_size_override("font_size",24)
+	start.name="StartGameButton";start.position=Vector2(6,6);start.icon=GameUI.menu_action_icon("play");start.alignment=HORIZONTAL_ALIGNMENT_CENTER;start.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;start.add_theme_font_size_override("font_size",24)
 	var help:=GameUI.make_button(actions,"HOW TO PLAY",show_how_to_play.bind(""),272,64)
-	help.name="MainHelpButton";help.position=Vector2(6,81);help.icon=GameUI.menu_action_icon("book");help.add_theme_font_size_override("font_size",24)
+	help.name="MainHelpButton";help.position=Vector2(6,81);help.icon=GameUI.menu_action_icon("book");help.alignment=HORIZONTAL_ALIGNMENT_CENTER;help.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;help.add_theme_font_size_override("font_size",24)
 	var leave:=GameUI.make_button(actions,"EXIT",func():page_controls.confirm("EXIT GAME?","Close Nenek Kebayan?",Callable(get_tree(),"quit")),272,64)
-	leave.name="MainExitButton";leave.position=Vector2(6,156);leave.icon=GameUI.menu_action_icon("exit");leave.add_theme_font_size_override("font_size",24)
+	leave.name="MainExitButton";leave.position=Vector2(6,156);leave.icon=GameUI.menu_action_icon("exit");leave.alignment=HORIZONTAL_ALIGNMENT_CENTER;leave.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;leave.add_theme_font_size_override("font_size",24)
+	var widest_menu_text := 0.0
+	var button_font: Font = start.get_theme_font("font")
+	for source in ["START GAME", "HOW TO PLAY", "EXIT"]:
+		widest_menu_text = maxf(widest_menu_text, Lang.widest_translation_width(source, button_font, 24))
+	var menu_button_width := maxi(272, ceili(widest_menu_text + 76.0))
+	actions.size.x = menu_button_width + 12
+	actions.position.x = (1280.0 - actions.size.x) * 0.5
+	for button in [start, help, leave]:
+		button.custom_minimum_size.x = menu_button_width
+		button.size.x = menu_button_width
 	var menu_notice := make_label("",14,CREAM,HORIZONTAL_ALIGNMENT_CENTER)
 	menu_notice.name="MenuNoticeLabel";menu_notice.position=Vector2(390,590);menu_notice.size=Vector2(500,44)
 	if is_instance_valid(page_controls): page_controls.call("refresh", true)
@@ -908,7 +944,7 @@ func build_map_select() -> void:
 	add_color_overlay(Color(0.04, 0.07, 0.08, 0.76))
 	var heading := make_panel(Rect2(24, 18, 1232, 90), Color(0.12, 0.09, 0.07, 1.0))
 	heading.name = "MapSelectionHeading"
-	_make_child_label(heading, "Choose a Map", 36, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(80, 16, 1072, 58))
+	_make_child_label(heading, Lang.text("Choose a Map"), 36, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(80, 16, 1072, 58))
 	var close := make_button(heading, "×", Callable(self, "navigate_back"), 48, 48)
 	close.name = "MapSelectionCloseButton"
 	close.position = Vector2(1168, 21)
@@ -923,10 +959,10 @@ func build_map_select() -> void:
 		preview.position = Vector2(12, 12); preview.size = Vector2(356, 230)
 		preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(preview)
-		_make_child_label(card, MAPS[i]["name"], 20, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 252, 340, 42))
-		var description := _make_child_label(card, MAPS[i]["description"], 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(26, 298, 328, 66))
+		_make_child_label(card, Lang.text(str(MAPS[i]["name"])), 20, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 252, 340, 42))
+		var description := _make_child_label(card, Lang.text(str(MAPS[i]["description"])), 14, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(26, 298, 328, 66))
 		description.clip_contents = true
-		var choose := make_button(card, "SELECT", Callable(self, "_choose_map").bind(i), 316, 50, true)
+		var choose := make_button(card, Lang.text("SELECT"), Callable(self, "_choose_map").bind(i), 316, 50, true)
 		choose.name = "MapSelect_%d" % i
 		choose.position = Vector2(32, 422)
 
@@ -1113,7 +1149,7 @@ func _on_network_positions_changed(members: Array) -> void:
 				var animate_sleep := not sleep_cast.is_empty() and int(sleep_cast.get("target_id", -1)) == peer_id and sleeping
 				# Only the sleeper sees their roaming body; other clients see the
 				# pinned sleeping body at full opacity.
-				actor.call("set_sleep_translucent", sleeping and is_local)
+				actor.call("set_sleep_opacity", 0.6 if sleeping and is_local else 1.0)
 				actor.call("set_sleeping", sleeping and not is_local, animate_sleep and not is_local)
 				actor.set("inactive", not alive)
 		if is_local:
@@ -1149,7 +1185,7 @@ func _update_local_sleep_echo(peer_id: int, character: String, display_name: Str
 		game_world.add_child(echo)
 		echo.call("configure", character, display_name, false, false)
 		(echo.get_node("Camera2D") as Camera2D).enabled = false
-		echo.call("set_sleep_translucent", true)
+		echo.call("set_sleep_opacity", 1.0)
 		echo.call("set_sleeping", true)
 	else:
 		echo.global_position = sleep_position
@@ -1231,9 +1267,6 @@ func _close_meeting_presentation() -> void:
 
 func _on_network_meeting_changed(state: String, seconds_left: int, members: Array, votes_cast: int, alive_count: int) -> void:
 	var previous_state := network_meeting_state
-	if state == "discussion" and previous_state != "discussion":
-		if Time.get_ticks_msec() - local_gong_played_at > 3000: _play_sfx("gong")
-		local_gong_played_at = -10000
 	network_meeting_state = state
 	network_meeting_seconds = seconds_left
 	network_meeting_tick = 0.0
@@ -1263,7 +1296,7 @@ func _on_network_meeting_changed(state: String, seconds_left: int, members: Arra
 		game_hud.add_child(cinematic); cinematic.configure("voting_intro")
 	elif state == "voting" and previous_state != "voting": _show_network_voting(members)
 	var timer_label := find_child("MeetingTimerLabel", true, false) as Label
-	if timer_label: timer_label.text = ("DISCUSSION" if state == "discussion" else "VOTING") + "  •  %ds" % seconds_left
+	if timer_label: timer_label.text = Lang.text("DISCUSSION  •  %ds" if state == "discussion" else "VOTING  •  %ds") % seconds_left
 	var votes_label := find_child("VotesCastLabel", true, false) as Label
 	if votes_label: votes_label.text = preload("res://scripts/app_language.gd").text("Votes received: %d/%d") % [votes_cast, alive_count]
 
@@ -1290,8 +1323,8 @@ func _on_elimination_revealed(details: Dictionary) -> void:
 	game_hud.add_child(cinematic); cinematic.configure("reveal", details)
 
 
-func _on_network_match_finished(winner: String, message: String) -> void:
-	show_result(winner == "villagers", message)
+func _on_network_match_finished(winner: String, message: String, players: Array) -> void:
+	show_result(winner == "villagers", message, players)
 
 
 func _show_network_discussion() -> void:
@@ -1336,7 +1369,7 @@ func _submit_network_vote(target_id: int) -> void:
 	if overlay:
 		for child in overlay.find_children("*", "Button", true, false): child.disabled = true
 		var feedback := overlay.find_child("VoteSubmissionLabel", true, false) as Label
-		if feedback: feedback.text = "Skip submitted. Your choice is locked." if selected_id < 0 else "Vote submitted. Your choice is locked."
+		if feedback: feedback.text = Lang.text("Skip submitted. Your choice is locked.") if selected_id < 0 else Lang.text("Vote submitted. Your choice is locked.")
 
 
 func _show_role_reveal() -> void:
@@ -1346,8 +1379,8 @@ func _show_role_reveal() -> void:
 	add_color_overlay(Color(0.025, 0.025, 0.025, 0.58))
 	var card := make_panel(Rect2(240, 70, 800, 580), Color(0.105, 0.073, 0.047, 0.97))
 	card.name = "PrivateRoleReveal"
-	_make_child_label(card, "YOUR SECRET ROLE", 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 16, 744, 42))
-	var shuffle_status := _make_child_label(card, "Cards are being shuffled…", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 60, 732, 32))
+	_make_child_label(card, Lang.text("YOUR SECRET ROLE"), 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 16, 744, 42))
+	var shuffle_status := _make_child_label(card, Lang.text("Cards are being shuffled…"), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 60, 732, 32))
 	shuffle_status.name = "RoleShuffleStatus"
 	var shuffle_row := Control.new()
 	shuffle_row.name = "ShuffleCards"
@@ -1364,10 +1397,10 @@ func _show_role_reveal() -> void:
 		back_style.set_corner_radius_all(12)
 		back.add_theme_stylebox_override("panel", back_style)
 		_make_child_label(back, "✦", 42, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(12, 30, 92, 60))
-		_make_child_label(back, "ROLE CARD", 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 103, 100, 28))
+		_make_child_label(back, Lang.text("ROLE CARD"), 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 103, 100, 28))
 		shuffle_cards.append(back)
 	var revealed := _build_revealed_role_card(card)
-	var footer := _make_child_label(card, "Only you can see this role. Other players see their own reveal.", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 470, 732, 46))
+	var footer := _make_child_label(card, Lang.text("Only you can see this role. Other players see their own reveal."), 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 470, 732, 46))
 	footer.name = "RoleRevealPrivacy"
 	var countdown := _make_child_label(card, "", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 524, 732, 42))
 	countdown.name = "RoleRevealCountdown"
@@ -1388,7 +1421,7 @@ func _show_role_reveal() -> void:
 		await shuffle_tween.finished
 		await get_tree().create_timer(0.07).timeout
 	if not is_instance_valid(card): return
-	shuffle_status.text = "Your card has been revealed"
+	shuffle_status.text = Lang.text("Your card has been revealed")
 	var reveal_tween := create_tween()
 	reveal_tween.tween_property(shuffle_row, "scale", Vector2(0.05, 1.0), 0.16)
 	await reveal_tween.finished
@@ -1401,13 +1434,13 @@ func _show_role_reveal() -> void:
 	await flip_tween.finished
 	# Keep the five-second reading time. Show 3, 2, 1 for its final three
 	# seconds so players can see that the transition is progressing.
-	countdown.text = "Entering the village…"
+	countdown.text = Lang.text("Entering the village…")
 	countdown.add_theme_font_size_override("font_size", 22)
 	if is_instance_valid(audio_director): audio_director.stop_role_audio()
 	await get_tree().create_timer(2.0).timeout
 	for seconds_left in [3, 2, 1]:
 		if not is_instance_valid(card) or current_screen != "role_reveal": return
-		countdown.text = "Entering the village in %d…" % seconds_left
+		countdown.text = Lang.text("Entering the village in %d…") % seconds_left
 		if is_instance_valid(audio_director): audio_director.play_role_countdown_tick(seconds_left)
 		await get_tree().create_timer(1.0).timeout
 	if is_instance_valid(card) and current_screen == "role_reveal": await build_game()
@@ -1444,20 +1477,20 @@ func _build_revealed_role_card(card: Panel) -> Panel:
 	role_badge.size = Vector2(478, 52)
 	role_badge.add_theme_stylebox_override("panel", role_style)
 	revealed.add_child(role_badge)
-	var role_title := "You are Nenek Kebayan" if player_is_impostor else "You are a Villager"
+	var role_title := Lang.text("You are Nenek Kebayan" if player_is_impostor else "You are a Villager")
 	var role_title_label := _make_child_label(role_badge, role_title, 19, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(6, 4, 466, 44))
 	role_title_label.name = "RoleTitleLabel"
-	var lobby_heading := _make_child_label(revealed, "Lobby pick:", 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 86, 478, 24))
+	var lobby_heading := _make_child_label(revealed, Lang.text("Lobby pick:"), 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 86, 478, 24))
 	lobby_heading.name = "RoleLobbyHeading"
 	var lobby_value := _make_child_label(revealed, selected_character, 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 112, 478, 28))
 	lobby_value.name = "RoleLobbyValue"
-	var character_heading := _make_child_label(revealed, "Your character:", 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 152, 478, 24))
+	var character_heading := _make_child_label(revealed, Lang.text("Your character:"), 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 152, 478, 24))
 	character_heading.name = "RoleCharacterHeading"
 	var character_value := _make_child_label(revealed, card_character, 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 180, 478, 28))
 	character_value.name = "RoleCharacterValue"
-	var role_copy := "Complete all twelve tasks.\nFind both Nenek Kebayan\nto save the village."
+	var role_copy := Lang.text("Complete all twelve tasks.\nFind both Nenek Kebayan\nto save the village.")
 	if player_is_impostor:
-		role_copy = "You are one of two Nenek.\nSleep the villagers.\nUse fog or lock the doors."
+		role_copy = Lang.text("You are one of two Nenek.\nSleep the villagers.\nUse fog or lock the doors.")
 	var role_copy_label := _make_child_label(revealed, role_copy, 12, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 236, 478, 98))
 	role_copy_label.name = "RoleInstructions"
 	role_copy_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -1473,24 +1506,24 @@ func build_waiting_room() -> void:
 
 	var header := make_panel(Rect2(40, 28, 1200, 86), Color(0.11, 0.075, 0.045, 0.94))
 	header.name = "LobbyHeader"
-	var heading := _make_child_label(header, "WAITING ROOM", 30, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(24, 12, 300, 58))
+	var heading := _make_child_label(header, Lang.text("WAITING ROOM"), 30, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(24, 12, 300, 58))
 	heading.name = "LobbyHeadingLabel"
 	# Separate columns retain the larger phone fonts and allow long map names
 	# to wrap without touching the heading, mode or room-code control.
-	var map_name := _make_child_label(header, "MAP  •  " + MAPS[selected_map]["name"], 15, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(352, 12, 254, 60))
+	var map_name := _make_child_label(header, Lang.text("MAP  •  ") + Lang.text(str(MAPS[selected_map]["name"])), 15, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(352, 12, 254, 60))
 	map_name.name = "LobbyMapLabel"
 	if network_room and play_mode=="friends":
 		var copy_code := make_button(header, "CODE  " + room_code, Callable(self, "_copy_room_code"), 190, 42)
 		copy_code.name = "RoomCodeButton"
 		copy_code.position = Vector2(632, 22); copy_code.add_theme_font_size_override("font_size", 18)
 	else:
-		var mode := _make_child_label(header, ("QUICK MATCH" if play_mode=="quick" else "SOLO VS BOTS"), 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(632, 18, 190, 48))
+		var mode := _make_child_label(header, Lang.text("QUICK MATCH" if play_mode=="quick" else "SOLO VS BOTS"), 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(632, 18, 190, 48))
 		mode.name = "LobbyModeLabel"
-	var status := _make_child_label(header, "%d / 10 PLAYERS   •   WAITING" % lobby_players.size(), 13, Color("d8edb2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(848, 12, 322, 60))
+	var status := _make_child_label(header, Lang.text("%d / 10 PLAYERS   •   WAITING") % lobby_players.size(), 13, Color("d8edb2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(848, 12, 322, 60))
 	status.name = "LobbyStatusLabel"
 
 	var map_panel := make_panel(Rect2(55, 140, 420, 430), Color(0.12, 0.08, 0.055, 0.96))
-	_make_child_label(map_panel, "YOUR SELECTED MAP", 18, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 14, 380, 34))
+	_make_child_label(map_panel, Lang.text("YOUR SELECTED MAP"), 18, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(20, 14, 380, 34))
 	var map_preview := TextureRect.new()
 	map_preview.texture = make_map_texture(load(GameData.map_art_path(selected_map)), MAPS[selected_map]["region"])
 	map_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1498,17 +1531,17 @@ func build_waiting_room() -> void:
 	map_preview.position = Vector2(18, 58); map_preview.size = Vector2(384, 206)
 	map_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	map_panel.add_child(map_preview)
-	var selection := _make_child_label(map_panel, "Selected character:\n" + (selected_character if not selected_character.is_empty() else "None"), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 274, 372, 60))
+	var selection := _make_child_label(map_panel, Lang.text("Selected character:\n%s") % (Lang.text("None") if selected_character.is_empty() else selected_character), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 274, 372, 60))
 	selection.name = "LobbySelectedCharacterLabel"
-	_make_child_label(map_panel, "Use Choose Character to switch.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 344, 372, 28)).name = "LobbyCharacterHint"
+	_make_child_label(map_panel, Lang.text("Use Choose Character to switch."), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 344, 372, 28)).name = "LobbyCharacterHint"
 	var countdown_note := _make_child_label(map_panel, "", 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(24, 380, 372, 42))
 	countdown_note.name = "LobbyCountdownLabel"
 
 	var players_panel := make_panel(Rect2(500, 140, 725, 430), Color(0.12, 0.08, 0.055, 0.96))
 	players_panel.name = "LobbyPlayersPanel"
 	var open_slots := maxi(0, 10 - lobby_players.size())
-	_make_child_label(players_panel, "PLAYERS IN ROOM", 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 10, 300, 34))
-	var occupancy := _make_child_label(players_panel, preload("res://scripts/app_language.gd").text("%d HERE  •  %d OPEN SLOTS") % [lobby_players.size(), open_slots], 13, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(400, 10, 300, 34))
+	_make_child_label(players_panel, Lang.text("PLAYERS IN ROOM"), 18, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(22, 10, 300, 34))
+	var occupancy := _make_child_label(players_panel, Lang.text("%d HERE  •  %d OPEN SLOTS") % [lobby_players.size(), open_slots], 13, CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(400, 10, 300, 34))
 	occupancy.name = "LobbyOccupancyLabel"
 	for i in 10:
 		var row := floori(float(i) / 5.0)
@@ -1517,17 +1550,17 @@ func build_waiting_room() -> void:
 		slot.name = "LobbySlot_%d" % i
 		_render_lobby_slot(slot, i, network_room)
 
-	var leave := make_button(self, "LEAVE ROOM", Callable(self, "show_leave_room_confirmation"), 190, 48)
+	var leave := make_button(self, Lang.text("LEAVE ROOM"), Callable(self, "show_leave_room_confirmation"), 190, 48)
 	leave.name = "LobbyLeaveRoomButton"
 	leave.position = Vector2(36, 610)
 
-	var choose := make_button(self, "CHOOSE CHARACTER", Callable(self, "build_character_select"), 240, 48)
+	var choose := make_button(self, Lang.text("CHOOSE CHARACTER"), Callable(self, "build_character_select"), 240, 48)
 	choose.name = "LobbyChooseCharacterButton"
 	choose.position = Vector2(246, 610)
 	if network_room and room_is_host and play_mode == "friends":
 		var qr := make_button(self, "SHOW ROOM QR", _show_room_qr, 205, 48)
 		qr.name = "ShowRoomQrButton"; qr.position = Vector2(510, 610)
-	var action_title := "START" if room_is_host else "ARE YOU READY?"
+	var action_title := Lang.text("START" if room_is_host else "ARE YOU READY?")
 	var action := make_button(self, action_title, Callable(self, "_on_lobby_primary_action"), 230, 48, true)
 	action.name = "LobbyActionButton"; action.position = Vector2(1012, 610)
 	action.disabled = selected_character.is_empty()
@@ -1536,7 +1569,7 @@ func build_waiting_room() -> void:
 	var ready_note := _make_child_label(self, wait_text, 12, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(986, 662, 280, 50))
 	ready_note.name = "LobbyReadyWaitNote"
 	ready_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var lobby_note_text := "1 human and 9 bots · no internet required" if play_mode=="solo" else "10 characters · 8 Villagers · 2 Nenek Kebayan"
+	var lobby_note_text := Lang.text("1 human and 9 bots · no internet required") if play_mode=="solo" else Lang.text("10 characters · 8 Villagers · 2 Nenek Kebayan")
 	var lobby_note := _make_child_label(self, lobby_note_text, 12, Color("f7d9a2"), HORIZONTAL_ALIGNMENT_RIGHT, Rect2(650, 578, 575, 24))
 	lobby_note.clip_text = true
 	_refresh_lobby_actions()
@@ -1550,9 +1583,9 @@ func _refresh_waiting_room() -> void:
 		var slot := panel.get_node_or_null("LobbySlot_%d" % i) as Panel
 		if slot: _render_lobby_slot(slot, i, network_room)
 	var occupancy := panel.get_node_or_null("LobbyOccupancyLabel") as Label
-	if occupancy: occupancy.text = preload("res://scripts/app_language.gd").text("%d HERE  •  %d OPEN SLOTS") % [lobby_players.size(), maxi(0, 10-lobby_players.size())]
+	if occupancy: occupancy.text = Lang.text("%d HERE  •  %d OPEN SLOTS") % [lobby_players.size(), maxi(0, 10-lobby_players.size())]
 	var selection := find_child("LobbySelectedCharacterLabel", true, false) as Label
-	if selection: selection.text = "Selected character:\n" + (selected_character if not selected_character.is_empty() else "None")
+	if selection: selection.text = Lang.text("Selected character:\n%s") % (Lang.text("None") if selected_character.is_empty() else selected_character)
 	_refresh_lobby_actions()
 
 
@@ -1580,6 +1613,7 @@ func _render_lobby_slot(slot: Panel, i: int, network_room: bool) -> void:
 			name_entry.text = lobby_player_name
 			name_entry.placeholder_text = "Your name"
 			name_entry.max_length = 20
+			name_entry.add_theme_font_size_override("font_size", 15)
 			name_entry.editable = not network_manager.lobby_locked
 			name_entry.position = Vector2(7, 82); name_entry.size = Vector2(110, 28)
 			name_entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1596,21 +1630,21 @@ func _render_lobby_slot(slot: Panel, i: int, network_room: bool) -> void:
 			)
 			name_entry.editable = not network_manager.lobby_locked
 			slot.add_child(name_entry)
-			var local_status := "HOST" if is_host else ("YOU  •  " + ("READY" if is_ready else "WAITING"))
-			var host_status := _make_child_label(slot, local_status, 10, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+			var local_status := Lang.text("HOST") if is_host else (Lang.text("YOU") + "  •  " + Lang.text("READY" if is_ready else "WAITING"))
+			var host_status := _make_child_label(slot, local_status, 8, Color("d8edb2"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(1, 118, 122, 20))
 			host_status.name = "LocalReadyStatusLabel"
 		else:
 			var remote_name := _make_child_label(slot, member_name, 10, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
 			remote_name.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 			remote_name.clip_text = true
 			remote_name.tooltip_text = member_name
-			_make_child_label(slot, ("HOST" if is_host else ("READY" if is_ready else "WAITING")), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+			_make_child_label(slot, Lang.text("HOST" if is_host else ("READY" if is_ready else "WAITING")), 10, Color("d8edb2") if is_ready else Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 	else:
 		var empty_avatar := _make_child_panel(slot, Rect2(29, 10, 66, 66), Color(0.20, 0.17, 0.13, 1.0))
 		empty_avatar.add_theme_stylebox_override("panel", _circle_style(Color(0.20, 0.17, 0.13, 1.0), Color("8d785f")))
 		_make_child_label(slot, "+", 30, Color("b8a58b"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(29, 9, 66, 66))
-		_make_child_label(slot, "OPEN SLOT", 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
-		_make_child_label(slot, "Waiting", 10, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
+		_make_child_label(slot, Lang.text("OPEN SLOT"), 10, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 82, 116, 28))
+		_make_child_label(slot, Lang.text("Waiting"), 10, Color("a99b86"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(4, 117, 116, 26))
 
 
 func _leave_room_to_menu() -> void:
@@ -1677,35 +1711,35 @@ func _refresh_lobby_actions() -> void:
 		if member.get("ready",false):ready_guests+=1
 	var can_start:=_guests_ready() and (play_mode=="solo" or human_count>=2)
 	var status:=find_child("LobbyStatusLabel",true,false) as Label
-	if status:status.text="STARTING IN %02d"%ceili(countdown) if locked else "%d / 10 HUMAN PLAYERS"%human_count
+	if status:status.text=Lang.text("STARTING IN %02d")%ceili(countdown) if locked else Lang.text("%d / 10 HUMAN PLAYERS")%human_count
 	var timer:=find_child("LobbyCountdownLabel",true,false) as Label
 	if timer:
-		timer.text="%02d:%02d"%[int(ceil(countdown))/60,int(ceil(countdown))%60] if searching else str(ceili(countdown)) if locked else "9 bots join when you start" if play_mode=="solo" else "%d human%s · %d bots at start"%[human_count,"" if human_count==1 else "s",10-human_count]
+		timer.text="%02d:%02d"%[int(ceil(countdown))/60,int(ceil(countdown))%60] if searching else str(ceili(countdown)) if locked else Lang.text("9 bots join when you start") if play_mode=="solo" else Lang.text("%d human%s · %d bots at start")%[human_count,"" if human_count==1 else "s",10-human_count]
 		timer.add_theme_font_size_override("font_size",32 if searching or locked else 18)
 	var note:=find_child("LobbyReadyWaitNote",true,false) as Label
 	if note:
 		if connected and network_manager.lobby_waiting_for_human:
-			note.text = "Waiting for another human player before starting."
+			note.text = Lang.text("Waiting for another human player before starting.")
 		elif searching:
-			note.text = "Bots fill empty slots in %ds." % ceili(countdown)
+			note.text = Lang.text("Bots fill empty slots in %ds.") % ceili(countdown)
 		elif locked:
-			note.text = "Get ready for the village."
+			note.text = Lang.text("Get ready for the village.")
 		elif not room_is_host:
-			note.text = "Press Ready once. The host starts."
+			note.text = Lang.text("Press Ready once. The host starts.")
 		elif play_mode == "friends":
-			note.text = "Start when your friends are ready."
+			note.text = Lang.text("Start when your friends are ready.")
 		else:
-			note.text = "Press Start to play with 9 bots."
+			note.text = Lang.text("Press Start to play with 9 bots.")
 	if locked:
-		action.text="STARTING IN %d"%ceili(countdown);action.disabled=true
+		action.text=Lang.text("STARTING IN %d")%ceili(countdown);action.disabled=true
 	elif play_mode=="quick":
-		action.text="READY ✓" if _local_player_is_ready() else "ARE YOU READY?"
+		action.text=Lang.text("READY ✓") if _local_player_is_ready() else Lang.text("ARE YOU READY?")
 		action.disabled=_local_player_is_ready() or selected_character.is_empty()
 	elif room_is_host:
-		action.text="START"
+		action.text=Lang.text("START")
 		action.disabled=not can_start
 	else:
-		action.text="READY ✓" if _local_player_is_ready() else "ARE YOU READY?"
+		action.text=Lang.text("READY ✓") if _local_player_is_ready() else Lang.text("ARE YOU READY?")
 		action.disabled=_local_player_is_ready() or selected_character.is_empty()
 	_apply_ready_button_color(action,locked or (not action.disabled if room_is_host and play_mode!="quick" else _local_player_is_ready()))
 	var choose:=find_child("LobbyChooseCharacterButton",true,false) as Button
@@ -1838,7 +1872,7 @@ func build_character_select() -> void:
 	if network_manager.lobby_locked or ((not room_is_host or play_mode=="quick") and _local_player_is_ready()): return
 	await clear_screen("character_select")
 	add_background(load(MENU_ART)); add_color_overlay(Color(0.035, 0.055, 0.06, 0.86))
-	_make_child_label(self, "CHOOSE YOUR CHARACTER", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(250, 10, 780, 44))
+	_make_child_label(self, Lang.text("CHOOSE YOUR CHARACTER"), 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(250, 10, 780, 44))
 	_make_child_label(self, MAPS[selected_map]["name"] + Lang.text("  •  10 CHARACTERS"), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(270, 54, 740, 30))
 	var roster: Array = CHARACTERS
 	for i in roster.size():
@@ -1868,19 +1902,19 @@ func build_character_select() -> void:
 		character_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		var reserved := character_reservations.has(character)
 		var is_selected := selected_character == character
-		var button_text := "SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT")
+		var button_text := Lang.text("SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT"))
 		var select := make_button(card, button_text, Callable(self, "_select_character").bind(character), 108, 38, is_selected)
 		select.name = "CharacterSelect_%d" % i
 		select.position = Vector2(43, 174)
 		select.disabled = is_selected or reserved
 		if reserved: select.tooltip_text = Lang.text("Selected by ") + str(character_reservations[character])
-	var selection_text := selected_character if not selected_character.is_empty() else "Choose one character"
+	var selection_text := selected_character if not selected_character.is_empty() else Lang.text("Choose one character")
 	var selected_label := _make_child_label(self, Lang.text("Selected: ") + selection_text, 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(220, 590, 620, 30))
 	selected_label.name = "CharacterSelectionLabel"
-	var return_room := make_button(self, "RETURN TO ROOM", Callable(self, "build_waiting_room"), 230, 48, true)
+	var return_room := make_button(self, Lang.text("RETURN TO ROOM"), Callable(self, "build_waiting_room"), 230, 48, true)
 	return_room.name = "CharacterReturnButton"
 	return_room.position = Vector2(1000, 590); return_room.disabled = selected_character.is_empty()
-	_make_child_label(self, "Characters are reserved by the server in online rooms.", 12, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(330, 650, 620, 22))
+	_make_child_label(self, Lang.text("Characters are reserved by the server in online rooms."), 12, Color("ead6b9"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(330, 650, 620, 22))
 
 
 func _refresh_character_select() -> void:
@@ -1893,12 +1927,12 @@ func _refresh_character_select() -> void:
 		var view_state := [reserved, is_selected, str(character_reservations.get(character, ""))]
 		if button.has_meta("selection_state") and button.get_meta("selection_state") == view_state: continue
 		button.set_meta("selection_state", view_state)
-		button.text = "SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT")
+		button.text = Lang.text("SELECTED" if is_selected else ("TAKEN" if reserved else "SELECT"))
 		button.disabled = is_selected or reserved
 		button.tooltip_text = Lang.text("Selected by ") + str(character_reservations[character]) if reserved else ""
 		GameUI.apply_menu_button(button, "red" if is_selected else "wood")
 	var label := find_child("CharacterSelectionLabel", true, false) as Label
-	if label: label.text = Lang.text("Selected: ") + (selected_character if not selected_character.is_empty() else "Choose one character")
+	if label: label.text = Lang.text("Selected: ") + (selected_character if not selected_character.is_empty() else Lang.text("Choose one character"))
 	var return_button := find_child("CharacterReturnButton", true, false) as Button
 	if return_button: return_button.disabled = selected_character.is_empty()
 
@@ -2079,14 +2113,14 @@ func open_task(index: int) -> void:
 	var overlay := make_panel(overlay_rect, Color(0.13, 0.085, 0.05, 0.99))
 	overlay.z_index = 21
 	overlay.name = "TaskOverlay"
-	var title := make_label(str(task["name"]), 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	var title := make_label(Lang.text(str(task["name"])), 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(30, 18); title.size = Vector2(730, 42); title.reparent(overlay, false)
 	var close := make_button(overlay, "×", Callable(self, "_close_task"), 52, 52)
 	close.position = Vector2(778, 10)
-	var instruction := make_label(str(task["prompt"]), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var instruction := make_label(Lang.text(str(task["prompt"])), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	instruction.position = Vector2(40, 65); instruction.size = Vector2(760, 46); instruction.reparent(overlay, false)
 	var progress_caption := "Pairs arranged" if task["minigame"]=="slippers" else "Progress"
-	var progress_label := make_label(preload("res://scripts/app_language.gd").text("%s: %d/%d") % [Lang.text(progress_caption), task_progress[index], TASK_STEPS[MAPS[selected_map]["name"]][index]], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var progress_label := make_label(Lang.text("%s: %d/%d") % [Lang.text(progress_caption), task_progress[index], TASK_STEPS[MAPS[selected_map]["name"]][index]], 15, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	progress_label.name = "TaskProgressLabel"
 	progress_label.position = Vector2(40, 112); progress_label.size = Vector2(760, 26); progress_label.reparent(overlay, false)
 	task_minigame = TaskMiniGame.new()
@@ -2240,8 +2274,6 @@ func call_meeting() -> void:
 	if not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server():
 		if player_position.distance_to(MapGeometry.gong_point(selected_map)) > 78.0:
 			show_notice("Move close to the central gong to call a meeting."); return
-		local_gong_played_at = Time.get_ticks_msec()
-		_play_sfx("gong")
 		network_manager.call_meeting()
 		return
 	if player_position.distance_to(MapGeometry.gong_point(selected_map)) > 78.0:
@@ -2256,16 +2288,16 @@ func show_vote_panel() -> void:
 	var overlay := make_panel(Rect2(300, 120, 680, 480), Color(0.12, 0.08, 0.06, 0.99))
 	overlay.name = "VoteOverlay"
 	_add_overlay_close(overlay, 680, Callable(overlay, "queue_free"))
-	var title := make_label("EMERGENCY MEETING", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	var title := make_label(Lang.text("EMERGENCY MEETING"), 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	title.position = Vector2(30, 20); title.size = Vector2(620, 46); title.reparent(overlay, false)
-	var intro := make_label("Discuss the clues. Vote for the player you suspect, or skip the vote.", 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	var intro := make_label(Lang.text("Discuss the clues. Vote for the player you suspect, or skip the vote."), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER)
 	intro.position = Vector2(40, 72); intro.size = Vector2(600, 40); intro.reparent(overlay, false)
 	var suspects := NPC_NAMES.filter(func(n: String) -> bool: return not dead_npcs.has(n))
 	if player_is_impostor: suspects.append(selected_character)
 	for i in suspects.size():
 		var vote := make_button(overlay, Lang.text("Vote: ") + suspects[i], Callable(self, "_cast_vote").bind(suspects[i]), 470, 48)
 		vote.position = Vector2(105, 126 + i * 59)
-	var skip := make_button(overlay, "SKIP VOTE", Callable(self, "_cast_vote").bind(""), 180, 42, true)
+	var skip := make_button(overlay, Lang.text("SKIP VOTE"), Callable(self, "_cast_vote").bind(""), 180, 42, true)
 	skip.position = Vector2(250, 423)
 
 
@@ -2286,7 +2318,7 @@ func _cast_vote(suspect: String) -> void:
 		build_game(); show_notice("" if suspect.is_empty() else suspect + Lang.text(" was a Villager. The investigation continues."))
 
 
-func show_result(villagers_win: bool, message: String) -> void:
+func show_result(villagers_win: bool, message: String, result_players: Array = []) -> void:
 	_close_meeting_presentation()
 	_play_sfx("victory")
 	_stop_move()
@@ -2303,27 +2335,32 @@ func show_result(villagers_win: bool, message: String) -> void:
 	backdrop.color = Color(0, 0, 0, 0.45)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_screen_ui_parent().add_child(backdrop)
-	var winners: Array[String] = []
-	for member in lobby_players:
-		var role := str(member.get("role", ""))
-		var is_nenek := role == "nenek_kebayan" or str(member.get("character", "")) == impostor_character
-		if is_nenek == (not villagers_win): winners.append(str(member.get("character", "")))
-	if not villagers_win and winners.size() < 2:
-		for secret in [impostor_character, assigned_role_character]:
-			if not str(secret).is_empty() and str(secret) not in winners: winners.append(str(secret))
-	if winners.is_empty():
-		for character in CHARACTERS:
-			var is_nenek: bool = character == impostor_character
-			if is_nenek == (not villagers_win): winners.append(character)
+	var winners: Array[Dictionary] = []
+	var winning_role := "villager" if villagers_win else "nenek_kebayan"
+	for entry in result_players:
+		if not entry is Dictionary: continue
+		var role := str(entry.get("role", ""))
+		if role == winning_role: winners.append(entry.duplicate(true))
+	if winners.is_empty() and not message.to_lower().contains("host left"):
+		for member in lobby_players:
+			var role := str(member.get("role", ""))
+			if role == winning_role:
+				winners.append({"name": str(member.get("name", "Player")), "character": str(member.get("character", "")), "role": role})
+	if winners.is_empty() and not message.to_lower().contains("host left"):
+		var local_role := "nenek_kebayan" if player_is_impostor else "villager"
+		if (local_role == "villager") == villagers_win:
+			winners.append({"name": lobby_player_name, "character": assigned_role_character if not assigned_role_character.is_empty() else selected_character, "role": local_role})
 	var parade := Control.new()
-	parade.name = "WinnerCharacterLineup"
-	parade.position = Vector2(150, 146)
+	parade.name = "WinnerPlayerLineup"
+	parade.position = Vector2(150, 100)
 	parade.size = Vector2(980, 150)
 	parade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backdrop.add_child(parade)
 	var count := mini(winners.size(), 8)
 	for i in count:
-		var character := winners[i]
+		var winner: Dictionary = winners[i]
+		var character := str(winner.get("character", ""))
+		var player_name := str(winner.get("name", "Player"))
 		var actor := Control.new()
 		actor.name = "Winner_%d" % i
 		actor.position = Vector2(-95 if i % 2 == 0 else 1060, 18)
@@ -2338,7 +2375,9 @@ func show_result(villagers_win: bool, message: String) -> void:
 		display.call("configure", character, "")
 		display.call("set_facing_direction", Vector2.RIGHT if i % 2 == 0 else Vector2.LEFT)
 		display.call("set_running", true)
-		var name_tag := _make_child_label(actor, character, 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-24, 88, 128, 22))
+		var name_tag := _make_child_label(actor, player_name, 9, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(-14, 88, 108, 27))
+		name_tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		name_tag.clip_text = true
 		var spacing := 108.0
 		var start_x := (980.0 - spacing * float(count - 1)) * 0.5
@@ -2346,15 +2385,18 @@ func show_result(villagers_win: bool, message: String) -> void:
 		var tween := create_tween()
 		tween.tween_property(actor, "position", Vector2(center_x - 40, 18), 0.9 + i * 0.08).set_delay(i * 0.07).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		tween.tween_callback(Callable(display, "set_running").bind(false))
-	var panel := GameUI.make_panel(backdrop, Rect2(310, 326, 660, 290), Color(0.1, 0.07, 0.04, 0.98))
+	var panel := GameUI.make_panel(backdrop, Rect2(290, 280, 700, 360), Color(0.1, 0.07, 0.04, 0.99))
 	panel.name = "ResultPanel"
-	_add_overlay_close(panel, 660, Callable(self, "_return_to_menu_cleanly"))
-	var title := _make_child_label(panel, "VILLAGERS WIN!" if villagers_win else "NENEK KEBAYAN WINS!", 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(30, 26, 600, 52))
+	_add_overlay_close(panel, 700, Callable(self, "_return_to_menu_cleanly"))
+	var title := _make_child_label(panel, Lang.text("VILLAGERS WIN!" if villagers_win else "NENEK KEBAYAN WINS!"), 32, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(35, 25, 630, 52))
 	title.name = "ResultTitle"
-	if message.contains("The host left"): title.text = "GAME ENDED"
-	_make_child_label(panel, Lang.text(message) + (Lang.text("\n\nSecret role character: ") + impostor_character if not impostor_character.is_empty() else ""), 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(45, 105, 570, 90))
-	var again := make_button(panel, "RETURN TO MENU", Callable(self, "_return_to_menu_cleanly"), 220, 48, true)
-	again.position = Vector2(220, 218)
+	if message.contains("The host left"): title.text = Lang.text("GAME ENDED")
+	var result_copy := _make_child_label(panel, Lang.text(message), 17, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(48, 100, 604, 142))
+	result_copy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	result_copy.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	result_copy.clip_text = true
+	var again := make_button(panel, "RETURN TO MENU", Callable(self, "_return_to_menu_cleanly"), 240, 48, true)
+	again.position = Vector2(230, 282)
 
 
 func show_exit_confirmation() -> void:
@@ -2508,13 +2550,13 @@ func show_notice(message: String) -> void:
 	last_notice = message; last_notice_time = Time.get_ticks_msec() / 1000.0
 	var label := find_child("NoticeLabel", true, false) as Label
 	if label:
-		label.text = message
+		label.text = Lang.text(message)
 		return
 	var room_notice := find_child("RoomErrorNotice", true, false) as Label
 	if room_notice == null:
 		room_notice = make_label("", 15, Color("fff3cd"), HORIZONTAL_ALIGNMENT_CENTER)
 		room_notice.name = "RoomErrorNotice"; room_notice.position = Vector2(250, 665); room_notice.size = Vector2(780, 32)
-	room_notice.text = message
+	room_notice.text = Lang.text(message)
 
 
 func show_how_to_play(_return_screen: String = "") -> void:

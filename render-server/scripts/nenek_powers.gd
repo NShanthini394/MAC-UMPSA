@@ -58,6 +58,7 @@ static func try_sleep(room: Dictionary, caster_id: int, target_id: int, now: flo
 	if not MapGeometry.has_clear_path(int(room.get("map_index", 0)), origin, destination, locked_doors(room, now)):
 		return "A wall or locked entrance blocks Sleep Spell."
 	target["sleeping"] = true
+	target["sleep_position"] = destination
 	target["direction"] = Vector2.ZERO
 	room["sleep_ready_at"] = now + SLEEP_COOLDOWN
 	caster["sleep_ready_at"] = now + SLEEP_COOLDOWN

@@ -65,8 +65,8 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 		_sleep_badge.modulate.a = 1.0
 
 
-func set_sleep_translucent(value: bool) -> void:
-	character_actor.call("set_sleep_translucent", value)
+func set_sleep_opacity(value: float) -> void:
+	character_actor.call("set_sleep_opacity", value)
 
 
 func play_sleep_spell_blow(direction: Vector2) -> void:

@@ -45,11 +45,11 @@ func configure(mode: String, reveal: Dictionary = {}) -> void:
 		headline.add_theme_constant_override("outline_size",14)
 		headline.add_theme_color_override("font_outline_color",Color("1c0604"))
 		headline.add_theme_color_override("font_color",Color("fff7df"))
-		headline.text = "EMERGENCY MEETING"
-		caption.text = "The gong has sounded. Gather and share your clues."
+		headline.text = Lang.text("EMERGENCY MEETING")
+		caption.text = Lang.text("The gong has sounded. Gather and share your clues.")
 		if kind == "voting_intro":
-			headline.text = "TIME TO VOTE"
-			caption.text = "Choose carefully. Who is Nenek Kebayan?"
+			headline.text = Lang.text("TIME TO VOTE")
+			caption.text = Lang.text("Choose carefully. Who is Nenek Kebayan?")
 			alarm_sweep.color = Color("7754c4")
 	else:
 		# The departure scene supplies the torch-lit setting. The actual voted
@@ -71,10 +71,10 @@ func configure(mode: String, reveal: Dictionary = {}) -> void:
 			disguise.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			disguise.position = Vector2(440,110); disguise.size = Vector2(400,350)
 			disguise.modulate.a = 0.0; add_child(disguise)
-			headline.text = "The village has made its choice…"
+			headline.text = Lang.text("The village has made its choice…")
 		else:
-			headline.text = "NO ONE WAS ELIMINATED"
-			caption.text = "The vote was tied or skipped. The investigation continues."
+			headline.text = Lang.text("NO ONE WAS ELIMINATED")
+			caption.text = Lang.text("The vote was tied or skipped. The investigation continues.")
 
 func atlas(path: String, region: Rect2) -> AtlasTexture:
 	var texture := AtlasTexture.new(); texture.atlas = load(path); texture.region = region
@@ -125,9 +125,9 @@ func _process(delta: float) -> void:
 	if elapsed > 4.5:
 		var remaining := int(details.get("remaining",2))
 		if remaining == 0:
-			caption.text = "Both Nenek Kebayan have been found!" + ("\nAll tasks are complete. The village is saved." if details.get("tasks_complete",false) else "\nComplete the remaining tasks to save the village.")
-		elif remaining == 1: caption.text = "One Nenek Kebayan is still among you…"
-		else: caption.text = "Two Nenek Kebayan are still among you…"
+			caption.text = Lang.text("Both Nenek Kebayan have been found!") + (Lang.text("\nAll tasks are complete. The village is saved.") if details.get("tasks_complete",false) else Lang.text("\nComplete the remaining tasks to save the village."))
+		elif remaining == 1: caption.text = Lang.text("One Nenek Kebayan is still among you…")
+		else: caption.text = Lang.text("Two Nenek Kebayan are still among you…")
 	if magic: magic.queue_redraw()
 
 func _draw_magic(canvas: CanvasItem) -> void:

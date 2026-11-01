@@ -4,6 +4,7 @@ extends RefCounted
 const GameData = preload("res://scripts/game_data.gd")
 const UI = preload("res://scripts/game_ui.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
+const Lang = preload("res://scripts/app_language.gd")
 
 
 func build(app) -> void:
@@ -63,8 +64,8 @@ func build(app) -> void:
 	route_line.visible = false; world.add_child(route_line)
 	var header: Panel = app.make_panel(Rect2(12, 10, 1256, 56), Color(0.11, 0.075, 0.045, 0.92))
 	app._make_child_label(header, GameData.MAPS[app.selected_map]["name"], 19, GameData.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(18, 12, 440, 32))
-	app._make_child_label(header, ("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
-	var progress: Label = app._make_child_label(header, preload("res://scripts/app_language.gd").text("TASKS  %d / %d    •    CLUES  %d / %d") % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.clue_points.size() if not app.room_code.is_empty() else app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
+	app._make_child_label(header, Lang.text("NENEK KEBAYAN" if app.player_is_impostor else "VILLAGER") + "  •  " + app.selected_character, 15, GameData.CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(565, 14, 420, 28))
+	var progress: Label = app._make_child_label(header, Lang.text("TASKS  %d/%d • CLUES %d/%d") % [app.completed_tasks.count(1), GameData.TASKS[GameData.MAPS[app.selected_map]["name"]].size(), app.collected_clues.size(), app.clue_points.size() if not app.room_code.is_empty() else app.CHARACTER_CLUES.get(app.impostor_character, []).size()], 13, GameData.CREAM, HORIZONTAL_ALIGNMENT_RIGHT, Rect2(970, 12, 265, 32))
 	progress.name = "ProgressLabel"
 	progress.visible = not app.player_is_impostor
 	var task_panel_height := 438.0 if app.village_tasks_expanded else 68.0
@@ -73,7 +74,7 @@ func build(app) -> void:
 	task_panel.visible = not app.player_is_impostor
 	task_panel.clip_contents = true
 	task_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var toggle_text := "VILLAGE TASKS  −" if app.village_tasks_expanded else "VILLAGE TASKS  +"
+	var toggle_text := Lang.text("VILLAGE TASKS  −" if app.village_tasks_expanded else "VILLAGE TASKS  +")
 	var task_toggle: Button = app.make_button(task_panel, toggle_text, Callable(app, "toggle_village_tasks"), 260, 52, true)
 	task_toggle.name = "VillageTasksToggle"
 	task_toggle.position = Vector2(12, 7)
@@ -82,11 +83,14 @@ func build(app) -> void:
 	var tasks: Array = GameData.TASKS[GameData.MAPS[app.selected_map]["name"]]
 	var task_scroll := ScrollContainer.new()
 	task_scroll.name = "VillageTaskScroll"
+	task_scroll.set_script(preload("res://scripts/boxed_scroll.gd"))
+	task_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	task_scroll.position = Vector2(8,66)
 	task_scroll.size = Vector2(268,362)
 	task_scroll.visible = app.village_tasks_expanded
 	task_panel.add_child(task_scroll)
 	var task_rows := Control.new()
+	task_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	task_rows.custom_minimum_size = Vector2(248,tasks.size()*52)
 	task_scroll.add_child(task_rows)
 	for i in tasks.size():

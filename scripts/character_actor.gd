@@ -13,7 +13,7 @@ var _facing_mode := "front"
 var _base_sprite_y := 0.0
 var _character := ""
 var _sleep_texture: Texture2D
-var _sleep_translucent := false
+var _sleep_opacity := 1.0
 var _pose_tween: Tween
 var _blow_tween: Tween
 
@@ -53,7 +53,7 @@ func configure(character: String, display_name: String = "YOU") -> void:
 	_elapsed = 0.0
 	_frame_index = 0
 	_facing_mode = "front"
-	_sleep_translucent = false
+	_sleep_opacity = 1.0
 	_sprite.scale = Vector2.ONE
 	_sprite.flip_h = false
 	_sprite.rotation = 0.0
@@ -109,13 +109,23 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 	_elapsed = 0.0
 	_frame_index = 0
 	_apply_frame()
+	if value and _sleep_texture != null:
+		# A lying pose needs a wider canvas than the upright walking sprite.
+		_sprite.size = Vector2(120, 90)
+		_sprite.position.x = -20
+	else:
+		if _sprite.texture != null:
+			var aspect := _sprite.texture.get_width() / float(maxi(1, _sprite.texture.get_height()))
+			_sprite.size = Vector2(72.0 * aspect, 72.0)
+			_sprite.position.x = (80.0 - _sprite.size.x) * 0.5
+	_sprite.pivot_offset = Vector2(_sprite.size.x * 0.5, 60)
 	if value and _sleep_texture != null and not animate:
 		_sprite.texture = _sleep_texture
 	if _pose_tween and _pose_tween.is_running(): _pose_tween.kill()
 	var target_rotation := 0.0
 	var target_y := _base_sprite_y + (18.0 if value else 0.0)
 	var target_tint := Color("c0d2e8") if value else Color.WHITE
-	target_tint.a = 0.5 if _sleep_translucent else 1.0
+	target_tint.a = _sleep_opacity
 	if animate:
 		_pose_tween = create_tween().set_parallel(true)
 		_pose_tween.tween_property(_sprite, "rotation", target_rotation, 0.48).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -129,10 +139,10 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 		_sprite.modulate = target_tint
 
 
-func set_sleep_translucent(value: bool) -> void:
-	_sleep_translucent = value
+func set_sleep_opacity(value: float) -> void:
+	_sleep_opacity = clampf(value, 0.0, 1.0)
 	if _sprite != null:
-		_sprite.modulate.a = 0.5 if value else 1.0
+		_sprite.modulate.a = _sleep_opacity
 
 
 func play_sleep_spell_blow(direction: Vector2) -> void:

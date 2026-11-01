@@ -15,7 +15,7 @@ signal clue_found(index: int, clue_name: String, found_by: int)
 signal meeting_changed(state: String, seconds_left: int, members: Array, votes_cast: int, alive_count: int)
 signal chat_received(peer_id: int, player_name: String, message: String)
 signal meeting_result(target_id: int, message: String, winner: String)
-signal match_finished(winner: String, message: String)
+signal match_finished(winner: String, message: String, players: Array)
 signal ability_feedback(message: String)
 signal matchmaking_changed(waiting: int)
 signal elimination_revealed(details: Dictionary)
@@ -27,6 +27,7 @@ const LOBBY_WAIT_SECONDS := 5.0
 const QUICK_WAIT_SECONDS := 60.0
 const FIRST_MEETING_DELAY := 30.0
 const MEETING_COOLDOWN := 60.0
+const BOT_TASK_ACTION_INTERVAL := 20.0
 const BotBrain = preload("res://scripts/bot_brain.gd")
 const BotConversation = preload("res://scripts/bot_conversation.gd")
 const ALARM_SECONDS := 3.2
@@ -148,7 +149,9 @@ func _process(delta: float) -> void:
 			var origin: Vector2 = player.get("position", MapGeometry.spawn_point(map_index))
 			var candidate := origin + direction * minf(delta, 0.1) * 250.0
 			candidate = candidate.clamp(Vector2(14, 14), bounds - Vector2(14, 14))
-			origin = MapGeometry.move_position(map_index, origin, candidate - origin, 14.0, entrances)
+			if not bool(player.get("sleeping", false)):
+				candidate = MapGeometry.move_position(map_index, origin, candidate - origin, 14.0, entrances)
+			origin = candidate
 			player["position"] = origin
 	if _position_broadcast_timer >= 0.05:
 		_position_broadcast_timer = 0.0
@@ -654,10 +657,20 @@ func _broadcast_positions(code: String, reliable: bool = false, sleep_cast: Dict
 	room["state_sequence"] = int(room.get("state_sequence", 0)) + 1
 	var positions: Array = []
 	for member in room["players"].values():
-		positions.append({"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))})
+		var player_state := {"id": member["id"], "position": member["position"], "alive": member["alive"], "sleeping": bool(member.get("sleeping", false))}
+		if bool(member.get("sleeping", false)):
+			player_state["sleep_position"] = member.get("sleep_position", member["position"])
+		positions.append(player_state)
 	for peer_id in room["players"].keys():
 		if not _can_send_to(int(peer_id)): continue
 		var receiver_state := positions.duplicate(true)
+		# Send sleepers' live position only to themselves. Everyone else sees
+		# their fixed body where the spell landed.
+		for player_state in receiver_state:
+			var subject_id := int(player_state.get("id", -1))
+			if subject_id == int(peer_id) or not bool(player_state.get("sleeping", false)): continue
+			var subject: Dictionary = room["players"].get(subject_id, {})
+			player_state["position"] = subject.get("sleep_position", player_state["position"])
 		var power_state := NenekPowers.snapshot(room, room["players"][peer_id], now)
 		if str(room["players"][peer_id].get("role", "")) != "nenek_kebayan":
 			power_state["sleep_cooldown"] = 0.0
@@ -700,9 +713,15 @@ func _finish_game(code: String, winner: String, message: String) -> void:
 	if bool(room.get("finished", false)):
 		return
 	room["finished"] = true
+	var players: Array[Dictionary] = []
+	var winning_role := "villager" if winner == "villagers" else ("nenek_kebayan" if winner == "nenek_kebayan" else "")
+	if not winning_role.is_empty():
+		for member in room["players"].values():
+			if str(member.get("role", "")) != winning_role: continue
+			players.append({"name": str(member.get("name", "Player")), "character": str(member.get("character", "")), "role": winning_role})
 	for peer_id in room["players"].keys():
 		if not _can_send_to(int(peer_id)): continue
-		_rpc_game_finished.rpc_id(int(peer_id), winner, message)
+		_rpc_game_finished.rpc_id(int(peer_id), winner, message, players)
 
 
 func _set_meeting_phase(code: String, state: String, seconds: float) -> void:
@@ -801,9 +820,11 @@ func _tick_testing_bots(code: String, now: float) -> void:
 			if now >= float(member.get("bot_vote_at", now+1)) or float(room.meeting_timer)<=2.0:
 				room.votes[id]=BotBrain.vote(room,member,_server_random)
 				_broadcast_meeting_state(code)
-		if state!="" or now<float(member.get("bot_action_at",0.0)):continue
-		member["bot_action_at"]=now+4.0
-		if str(member.role)=="villager":
+		if state!="":continue
+		var bot_role := str(member.role)
+		if bot_role == "villager":
+			if now < float(member.get("bot_task_action_at", member.get("bot_action_at", 0.0))): continue
+			member["bot_task_action_at"] = now + BOT_TASK_ACTION_INTERVAL
 			var points:=MapGeometry.task_points(int(room.map_index))
 			for i in points.size():
 				if int(room.completed_tasks[i])==1 or member.position.distance_to(points[i])>72:continue
@@ -813,6 +834,8 @@ func _tick_testing_bots(code: String, now: float) -> void:
 				if int(room.task_progress[i])>=int(GameData.COMMON_TASK_STEPS[i]):room.completed_tasks[i]=1
 				_broadcast_task_state(code);break
 		else:
+			if now < float(member.get("bot_action_at", 0.0)): continue
+			member["bot_action_at"] = now + 4.0
 			if not BotBrain.can_bot_attack(room, member, now): continue
 			for target in room.players.values():
 				if NenekPowers.try_sleep(room,id,int(target.id),now).is_empty():
@@ -1439,8 +1462,8 @@ func _rpc_meeting_result(target_id: int, message: String, winner: String) -> voi
 
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_game_finished(winner: String, message: String) -> void:
-	match_finished.emit(winner, message)
+func _rpc_game_finished(winner: String, message: String, players: Array) -> void:
+	match_finished.emit(winner, message, players)
 
 
 @rpc("authority", "call_remote", "reliable")

@@ -2,6 +2,7 @@ extends Control
 const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
 const Geometry = preload("res://scripts/map_geometry.gd")
+const Lang = preload("res://scripts/app_language.gd")
 var _map_tab: Button
 var _tasks_tab: Button
 var _palace := false
@@ -43,10 +44,10 @@ func configure(controller: Control) -> void:
 	var border := panel.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
 	border.border_color=Color("b19a6b")
 	panel.add_theme_stylebox_override("panel",border)
-	var peta := UI.make_button(panel,"MAP",_tab.bind(false),112,42,true)
+	var peta := UI.make_button(panel,Lang.text("MAP"),_tab.bind(false),112,42,true)
 	peta.name="MapTab"; peta.toggle_mode=true; _map_tab=peta
 	peta.position=Vector2(20,18)
-	var tasks := UI.make_button(panel,"TASKS",_tab.bind(true),112,42)
+	var tasks := UI.make_button(panel,Lang.text("TASKS"),_tab.bind(true),112,42)
 	tasks.name="MapTasksTab"; tasks.visible=not app.player_is_impostor
 	tasks.toggle_mode=true; _tasks_tab=tasks
 	tasks.position=Vector2(144,18)
@@ -55,13 +56,13 @@ func configure(controller: Control) -> void:
 	close.name="MapCloseButton"; close.position=Vector2(1128,12)
 	if _palace: UI.apply_menu_button(close,"jade")
 	_legend=Control.new(); _legend.position=Vector2(22,92); _legend.size=Vector2(228,330); panel.add_child(_legend)
-	UI.make_child_label(_legend,"MAP KEY",17,Data.GOLD,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,0,228,30))
+	UI.make_child_label(_legend,Lang.text("MAP KEY"),17,Data.GOLD,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,0,228,30))
 	var legend_lines := ["▲   Your position","1–12   Unfinished tasks","✓   Completed tasks","▣   Room / area","┄   Door / access"]
 	if app.player_is_impostor: legend_lines=["▲   Your position","▣   Room / area","┄   Door / access"]
-	for index in legend_lines.size(): UI.make_child_label(_legend,legend_lines[index],15,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,50+index*40,228,36))
-	var instruction := UI.make_child_label(_legend,"Choose a task number\nto see its location:",14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,270,228,56))
+	for index in legend_lines.size(): UI.make_child_label(_legend,Lang.text(legend_lines[index]),15,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,50+index*40,228,36))
+	var instruction := UI.make_child_label(_legend,Lang.text("Choose a task number\nto see its location:"),14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(0,270,228,56))
 	instruction.name="MapNumberInstruction"
-	if app.player_is_impostor: instruction.text="View rooms and paths\non the map."
+	if app.player_is_impostor: instruction.text=Lang.text("View rooms and paths\non the map.")
 	_tasks=ScrollContainer.new(); _tasks.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED; _tasks.position=Vector2(22,92); _tasks.size=Vector2(228,464); panel.add_child(_tasks)
 	var task_rows := VBoxContainer.new()
 	task_rows.add_theme_constant_override("separation",2)
@@ -77,7 +78,7 @@ func configure(controller: Control) -> void:
 		if _palace: UI.apply_menu_button(button,"jade")
 		var badge := UI.make_child_label(button,str(index+1),13,Data.CREAM,HORIZONTAL_ALIGNMENT_CENTER,Rect2(14,0,24,72))
 		_task_badges.append(badge)
-		var copy: String = str(Data.COMMON_TASKS[index]["name"])
+		var copy: String = Lang.text(str(Data.COMMON_TASKS[index]["name"]))
 		copy=copy.replace("marbles into", "marbles\ninto")
 		var task_name := UI.make_child_label(button,copy,14,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(42,9,152,54))
 		task_name.name="TaskEntryName_%d"%index
@@ -92,7 +93,7 @@ func configure(controller: Control) -> void:
 	_place.name="SelectedTaskPlace"
 	_place.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	_place.vertical_alignment=VERTICAL_ALIGNMENT_TOP
-	_route=UI.make_button(panel,"SHOW ROUTE",_navigate,228,42,true)
+	_route=UI.make_button(panel,Lang.text("SHOW ROUTE"),_navigate,228,42,true)
 	_route.name="ShowRouteButton"
 	_route.position=Vector2(22,570); _route.disabled=true
 	_route.pivot_offset=_route.size*0.5
@@ -110,12 +111,12 @@ func configure(controller: Control) -> void:
 	canvas.name="FloorPlanCanvas"; canvas.position=Vector2(272,84); canvas.size=Vector2(886,458)
 	panel.add_child(canvas); canvas.call("configure",app)
 	canvas.connect("task_selected",_choose)
-	UI.make_child_label(panel,"3D map • open rooms and connected paths",13,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(280,551,630,25))
+	UI.make_child_label(panel,Lang.text("3D map • open rooms and connected paths"),13,Data.CREAM,HORIZONTAL_ALIGNMENT_LEFT,Rect2(280,551,630,25))
 	var zoom_out := UI.make_button(panel,"−",func():canvas.call("change_zoom",1/1.2),44,40)
 	zoom_out.position=Vector2(960,572)
 	var zoom_in := UI.make_button(panel,"+",func():canvas.call("change_zoom",1.2),44,40)
 	zoom_in.position=Vector2(1010,572)
-	var reset := UI.make_button(panel,"FIT",func():canvas.call("reset_view"),90,40)
+	var reset := UI.make_button(panel,Lang.text("FIT"),func():canvas.call("reset_view"),90,40)
 	reset.position=Vector2(1060,572); reset.add_theme_font_size_override("font_size",13)
 	if _palace:
 		for button in [zoom_out,zoom_in,reset]: UI.apply_menu_button(button,"jade")
@@ -147,12 +148,12 @@ func _refresh_selection_details() -> void:
 	var index:=selected
 	var section_id: int = Geometry.floor_plan(app.selected_map).layout["task_sections"][index]
 	var place: String = Geometry.floor_plan(app.selected_map).layout["sections"][section_id]["name"]
-	_selection.text="%d. %s"%[index+1,Data.COMMON_TASKS[index]["name"]]
-	_place.text=place
+	_selection.text="%d. %s"%[index+1,Lang.text(str(Data.COMMON_TASKS[index]["name"]))]
+	_place.text=Lang.text(place)
 	_details.visible=not _tasks.visible
 	_route.visible=not _tasks.visible
 	_route.disabled=app.completed_tasks[index]==1 or not app.can_local_act()
-	_route.text="COMPLETED" if app.completed_tasks[index]==1 else "SHOW ROUTE"
+	_route.text=Lang.text("COMPLETED" if app.completed_tasks[index]==1 else "SHOW ROUTE")
 	_update_route_attention()
 
 func _refresh_task_buttons() -> void:

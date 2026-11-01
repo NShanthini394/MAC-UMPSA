@@ -43,7 +43,6 @@ var _queue_batch_until := -1.0
 var _next_bot_id := 2147483000
 var force_host_nenek_for_testing := false
 const GameData = preload("res://scripts/game_data.gd")
-const Lang = preload("res://scripts/app_language.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
 const Discovery = preload("res://scripts/lan_discovery.gd")
@@ -1240,7 +1239,7 @@ func request_call_meeting() -> void:
 		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if now < float(room.get("gong_ready_at", now + FIRST_MEETING_DELAY)):
-		_rpc_room_error.rpc_id(sender, Lang.text("The gong is cooling down. Wait %d seconds before calling another meeting.") % ceili(float(room["gong_ready_at"]) - now))
+		_rpc_room_error.rpc_id(sender, "The gong is cooling down. Wait %d seconds before calling another meeting." % ceili(float(room["gong_ready_at"]) - now))
 		return
 	var position: Vector2 = room["players"][sender].get("position", Vector2.ZERO)
 	var gong := MapGeometry.gong_point(int(room["map_index"]))

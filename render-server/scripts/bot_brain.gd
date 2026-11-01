@@ -4,6 +4,17 @@ extends RefCounted
 const Geo=preload("res://scripts/map_geometry.gd")
 const Powers=preload("res://scripts/nenek_powers.gd")
 const Rules=preload("res://scripts/match_rules.gd")
+const SOLO_GRACE_SECONDS := 45.0
+const SOLO_BOT_SLEEP_SECONDS := 40.0
+
+static func can_bot_attack(room: Dictionary, bot: Dictionary, now: float) -> bool:
+	if str(room.get("mode", "")) != "solo": return true
+	return now >= float(room.get("started_at", now)) + SOLO_GRACE_SECONDS and now >= float(bot.get("bot_sleep_at", 0.0)) and now >= float(room.get("solo_next_attack", 0.0))
+
+static func record_bot_attack(room: Dictionary, bot: Dictionary, now: float) -> void:
+	if str(room.get("mode", "")) != "solo": return
+	bot["bot_sleep_at"] = now + SOLO_BOT_SLEEP_SECONDS
+	room["solo_next_attack"] = now + 20.0
 
 static func witness_sleep(room:Dictionary,caster_id:int,target_id:int)->void:
 	var caster:Dictionary=room.players[caster_id]
@@ -45,7 +56,7 @@ static func vote(room:Dictionary,bot:Dictionary,random:RandomNumberGenerator)->i
 		if target in eligible:nominations[target]=int(nominations.get(target,0))+1
 	for target in nominations:
 		if str(bot.role)=="nenek_kebayan" and str(room.players[target].role)=="nenek_kebayan":continue
-		if int(nominations[target]) >= 2 or random.randf()<0.55:return int(target)
+		if int(nominations[target]) >= 2 or random.randf()<(0.75 if str(room.get("mode", ""))=="solo" and str(bot.role)=="villager" else 0.55):return int(target)
 	if str(bot.role)=="nenek_kebayan":
 		var villagers:Array=[]
 		for id in eligible:
@@ -57,7 +68,11 @@ static func destination(room:Dictionary,bot:Dictionary,now:float,random:RandomNu
 	if str(bot.role)=="nenek_kebayan":
 		var targets:Array=[]
 		for member in room.players.values():
-			if Powers.is_active(member) and str(member.role)=="villager":targets.append(member.position)
+			if not Powers.is_active(member) or str(member.role)!="villager": continue
+			if str(room.get("mode", "")) == "solo":
+				# Solo opponents can only pursue villagers they can actually see.
+				if bot.position.distance_to(member.position)>240.0 or not Geo.has_clear_path(int(room.map_index),bot.position,member.position): continue
+			targets.append(member.position)
 		if not targets.is_empty():return targets[random.randi_range(0,targets.size()-1)]
 	else:
 		# One villager approaches the gong; the others continue their tasks.

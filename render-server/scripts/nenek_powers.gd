@@ -4,7 +4,7 @@ extends RefCounted
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 const MatchRules = preload("res://scripts/match_rules.gd")
 const SLEEP_RANGE := 105.0
-const SLEEP_COOLDOWN := 25.0
+const SLEEP_COOLDOWN := 20.0
 const SABOTAGE_COOLDOWN := 120.0
 const FOG_DURATION := 20.0
 const LOCK_DURATION := 10.0
@@ -51,7 +51,7 @@ static func try_sleep(room: Dictionary, caster_id: int, target_id: int, now: flo
 	var target: Dictionary = players[target_id]
 	if not is_active(caster) or str(caster.get("role", "")) != "nenek_kebayan": return "Only active Nenek Kebayan can cast Sleep Spell."
 	if caster_id == target_id or not is_active(target) or str(target.get("role", "")) != "villager": return "Choose an awake villager."
-	if now < float(caster.get("sleep_ready_at", 0.0)): return "Sleep Spell is still recharging."
+	if now < float(room.get("sleep_ready_at", caster.get("sleep_ready_at", 0.0))): return "Sleep Spell is still recharging."
 	var origin: Vector2 = caster.get("position", Vector2.ZERO)
 	var destination: Vector2 = target.get("position", Vector2.ZERO)
 	if origin.distance_to(destination) > SLEEP_RANGE: return "Move closer to an awake villager."
@@ -59,6 +59,7 @@ static func try_sleep(room: Dictionary, caster_id: int, target_id: int, now: flo
 		return "A wall or locked entrance blocks Sleep Spell."
 	target["sleeping"] = true
 	target["direction"] = Vector2.ZERO
+	room["sleep_ready_at"] = now + SLEEP_COOLDOWN
 	caster["sleep_ready_at"] = now + SLEEP_COOLDOWN
 	return ""
 
@@ -103,6 +104,6 @@ static func snapshot(room: Dictionary, player: Dictionary, now: float) -> Dictio
 		"seconds_left": seconds_left,
 		"fog_origin": room.get("fog_origin", Vector2.ZERO),
 		"fog_radius": FOG_RADIUS,
-		"sleep_cooldown": maxf(0.0, float(player.get("sleep_ready_at", 0.0)) - now),
+		"sleep_cooldown": maxf(0.0, float(room.get("sleep_ready_at", player.get("sleep_ready_at", 0.0))) - now),
 		"sabotage_cooldown": maxf(0.0, float(room.get("sabotage_ready_at", 0.0)) - now)
 	}

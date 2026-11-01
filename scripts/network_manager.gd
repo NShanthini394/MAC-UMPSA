@@ -794,6 +794,11 @@ func _tick_testing_bots(code: String, now: float) -> void:
 		if not member.get("is_bot",false) or not NenekPowers.is_active(member):continue
 		var id:=int(member.id)
 		if state=="voting" and not room.votes.has(id):
+			if str(room.get("mode", "")) == "solo" and float(room.meeting_timer) > 3.0:
+				var waiting_for_human := false
+				for human_id in Rules.human_ids(room, true):
+					if not room.votes.has(human_id): waiting_for_human = true
+				if waiting_for_human: continue
 			if now >= float(member.get("bot_vote_at", now+1)) or float(room.meeting_timer)<=2.0:
 				room.votes[id]=BotBrain.vote(room,member,_server_random)
 				_broadcast_meeting_state(code)
@@ -809,8 +814,10 @@ func _tick_testing_bots(code: String, now: float) -> void:
 				if int(room.task_progress[i])>=int(GameData.COMMON_TASK_STEPS[i]):room.completed_tasks[i]=1
 				_broadcast_task_state(code);break
 		else:
+			if not BotBrain.can_bot_attack(room, member, now): continue
 			for target in room.players.values():
 				if NenekPowers.try_sleep(room,id,int(target.id),now).is_empty():
+					BotBrain.record_bot_attack(room, member, now)
 					BotBrain.witness_sleep(room,id,int(target.id))
 					_broadcast_positions(code,true,{"caster_id":id,"target_id":int(target.id)});_send_room_state(code);break
 			if now>=float(member.get("bot_sabotage_at",now+45)):

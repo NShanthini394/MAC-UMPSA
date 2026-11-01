@@ -24,8 +24,8 @@ func run()->void:
    check(not str(event.message).contains("minigame"),"Chat shows task names, not dictionaries")
    messages.append(event.message);times.append(now)
  check(messages.size()>=2,"Bots answer and continue discussion")
- check(times[0]<=103,"Human question receives a prompt reply")
- for i in range(1,times.size()):check(times[i]-times[i-1]>=2,"Messages are staggered")
+ check(times[0]>=103.5 and times[0]<=106.5,"Human question allows a thinking pause before the reply")
+ for i in range(1,times.size()):check(times[i]-times[i-1]>=4.5,"Messages leave enough reading time")
  var bot:Dictionary=Chat.active_bots(room)[0];bot.bot_last_task=0
  check(Chat.alibi(bot).contains("cook rice"),"Alibis reference the task actually performed")
  Chat.hear(room,7,str(bot.name)+", where were you?",131,random)

@@ -73,11 +73,13 @@ static func append_chat(app: Control, peer_id: int, player_name: String, message
 	if chat == null: return
 	var own: bool = peer_id == app.network_manager.local_peer_id()
 	var row := HBoxContainer.new()
-	row.custom_minimum_size = Vector2(900, 0)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.alignment = BoxContainer.ALIGNMENT_END if own else BoxContainer.ALIGNMENT_BEGIN
 	chat.add_child(row)
-	var bubble := Panel.new()
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if own: row.add_child(spacer)
+	var bubble := PanelContainer.new()
+	bubble.name = "ChatBubble"
 	bubble.custom_minimum_size = Vector2(clampf(170.0 + message.length() * 4.8, 220.0, 680.0), 0)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("4b664c") if own else Color("3b3028")
@@ -86,17 +88,30 @@ static func append_chat(app: Control, peer_id: int, player_name: String, message
 	style.content_margin_top = 7; style.content_margin_bottom = 7
 	bubble.add_theme_stylebox_override("panel", style)
 	row.add_child(bubble)
-	var label := Label.new()
-	label.text = player_name + "\n" + message
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", int(preload("res://scripts/settings_store.gd").get_value("text_size")))
-	label.add_theme_color_override("font_color", Data.CREAM)
-	label.position = Vector2(10, 7)
-	label.size = Vector2(bubble.custom_minimum_size.x - 20, maxf(48.0, ceilf(message.length() / 68.0) * 26.0 + 32.0))
-	bubble.custom_minimum_size.y = label.size.y + 14
-	bubble.add_child(label)
-	chat.custom_minimum_size.y += bubble.custom_minimum_size.y + 7
-	(chat.get_parent() as ScrollContainer).set_deferred("scroll_vertical", 1000000)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 5)
+	bubble.add_child(stack)
+	for copy in [player_name, message]:
+		var label := Label.new()
+		label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		label.text = copy
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", int(preload("res://scripts/settings_store.gd").get_value("text_size")))
+		label.add_theme_color_override("font_color", Data.CREAM)
+		stack.add_child(label)
+	if not own: row.add_child(spacer)
+	# Containers measure the actual shaped/wrapped text in every language.
+	# Character-count height guesses overflow when fonts or bubble widths change.
+	_scroll_latest.call_deferred(chat)
+
+static func _scroll_latest(chat: Control) -> void:
+	if not is_instance_valid(chat) or not chat.is_inside_tree(): return
+	var tree := chat.get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	if not is_instance_valid(chat) or not chat.is_inside_tree(): return
+	var scroll := chat.get_parent() as ScrollContainer
+	if scroll: scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
 
 static func voting(app: Control, members: Array) -> void:
 	var body := panel(app, Rect2(140, 32, 1000, 656))

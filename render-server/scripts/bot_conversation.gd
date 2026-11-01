@@ -8,14 +8,16 @@ const Data = preload("res://scripts/game_data.gd")
 static func begin(room: Dictionary, now: float, random: RandomNumberGenerator) -> void:
 	room["bot_chat_queue"] = []
 	room["bot_chat_history"] = []
-	room["bot_chat_next"] = now + 1.5
+	room["bot_chat_next"] = now + 4.0
+	room["bot_chat_last_spoke"] = {}
+	room["bot_chat_counts"] = {}
 	var bots := active_bots(room)
 	# A few people open the conversation; others reply when addressed.
-	for i in mini(bots.size(), 5):
+	for i in mini(bots.size(), 3):
 		var bot: Dictionary = bots[(i + random.randi_range(0, bots.size()-1)) % bots.size()]
 		var queue: Array = room.bot_chat_queue
 		if queue.any(func(event: Dictionary) -> bool: return event.id == bot.id): continue
-		queue.append({"id": bot.id, "due": now + 2.0 + i * random.randf_range(3.5, 5.0), "message": "", "speaker": ""})
+		queue.append({"id": bot.id, "due": now + 4.0 + i * random.randf_range(5.0, 7.0), "message": "", "speaker": ""})
 
 static func active_bots(room: Dictionary) -> Array:
 	var result: Array = []
@@ -34,15 +36,15 @@ static func hear(room: Dictionary, sender: int, message: String, now: float, ran
 	var speaker := str(room.players[sender].name)
 	var turn := int(room.get("bot_chat_turn", 0))
 	room["bot_chat_turn"] = turn + 1
-	var respondents: Array = addressed.slice(0, 2) if not addressed.is_empty() else [bots[turn % bots.size()]]
-	if addressed.is_empty() and ("?" in message or "clue" in lower) and bots.size() > 1:
-		respondents.append(bots[(turn+1) % bots.size()])
+	var respondents: Array = addressed.slice(0, 1) if not addressed.is_empty() else [bots[turn % bots.size()]]
 	var queue: Array = room.get("bot_chat_queue", [])
 	for i in respondents.size():
 		var bot: Dictionary = respondents[i]
+		if int(room.get("bot_chat_counts", {}).get(bot.id, 0)) >= 2: continue
 		# Replace that bot's pending opener or old answer with the newest question.
 		queue = queue.filter(func(event: Dictionary) -> bool: return event.id != bot.id)
-		queue.append({"id": bot.id, "due": now + random.randf_range(1.3, 2.5) + i * 3.0, "message": message, "speaker": speaker})
+		var due := maxf(now + random.randf_range(3.5, 6.0), float(room.get("bot_chat_last_spoke", {}).get(bot.id, -100.0)) + 14.0)
+		queue.append({"id": bot.id, "due": due, "message": message, "speaker": speaker})
 	room["bot_chat_queue"] = queue
 
 static func tick(room: Dictionary, now: float, random: RandomNumberGenerator) -> Dictionary:
@@ -54,6 +56,8 @@ static func tick(room: Dictionary, now: float, random: RandomNumberGenerator) ->
 		if now < float(event.due): return {}
 		queue.pop_front()
 		if not room.players.has(event.id) or not Powers.is_active(room.players[event.id]): continue
+		if int(room.get("bot_chat_counts", {}).get(event.id, 0)) >= 2: continue
+		if now < float(room.get("bot_chat_last_spoke", {}).get(event.id, -100.0)) + 14.0: continue
 		var bot: Dictionary = room.players[event.id]
 		var message := response(room, bot, str(event.message), str(event.speaker), random)
 		var history: Array = room.get("bot_chat_history", [])
@@ -63,7 +67,9 @@ static func tick(room: Dictionary, now: float, random: RandomNumberGenerator) ->
 		history.append(message)
 		if history.size() > 30: history.pop_front()
 		room["bot_chat_history"] = history
-		room["bot_chat_next"] = now + random.randf_range(2.2, 3.8)
+		room["bot_chat_last_spoke"][event.id] = now
+		room["bot_chat_counts"][event.id] = int(room["bot_chat_counts"].get(event.id, 0)) + 1
+		room["bot_chat_next"] = now + random.randf_range(4.5, 6.5)
 		return {"member": bot, "message": message}
 	return {}
 

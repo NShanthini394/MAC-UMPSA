@@ -25,6 +25,8 @@ const MAX_PLAYERS_PER_ROOM := 10
 const MAX_SERVER_CLIENTS := 100
 const LOBBY_WAIT_SECONDS := 5.0
 const QUICK_WAIT_SECONDS := 60.0
+const FIRST_MEETING_DELAY := 30.0
+const MEETING_COOLDOWN := 60.0
 const BotBrain = preload("res://scripts/bot_brain.gd")
 const BotConversation = preload("res://scripts/bot_conversation.gd")
 const ALARM_SECONDS := 3.2
@@ -35,10 +37,13 @@ const Rules = preload("res://scripts/match_rules.gd")
 const Companions = preload("res://scripts/walking_companions.gd")
 var public_queue: Array[int] = []
 var queue_names: Dictionary = {}
+var queue_maps: Dictionary = {}
+var queue_joined_at: Dictionary = {}
 var _queue_batch_until := -1.0
 var _next_bot_id := 2147483000
 var force_host_nenek_for_testing := false
 const GameData = preload("res://scripts/game_data.gd")
+const Lang = preload("res://scripts/app_language.gd")
 const MapGeometry = preload("res://scripts/map_geometry.gd")
 const NenekPowers = preload("res://scripts/nenek_powers.gd")
 const Discovery = preload("res://scripts/lan_discovery.gd")
@@ -59,6 +64,7 @@ var lobby_countdown := -1.0
 var active_room_mode := "friends"
 var lobby_searching := false
 var lobby_locked := false
+var lobby_waiting_for_human := false
 var _input_sent_at := -1000
 var _last_input_direction := Vector2.ZERO
 var _input_sequence := 0
@@ -126,6 +132,8 @@ func _process(delta: float) -> void:
 					"voting": _resolve_vote(str(code))
 					"reveal":
 						room["meeting_state"] = ""
+						room["gong_ready_at"] = now + MEETING_COOLDOWN
+						_broadcast_positions(str(code), true)
 						var victor := Rules.winner(room)
 						if not victor.is_empty(): _finish_game(str(code), victor, _winner_message(victor))
 						else: _broadcast_meeting_state(str(code))
@@ -240,6 +248,12 @@ func _on_peer_connected(peer_id: int) -> void:
 	var transport := multiplayer.multiplayer_peer as WebSocketMultiplayerPeer
 	if transport:
 		transport.get_peer(peer_id).heartbeat_interval = 10.0
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet:
+		var enet_peer := enet.get_peer(peer_id)
+		if enet_peer:
+			enet_peer.set_timeout(32, 10000, 120000)
+			enet_peer.ping_interval(1000)
 	if multiplayer.is_server() and multiplayer.get_peers().size() > MAX_SERVER_CLIENTS:
 		multiplayer.disconnect_peer(peer_id)
 
@@ -313,7 +327,7 @@ func _send_pending_action() -> void:
 		"join":
 			request_join_room.rpc_id(1, str(_pending_action["code"]), local_player_name)
 		"matchmaking":
-			request_find_match.rpc_id(1, local_player_name)
+			request_find_match.rpc_id(1, local_player_name, int(_pending_action.get("map_index", 0)))
 	_pending_action.clear()
 
 
@@ -421,7 +435,7 @@ func _disconnect_peer() -> void:
 	if is_instance_valid(lan_discovery): lan_discovery.cancel_search()
 	lobby_countdown = -1.0
 	connection_pending = false
-	lobby_locked=false;lobby_searching=false;active_room_mode="friends"
+	lobby_locked=false;lobby_searching=false;lobby_waiting_for_human=false;active_room_mode="friends"
 	if multiplayer.multiplayer_peer != null and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -429,6 +443,12 @@ func _disconnect_peer() -> void:
 
 func _on_connected_to_server() -> void:
 	connection_pending = false
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet:
+		var server_peer := enet.get_peer(1)
+		if server_peer:
+			server_peer.set_timeout(32, 10000, 120000)
+			server_peer.ping_interval(1000)
 	connection_changed.emit(true, "Connected to room server.")
 	_send_pending_action()
 
@@ -462,7 +482,7 @@ func _on_server_disconnected() -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer.is_server():
-		_remove_player(peer_id)
+		_remove_player(peer_id, true)
 
 
 func _clean_player_name(value: String) -> String:
@@ -525,20 +545,22 @@ func _fill_companions(room: Dictionary) -> void:
 		_next_bot_id -= 1
 
 
-func find_match(player_name: String, address: String) -> Error:
+func find_match(player_name: String, address: String, map_index: int = 0) -> Error:
 	if connection_pending or not active_room_code.is_empty(): return ERR_ALREADY_IN_USE
 	local_player_name = _clean_player_name(player_name)
-	_pending_action = {"kind": "matchmaking"}
+	_pending_action = {"kind": "matchmaking", "map_index": clampi(map_index, 0, GameData.MAPS.size() - 1)}
 	return _connect_for_pending_action(address)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_find_match(player_name: String) -> void:
+func request_find_match(player_name: String, map_index: int = 0) -> void:
 	if not multiplayer.is_server(): return
 	var sender := multiplayer.get_remote_sender_id()
 	if peer_room_codes.has(sender): return
 	if sender not in public_queue: public_queue.append(sender)
 	queue_names[sender] = _clean_player_name(player_name)
+	queue_maps[sender] = clampi(map_index, 0, GameData.MAPS.size() - 1)
+	queue_joined_at[sender] = Time.get_ticks_msec() / 1000.0
 	_broadcast_queue()
 
 
@@ -548,34 +570,38 @@ func _broadcast_queue() -> void:
 
 
 func _tick_matchmaking() -> void:
-	# Public lobbies appear immediately; the shared search deadline never resets
-	# when another player joins. Locked/counting-down matches accept no arrivals.
-	for code in rooms:
-		var existing:Dictionary=rooms[code]
-		if not existing.get("public",false) or existing.get("started",false) or existing.get("locked",false):continue
-		var changed:=false
-		while not public_queue.is_empty() and Rules.human_ids(existing).size()<MAX_PLAYERS_PER_ROOM:
-			var id:int=public_queue.pop_front()
-			existing.players[id]=_make_player(id,str(queue_names[id]),false,_random_available_character(existing.players))
-			queue_names.erase(id);peer_room_codes[id]=str(code)
-			if _can_send_to(id):_rpc_room_opened.rpc_id(id,str(code),int(existing.map_index),_room_members(existing),false,_lobby_context(existing))
-			changed=true
-		if changed:_send_room_state(str(code));_broadcast_queue()
+	# Hold each queue batch briefly so its players can vote before the shared map
+	# is locked into the waiting room. Later batches get their own fixed-map room.
+	var now := Time.get_ticks_msec() / 1000.0
 	if public_queue.is_empty():return
+	# Quick matches need two real players because bot seats cannot be assigned
+	# either hidden Nenek Kebayan role.
+	if public_queue.size() < 2: return
+	var vote_window_elapsed := false
+	for queued_id in public_queue:
+		if now - float(queue_joined_at.get(queued_id, now)) >= 12.0: vote_window_elapsed = true; break
+	if public_queue.size() < MAX_PLAYERS_PER_ROOM and not vote_window_elapsed: return
 	var code:=_find_room_code()
 	if code.is_empty():return
 	var group:=public_queue.slice(0,mini(MAX_PLAYERS_PER_ROOM,public_queue.size()))
-	var room:Dictionary={"map_index":_server_random.randi_range(0,GameData.MAPS.size()-1),"host_id":group[0],"players":{},"started":false,"public":true,"mode":"quick","bot_match":true,"bot_wait":true,"locked":false,"start_countdown":QUICK_WAIT_SECONDS}
+	var map_votes: Dictionary = {}
+	for id in group:
+		var choice := int(queue_maps.get(id, 0))
+		map_votes[choice] = int(map_votes.get(choice, 0)) + 1
+	var majority_map := 0
+	for choice in map_votes:
+		if int(map_votes[choice]) > int(map_votes.get(majority_map, 0)): majority_map = int(choice)
+	var room:Dictionary={"map_index":majority_map,"host_id":group[0],"players":{},"started":false,"public":true,"mode":"quick","bot_match":true,"bot_wait":true,"locked":false,"start_countdown":QUICK_WAIT_SECONDS}
 	for id in group:
 		room.players[id]=_make_player(id,str(queue_names[id]),id==group[0],_random_available_character(room.players))
-		peer_room_codes[id]=code;public_queue.erase(id);queue_names.erase(id)
+		peer_room_codes[id]=code;public_queue.erase(id);queue_names.erase(id);queue_maps.erase(id);queue_joined_at.erase(id)
 	rooms[code]=room
 	for id in group:
 		if _can_send_to(id):_rpc_room_opened.rpc_id(id,code,int(room.map_index),_room_members(room),id==group[0],_lobby_context(room))
 	_send_room_state(code);_broadcast_queue()
 
 func _lobby_context(room:Dictionary)->Dictionary:
-	return {"mode":str(room.get("mode","friends")),"searching":bool(room.get("bot_wait",false)),"locked":bool(room.get("locked",false)),"human_count":Rules.human_ids(room).size()}
+	return {"mode":str(room.get("mode","friends")),"searching":bool(room.get("bot_wait",false)),"locked":bool(room.get("locked",false)),"human_count":Rules.human_ids(room).size(),"waiting_for_human":bool(room.get("waiting_for_human",false))}
 
 func _lock_lobby(code:String)->void:
 	var room:Dictionary=rooms[code]
@@ -693,7 +719,7 @@ func _set_meeting_phase(code: String, state: String, seconds: float) -> void:
 
 
 func _winner_message(winner: String) -> String:
-	return "All twelve tasks are complete and both Nenek Kebayan have been found. The Villagers win!" if winner == "villagers" else "No villagers remain awake in the match. The Nenek Kebayan team wins!"
+	return "All twelve tasks are complete and both Nenek Kebayan have been found. The Villagers win!" if winner == "villagers" else "The Nenek Kebayan outnumber the remaining awake villagers. Nenek Kebayan wins!"
 
 
 func _finish_voting_if_complete(code: String) -> void:
@@ -768,6 +794,11 @@ func _tick_testing_bots(code: String, now: float) -> void:
 		if not member.get("is_bot",false) or not NenekPowers.is_active(member):continue
 		var id:=int(member.id)
 		if state=="voting" and not room.votes.has(id):
+			if str(room.get("mode", "")) == "solo" and float(room.meeting_timer) > 3.0:
+				var waiting_for_human := false
+				for human_id in Rules.human_ids(room, true):
+					if not room.votes.has(human_id): waiting_for_human = true
+				if waiting_for_human: continue
 			if now >= float(member.get("bot_vote_at", now+1)) or float(room.meeting_timer)<=2.0:
 				room.votes[id]=BotBrain.vote(room,member,_server_random)
 				_broadcast_meeting_state(code)
@@ -783,8 +814,10 @@ func _tick_testing_bots(code: String, now: float) -> void:
 				if int(room.task_progress[i])>=int(GameData.COMMON_TASK_STEPS[i]):room.completed_tasks[i]=1
 				_broadcast_task_state(code);break
 		else:
+			if not BotBrain.can_bot_attack(room, member, now): continue
 			for target in room.players.values():
 				if NenekPowers.try_sleep(room,id,int(target.id),now).is_empty():
+					BotBrain.record_bot_attack(room, member, now)
 					BotBrain.witness_sleep(room,id,int(target.id))
 					_broadcast_positions(code,true,{"caster_id":id,"target_id":int(target.id)});_send_room_state(code);break
 			if now>=float(member.get("bot_sabotage_at",now+45)):
@@ -814,6 +847,11 @@ func _tick_lobby_countdown(code: String, delta: float) -> void:
 		if str(room.get("mode","friends"))!="quick":return
 		var remaining:=maxf(0.0,(QUICK_WAIT_SECONDS if previous<0 else previous)-delta)
 		room["start_countdown"]=remaining;room["bot_wait"]=true
+		if remaining<=0 and Rules.human_ids(room).size()<2:
+			room["start_countdown"]=10.0
+			room["waiting_for_human"]=true
+			if ceili(previous)!=10:_send_room_state(code)
+			return
 		if remaining<=0 or (Rules.human_ids(room).size()==10 and _all_ready(room)):
 			_lock_lobby(code);return
 		if ceili(previous)!=ceili(remaining):_send_room_state(code)
@@ -841,16 +879,18 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	var members: Array = room["players"].values()
 	var humans:=Rules.human_ids(room)
 	var candidates:Array[int]=[]
-	candidates.assign(room["players"].keys());candidates.shuffle()
-	if humans.size()==1:
+	if str(room.get("mode", "friends")) in ["friends", "quick"]:
+		candidates.assign(humans)
+	else:
+		candidates.assign(room["players"].keys())
+	candidates.shuffle()
+	if str(room.get("mode", "friends")) == "solo" and humans.size()==1:
 		candidates.erase(humans[0])
 	if force_host_nenek_for_testing and humans.size()>1:
 		candidates.erase(int(room.host_id));candidates.push_front(int(room.host_id))
 	var impostors:Array[int]=[]
-	impostors.assign(candidates.slice(0,2))
-	if humans.size()==2 and humans.all(func(id:int)->bool:return id in impostors):
-		for id in candidates:
-			if id not in impostors and id not in humans:impostors[1]=id;break
+	impostors.assign(candidates.slice(0,mini(2, candidates.size())))
+	if humans.size() < 2 and str(room.get("mode", "friends")) in ["friends", "quick"]: return
 	var secret_characters: Array[String] = []
 	for id in impostors: secret_characters.append(str(room["players"][id]["character"]))
 	room["secret_characters"] = secret_characters
@@ -875,6 +915,8 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	room["bot_meeting_at"] = Time.get_ticks_msec() / 1000.0 + 75.0
 	room["meeting_state"] = ""
 	room["meeting_timer"] = 0.0
+	room["started_at"] = Time.get_ticks_msec() / 1000.0
+	room["gong_ready_at"] = room["started_at"] + FIRST_MEETING_DELAY
 	room["votes"] = {}
 	NenekPowers.reset_match(room, Time.get_ticks_msec() / 1000.0)
 	for i in members.size():
@@ -900,9 +942,9 @@ func _try_start_room(code: String, require_host: bool, requester_id: int = 0) ->
 	print("Started room %s with %d players" % [code, player_count])
 
 
-func _remove_player(peer_id: int) -> void:
+func _remove_player(peer_id: int, keep_active: bool = false) -> void:
 	if peer_id in public_queue:
-		public_queue.erase(peer_id); queue_names.erase(peer_id); _broadcast_queue()
+		public_queue.erase(peer_id); queue_names.erase(peer_id); queue_maps.erase(peer_id); queue_joined_at.erase(peer_id); _broadcast_queue()
 	if not peer_room_codes.has(peer_id):
 		return
 	var code: String = peer_room_codes[peer_id]
@@ -910,6 +952,21 @@ func _remove_player(peer_id: int) -> void:
 	if not rooms.has(code):
 		return
 	var room: Dictionary = rooms[code]
+	if keep_active and bool(room.get("started", false)):
+		# Treat a network drop as an AI takeover during an active game; other
+		# players stay in the match and the dropped seat keeps its role.
+		room["players"][peer_id]["is_bot"] = true
+		room["players"][peer_id]["disconnected"] = true
+		room["players"][peer_id]["direction"] = Vector2.ZERO
+		room["players"][peer_id]["bot_action_at"] = Time.get_ticks_msec() / 1000.0 + 3.0
+		room["players"][peer_id]["bot_pause"] = Time.get_ticks_msec() / 1000.0
+		if int(room["host_id"]) == peer_id:
+			var remaining_ids := Rules.human_ids(room)
+			if not remaining_ids.is_empty():
+				remaining_ids.sort()
+				room["host_id"] = remaining_ids[0]
+		_send_room_state(code)
+		return
 	if int(room["host_id"]) == peer_id and (not room.get("public",false) or room.get("started",false)):
 		_finish_game(code, "host_left", "The host left. This game has ended for everyone.")
 		for id in room["players"]: peer_room_codes.erase(id)
@@ -1181,6 +1238,10 @@ func request_call_meeting() -> void:
 		return
 	if not room["players"].has(sender) or not NenekPowers.is_active(room["players"][sender]):
 		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if now < float(room.get("gong_ready_at", now + FIRST_MEETING_DELAY)):
+		_rpc_room_error.rpc_id(sender, Lang.text("The gong is cooling down. Wait %d seconds before calling another meeting.") % ceili(float(room["gong_ready_at"]) - now))
+		return
 	var position: Vector2 = room["players"][sender].get("position", Vector2.ZERO)
 	var gong := MapGeometry.gong_point(int(room["map_index"]))
 	if position.distance_to(gong) > 78.0 or not MapGeometry.has_clear_path(int(room["map_index"]),position,gong,NenekPowers.locked_doors(room,Time.get_ticks_msec()/1000.0)):
@@ -1264,7 +1325,7 @@ func request_sleep_spell(target_id: int) -> void:
 	_broadcast_positions(str(context["code"]), true, {"caster_id": sender, "target_id": target_id})
 	_send_room_state(str(context["code"]))
 	if NenekPowers.winner(room) == "nenek_kebayan":
-		_finish_game(str(context["code"]), "nenek_kebayan", "No awake villager remain. Nenek Kebayan wins!")
+		_finish_game(str(context["code"]), "nenek_kebayan", _winner_message("nenek_kebayan"))
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -1293,6 +1354,7 @@ func _rpc_room_opened(code: String, map_index: int, members: Array, is_host: boo
 	local_secret_character = ""
 	local_role_character = ""
 	active_room_mode=str(context.get("mode","friends"));lobby_searching=bool(context.get("searching",false));lobby_locked=bool(context.get("locked",false))
+	lobby_waiting_for_human=bool(context.get("waiting_for_human", false))
 	room_opened.emit(code, map_index, members, is_host)
 
 
@@ -1303,6 +1365,7 @@ func _rpc_room_state(code: String, map_index: int, host_id: int, members: Array,
 		if int(member.get("id", -1)) == multiplayer.get_unique_id():
 			local_character = str(member.get("character", ""))
 	active_room_mode=str(context.get("mode","friends"));lobby_searching=bool(context.get("searching",false));lobby_locked=bool(context.get("locked",false))
+	lobby_waiting_for_human=bool(context.get("waiting_for_human", false))
 	room_changed.emit(code, map_index, host_id, members)
 
 

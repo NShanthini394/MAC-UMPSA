@@ -125,7 +125,7 @@ func _process(delta: float) -> void:
 	if elapsed > 4.5:
 		var remaining := int(details.get("remaining",2))
 		if remaining == 0:
-			caption.text = Lang.text("Both Nenek Kebayan have been found!") + (Lang.text("\nAll tasks are complete. The village is saved.") if details.get("tasks_complete",false) else Lang.text("\nComplete the remaining tasks to save the village."))
+			caption.text = Lang.text("Both Nenek Kebayan have been voted out. The Villagers win!")
 		elif remaining == 1: caption.text = Lang.text("One Nenek Kebayan is still among you…")
 		else: caption.text = Lang.text("Two Nenek Kebayan are still among you…")
 	if magic: magic.queue_redraw()

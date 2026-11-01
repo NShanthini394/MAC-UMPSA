@@ -216,6 +216,36 @@ func show_help() -> void:
 	guide.text = GameGuide.rich_text()
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
+	var replay := UI.make_button(panel, Lang.text("Replay Tutorial"), Callable(app, "replay_tutorial"), 250, 48, true)
+	replay.name = "ReplayTutorialButton"
+	replay.position = Vector2(190, 510)
+
+func show_login_welcome() -> void:
+	var panel := dialog_panel("login_welcome", Rect2(300, 170, 680, 380))
+	panel.name = "LoginWelcomePanel"
+	var close := panel.find_child("PopupCloseButton", true, false) as Button
+	if close:
+		close.hide()
+	var title_source := "Welcome to Nenek Kebayan"
+	var title := UI.make_child_label(panel, Lang.text("Welcome to Nenek Kebayan"), 27, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 34, 576, 50))
+	title.name = "LoginWelcomeTitle"
+	title.set_meta("language_source_text", title_source)
+	var message_source := "Start the tutorial. Then play a short practice match with 9 bots as Puteri Gunung Ledang."
+	var message := UI.make_child_label(panel, Lang.text(message_source), 18, Data.CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(48, 98, 536, 150))
+	message.name = "LoginWelcomeMessage"
+	message.set_meta("language_source_text", message_source)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var close_action := UI.make_button(panel, Lang.text("CLOSE"), Callable(app, "finish_login_welcome"), 240, 52)
+	close_action.name = "LoginWelcomeClose"
+	close_action.accessibility_name = Lang.text("CLOSE")
+	close_action.set_meta("language_source_text", "CLOSE")
+	close_action.position = Vector2(72, 284)
+	var start_source := "Start Tutorial"
+	var start := UI.make_button(panel, Lang.text(start_source), Callable(app, "start_tutorial_from_welcome"), 240, 52, true)
+	start.name = "LoginWelcomeStartTutorial"
+	start.accessibility_name = Lang.text(start_source)
+	start.set_meta("language_source_text", start_source)
+	start.position = Vector2(368, 284)
 
 
 func _refresh_guide_language(_code: String) -> void:
@@ -223,6 +253,25 @@ func _refresh_guide_language(_code: String) -> void:
 	if guide: guide.text = GameGuide.rich_text()
 	var heading := find_child("HowToPlayHeading", true, false) as Label
 	if heading: heading.text = Lang.text("HOW TO PLAY")
+	var welcome_title := find_child("LoginWelcomeTitle", true, false) as Label
+	if welcome_title: welcome_title.text = Lang.text("Welcome to Nenek Kebayan")
+	var welcome_message := find_child("LoginWelcomeMessage", true, false) as Label
+	if welcome_message: welcome_message.text = Lang.text("Start the tutorial. Then play a short practice match with 9 bots as Puteri Gunung Ledang.")
+	var welcome_start := find_child("LoginWelcomeStartTutorial", true, false) as Button
+	if welcome_start:
+		welcome_start.text = Lang.text("Start Tutorial")
+		welcome_start.accessibility_name = welcome_start.text
+	var welcome_close_action := find_child("LoginWelcomeClose", true, false) as Button
+	if welcome_close_action:
+		welcome_close_action.text = Lang.text("CLOSE")
+		welcome_close_action.accessibility_name = welcome_close_action.text
+	var welcome_close := find_child("LoginWelcomePanel", true, false)
+	if welcome_close:
+		var close_button := welcome_close.find_child("PopupCloseButton", true, false) as Button
+		if close_button:
+			close_button.tooltip_text = Lang.text("CLOSE")
+			close_button.accessibility_name = close_button.tooltip_text
+			close_button.hide()
 	var settings_guide := app.find_child("SettingsHowToPlayGuide", true, false) as RichTextLabel
 	if settings_guide: settings_guide.text = GameGuide.rich_text()
 	var settings_heading := app.find_child("SettingsPageHeading", true, false) as Label

@@ -737,7 +737,7 @@ func _set_meeting_phase(code: String, state: String, seconds: float) -> void:
 
 
 func _winner_message(winner: String) -> String:
-	return "All twelve tasks are complete and both Nenek Kebayan have been found. The Villagers win!" if winner == "villagers" else "The Nenek Kebayan outnumber the remaining awake villagers. Nenek Kebayan wins!"
+	return "Both Nenek Kebayan have been voted out. The Villagers win!" if winner == "villagers" else "Nenek Kebayan wins: they outnumber the awake villagers, or only one Nenek Kebayan and one awake villager remain."
 
 
 func _finish_voting_if_complete(code: String) -> void:

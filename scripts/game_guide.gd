@@ -9,7 +9,7 @@ const SOURCE_SECTIONS := [
 	],
 	[
 		"Villagers",
-		"Complete all twelve tasks and find both Nenek Kebayan to win. Follow task routes, inspect clues, and compare observations."
+		"Vote out both Nenek Kebayan to win, even if tasks are unfinished. Follow task routes, inspect clues, and compare observations."
 	],
 	[
 		"Nenek Kebayan",

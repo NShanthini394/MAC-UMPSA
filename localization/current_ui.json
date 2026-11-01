@@ -1468,5 +1468,191 @@
     "Teruskan dengan E-mel",
     "使用电子邮件继续",
     "மின்னஞ்சல் மூலம் தொடரவும்"
+  ],
+  [
+    "Replay Tutorial",
+    "Ulang Tutorial",
+    "重玩教程",
+    "பயிற்சியை மீண்டும் தொடங்கு"
+  ],
+  [
+    "Welcome to the village",
+    "Selamat datang ke kampung",
+    "欢迎来到村庄",
+    "கிராமத்திற்கு வரவேற்கிறோம்"
+  ],
+  [
+    "Villagers complete their tasks and identify both Nenek Kebayan imposters. Work together and watch carefully.",
+    "Orang Kampung perlu menyiapkan tugas dan mengenal pasti kedua-dua penyamar Nenek Kebayan. Bekerjasama dan perhatikan sekeliling.",
+    "村民要完成任务并找出两名 Nenek Kebayan 内鬼。大家要合作并留意周围。",
+    "கிராமவாசிகள் பணிகளை முடித்து, இரண்டு Nenek Kebayan ஊடுருவிகளையும் கண்டுபிடிக்க வேண்டும். ஒன்றிணைந்து கவனமாக இருங்கள்."
+  ],
+  [
+    "Move around",
+    "Bergerak",
+    "移动",
+    "நகரவும்"
+  ],
+  [
+    "Drag the joystick at the lower left, or use WASD / arrow keys. Try moving a little to continue.",
+    "Seret kayu ria di kiri bawah, atau gunakan WASD / kekunci anak panah. Cuba bergerak sedikit untuk teruskan.",
+    "拖动左下角的摇杆，或使用 WASD／方向键。试着移动一下以继续。",
+    "கீழ் இடதுபுற ஜாய்ஸ்டிக்கை இழுக்கவும் அல்லது WASD / அம்புக்குறி விசைகளைப் பயன்படுத்தவும். தொடரச் சிறிது நகரவும்."
+  ],
+  [
+    "Use Interact",
+    "Gunakan Interaksi",
+    "使用互动按钮",
+    "செயல்படு பொத்தானைப் பயன்படுத்தவும்"
+  ],
+  [
+    "Near a task or the gong, tap the Interact button on the right or press E. Tap it now to continue; this tutorial tap will not trigger a game action.",
+    "Berhampiran tugas atau gong, tekan butang Interaksi di kanan atau kekunci E. Tekan sekarang untuk teruskan; tutorial ini tidak akan mencetuskan tindakan permainan.",
+    "靠近任务或铜锣时，点击右侧的互动按钮或按 E。现在点击以继续；教程不会触发游戏操作。",
+    "பணி அல்லது மணிக்கு அருகில் இருக்கும்போது, வலதுபுறச் செயல்படு பொத்தானைத் தட்டவும் அல்லது E அழுத்தவும். தொடர இப்போது தட்டவும்; இது விளையாட்டு செயலைத் தொடங்காது."
+  ],
+  [
+    "Tasks, map & routes",
+    "Tugas, peta & laluan",
+    "任务、地图与路线",
+    "பணிகள், வரைபடம், வழிகள்"
+  ],
+  [
+    "Villagers use the task list and map to find village tasks. Markers show task stations; choose a task on the map to see route guidance.",
+    "Orang Kampung menggunakan senarai tugas dan peta untuk mencari tugas kampung. Penanda menunjukkan stesen tugas; pilih tugas pada peta untuk melihat panduan laluan.",
+    "村民可通过任务列表和地图寻找村庄任务。标记显示任务地点；在地图上选择任务即可查看路线指引。",
+    "கிராமப் பணிகளைக் கண்டுபிடிக்க கிராமவாசிகள் பணி பட்டியலையும் வரைபடத்தையும் பயன்படுத்துவர். குறியீடுகள் பணி இடங்களைக் காட்டும்; வழிகாட்டப்பட்ட பாதைக்கு வரைபடத்தில் பணியைத் தேர்ந்தெடுக்கவும்."
+  ],
+  [
+    "Sleep spell",
+    "Mantera tidur",
+    "催眠术",
+    "தூக்க மந்திரம்"
+  ],
+  [
+    "Nenek Kebayan can put Villagers to sleep. Sleeping players can still move, but cannot complete tasks or vote.",
+    "Nenek Kebayan boleh menidurkan Orang Kampung. Pemain yang tidur masih boleh bergerak, tetapi tidak boleh menyiapkan tugas atau mengundi.",
+    "Nenek Kebayan 可以让村民睡着。睡着的玩家仍能移动，但不能完成任务或投票。",
+    "Nenek Kebayan கிராமவாசிகளைத் தூங்கச் செய்யலாம். தூங்கும் வீரர்கள் நகரலாம்; ஆனால் பணிகளை முடிக்கவோ வாக்களிக்கவோ முடியாது."
+  ],
+  [
+    "Gong, discussion & voting",
+    "Gong, perbincangan & undian",
+    "铜锣、讨论与投票",
+    "மணி, கலந்துரையாடல், வாக்கு"
+  ],
+  [
+    "Use the gong to call an emergency discussion, then vote carefully. It opens at the start of a match and has a one-minute cooldown after each meeting.",
+    "Gunakan gong untuk memanggil perbincangan kecemasan, kemudian undi dengan teliti. Gong tersedia pada awal perlawanan dan mempunyai tempoh bertenang satu minit selepas setiap mesyuarat.",
+    "敲响铜锣可召开紧急讨论，之后谨慎投票。铜锣在比赛开始时可用，每次会议后有一分钟冷却时间。",
+    "அவசரக் கலந்துரையாடலை அழைக்க மணியைப் பயன்படுத்தி, கவனமாக வாக்களிக்கவும். போட்டி தொடங்கும்போது மணி தயாராக இருக்கும்; ஒவ்வொரு கூட்டத்திற்குப் பிறகும் ஒரு நிமிடக் குளிர்வு நேரம் உண்டு."
+  ],
+  [
+    "How to win",
+    "Cara menang",
+    "获胜条件",
+    "வெற்றி பெறுவது எப்படி"
+  ],
+  [
+    "Villagers win only after all required tasks are complete and both Nenek Kebayan are identified. Nenek Kebayan win when their number equals or exceeds the remaining awake Villagers.",
+    "Orang Kampung hanya menang setelah semua tugas wajib selesai dan kedua-dua Nenek Kebayan dikenal pasti. Nenek Kebayan menang apabila bilangan mereka sama atau melebihi Orang Kampung yang masih berjaga.",
+    "村民只有完成所有必需任务并找出两名 Nenek Kebayan 才能获胜。当 Nenek Kebayan 人数达到或超过仍清醒的村民人数时，Nenek Kebayan 获胜。",
+    "தேவையான அனைத்துப் பணிகளையும் முடித்து, இரண்டு Nenek Kebayan-களையும் கண்டுபிடித்தால் மட்டுமே கிராமவாசிகள் வெல்வார்கள். விழித்திருக்கும் கிராமவாசிகளின் எண்ணிக்கைக்கு Nenek Kebayan எண்ணிக்கை சமமாகவோ அதிகமாகவோ இருந்தால் அவர்கள் வெல்வார்கள்."
+  ],
+  [
+    "%d / %d",
+    "%d / %d",
+    "%d / %d",
+    "%d / %d"
+  ],
+  [
+    "Back",
+    "Kembali",
+    "上一步",
+    "பின்"
+  ],
+  [
+    "Next",
+    "Seterusnya",
+    "下一步",
+    "அடுத்து"
+  ],
+  [
+    "Skip Tutorial",
+    "Langkau Tutorial",
+    "跳过教程",
+    "பயிற்சியைத் தவிர்"
+  ],
+  [
+    "Finish",
+    "Selesai",
+    "完成",
+    "முடி"
+  ],
+  [
+    "Tap or move the highlighted control to continue.",
+    "Tekan atau gerakkan kawalan yang diserlahkan untuk teruskan.",
+    "点击或移动高亮显示的控件以继续。",
+    "தொடர முன்னிலைப்படுத்தப்பட்ட கட்டுப்பாட்டைத் தட்டவும் அல்லது நகர்த்தவும்."
+  ],
+  [
+    "Tutorial complete. Good luck in the village!",
+    "Tutorial selesai. Semoga berjaya di kampung!",
+    "教程完成。祝你在村庄游戏愉快！",
+    "பயிற்சி முடிந்தது. கிராமத்தில் வாழ்த்துகள்!"
+  ],
+  [
+    "Villagers: complete the village tasks; watch for suspicious behaviour; discuss and vote carefully; find both Nenek Kebayan to win.",
+    "Orang Kampung: siapkan tugas kampung; awasi tingkah laku mencurigakan; bincang dan undi dengan teliti; cari kedua-dua Nenek Kebayan untuk menang.",
+    "村民：完成村庄任务；留意可疑行为；谨慎讨论和投票；找出两名 Nenek Kebayan 才能获胜。",
+    "கிராமவாசிகள்: கிராமப் பணிகளை முடிக்கவும்; சந்தேகமான நடத்தையைக் கவனிக்கவும்; விவாதித்து கவனமாக வாக்களிக்கவும்; வெல்ல இரண்டு Nenek Kebayan-களையும் கண்டுபிடிக்கவும்."
+  ],
+  [
+    "Nenek Kebayan: blend in; put Villagers to sleep unseen; mislead during discussions; respect action cooldowns; win when you equal or outnumber the awake Villagers.",
+    "Nenek Kebayan: மக்களுடன் கலந்து இருங்கள்; யாரும் பார்க்காமல் Orang Kampung-ஐத் தூங்கச் செய்யுங்கள்; விவாதங்களில் தவறாக வழிநடத்துங்கள்; திறன் மீள்நேரத்தைக் கடைப்பிடியுங்கள்; விழித்திருக்கும் Orang Kampung எண்ணிக்கைக்கு சமமாகவோ அதிகமாகவோ இருந்தால் வெல்லுங்கள்.",
+    "Nenek Kebayan：融入村民；悄悄让村民睡着；在讨论中误导他人；遵守行动冷却时间；人数达到或超过清醒村民时获胜。",
+    "Nenek Kebayan: கிராமவாசிகளுடன் கலந்து இருங்கள்; தெரியாமல் அவர்களைத் தூங்கச் செய்யுங்கள்; விவாதங்களில் தவறாக வழிநடத்துங்கள்; திறன் குளிர்வு நேரத்தைக் கடைப்பிடியுங்கள்; விழித்திருக்கும் கிராமவாசிகளுக்கு சமமாகவோ அதிகமாகவோ இருந்தால் வெல்லுங்கள்."
+  ],
+  [
+    "Tutorial skipped. Replay it from How to Play or Settings.",
+    "Tutorial dilangkau. Mainkan semula melalui Cara Bermain atau Tetapan.",
+    "教程已跳过。可在玩法说明或设置中重玩。",
+    "பயிற்சி தவிர்க்கப்பட்டது. விளையாடுவது எப்படி அல்லது அமைப்புகளில் மீண்டும் தொடங்கலாம்."
+  ],
+  [
+    "Interact · E",
+    "Interaksi · E",
+    "互动 · E",
+    "செயல்படு · E"
+  ],
+  [
+    "Welcome to Nenek Kebayan",
+    "Selamat datang ke Nenek Kebayan",
+    "欢迎来到《Nenek Kebayan》",
+    "Nenek Kebayan விளையாட்டிற்கு வரவேற்கிறோம்"
+  ],
+  [
+    "Start the tutorial. Then play a short practice match with 9 bots as Puteri Gunung Ledang.",
+    "Mulakan tutorial, kemudian sertai perlawanan latihan ringkas bersama 9 bot sebagai Puteri Gunung Ledang.",
+    "开始教程，然后扮演 Puteri Gunung Ledang 与 9 个机器人进行简短练习赛。",
+    "பயிற்சியைத் தொடங்குங்கள். பிறகு Puteri Gunung Ledang ஆக 9 போட்களுடன் குறுகிய பயிற்சி ஆட்டத்தில் விளையாடுங்கள்."
+  ],
+  [
+    "Start Tutorial",
+    "Mula Tutorial",
+    "开始教程",
+    "பயிற்சியைத் தொடங்கு"
+  ],
+  [
+    "CLOSE",
+    "TUTUP",
+    "关闭",
+    "மூடு"
+  ],
+  [
+    "Could not start the tutorial practice match. Please try again.",
+    "Perlawanan latihan tutorial tidak dapat dimulakan. Sila cuba lagi.",
+    "无法开始教程练习赛，请重试。",
+    "பயிற்சி ஆட்டத்தைத் தொடங்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
   ]
 ]

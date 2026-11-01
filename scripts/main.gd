@@ -58,6 +58,10 @@ var assigned_role_character := ""
 var player_is_impostor := false
 var player_sleeping := false
 var player_voted_out := false
+var tutorial_started_this_session := false
+var tutorial_replay_requested := false
+var tutorial_test_session_requested := false
+var tutorial_test_session_starting := false
 var active_power_kind := ""
 var active_power_area := -1
 var active_power_until := 0.0
@@ -217,6 +221,10 @@ func _process(delta: float) -> void:
 		_refresh_lobby_actions()
 		return
 
+	var tutorial := find_child("FirstTimeTutorial", true, false)
+	if tutorial != null and not tutorial.call("allow_movement"):
+		_stop_move()
+		return
 	if current_screen != "game" or task_overlay_index >= 0 or player_voted_out or _utility_dialog_open() or find_child("MapOverlay",true,false) != null:
 		return
 	var direction := move_vector
@@ -492,6 +500,10 @@ func _handle_spectator_pan(event: InputEvent) -> void:
 
 func clear_screen(screen_name: String) -> void:
 	_stop_move()
+	if find_child("FirstTimeTutorial", true, false) != null and screen_name != "game":
+		# Leaving before Finish or Skip keeps the persisted setting incomplete,
+		# so the next match entry can offer the tutorial again.
+		tutorial_started_this_session = false
 	if is_instance_valid(huawei_translation): huawei_translation.close()
 	if is_instance_valid(huawei_scan): huawei_scan.cancel_scan()
 	if is_instance_valid(audio_director): audio_director.stop_role_audio()
@@ -585,7 +597,8 @@ func _on_authenticated() -> void:
 	if current_screen != "login": return
 	room_code = ""
 	room_is_host = false
-	build_menu()
+	await build_menu()
+	show_login_welcome_if_needed()
 
 func _account_updated(action: String, _message: String) -> void:
 	var profiles = preload("res://scripts/account_profiles.gd")
@@ -617,7 +630,36 @@ func _continue_as_guest() -> void:
 	lobby_player_name = str(preload("res://scripts/account_profiles.gd").profile({}).username)
 	room_code = ""
 	room_is_host = false
-	build_menu()
+	await build_menu()
+	show_login_welcome_if_needed()
+
+
+func show_login_welcome_if_needed() -> void:
+	if current_screen != "menu": return
+	if page_controls.dialog_open() and str(page_controls.get("_dialog_kind")) != "login_welcome": return
+	page_controls.call("show_login_welcome")
+
+
+func finish_login_welcome() -> void:
+	page_controls.close_dialog()
+
+
+func start_tutorial_from_welcome() -> void:
+	finish_login_welcome()
+	selected_character = "Puteri Gunung Ledang"
+	selected_map = 0
+	play_mode = "solo"
+	map_selection_mode = "solo"
+	tutorial_replay_requested = true
+	tutorial_test_session_requested = true
+	tutorial_test_session_starting = false
+	await start_practice()
+
+
+func on_tutorial_finished() -> void:
+	if not tutorial_test_session_requested or tutorial_test_session_starting:
+		return
+	await _start_solo_room()
 
 
 func build_menu() -> void:
@@ -679,12 +721,24 @@ func _start_solo_room() -> void:
 		result=lan_host.start(port,true)
 		if result==OK:break
 	if result!=OK:
-		await build_menu();show_menu_notice("Could not prepare Solo mode. Please try again.");return
+		var tutorial_start_failed := tutorial_test_session_requested
+		tutorial_test_session_requested = false
+		tutorial_test_session_starting = false
+		tutorial_replay_requested = false
+		await build_menu()
+		show_menu_notice(Lang.text("Could not start the tutorial practice match. Please try again.") if tutorial_start_failed else "Could not prepare Solo mode. Please try again.")
+		return
 	internet_mode=false
 	network_manager.server_port=port
 	result=network_manager.create_room(selected_map,lobby_player_name,"127.0.0.1","solo")
 	if result!=OK:
-		lan_host.stop();await build_menu();show_menu_notice("Could not prepare Solo mode. Please try again.")
+		var tutorial_start_failed := tutorial_test_session_requested
+		lan_host.stop()
+		tutorial_test_session_requested = false
+		tutorial_test_session_starting = false
+		tutorial_replay_requested = false
+		await build_menu()
+		show_menu_notice(Lang.text("Could not start the tutorial practice match. Please try again.") if tutorial_start_failed else "Could not prepare Solo mode. Please try again.")
 
 func _open_account_settings() -> void:
 	page_controls.close_dialog()
@@ -830,8 +884,52 @@ func _refresh_network_lobby() -> void:
 	if not room_code.is_empty():
 		if current_screen == "character_select": _refresh_character_select()
 		elif current_screen == "waiting_room": _refresh_waiting_room()
-		elif current_screen not in ["role_reveal", "game", "meeting", "result"]: build_waiting_room()
+		elif current_screen not in ["role_reveal", "game", "meeting", "result"]:
+			await build_waiting_room()
+			if tutorial_test_session_requested:
+				await _start_tutorial_test_match()
 	_lobby_refresh_queued = false
+
+
+func _start_tutorial_test_match() -> void:
+	if tutorial_test_session_starting or not tutorial_test_session_requested:
+		return
+	tutorial_test_session_starting = true
+	var frames_waited := 0
+	while frames_waited < 240 and (current_screen != "waiting_room" or not network_manager.is_connected_to_room_server()):
+		await get_tree().process_frame
+		frames_waited += 1
+	if current_screen != "waiting_room" or not network_manager.is_connected_to_room_server():
+		_fail_tutorial_test_session()
+		return
+	if selected_character != "Puteri Gunung Ledang":
+		network_manager.set_character("Puteri Gunung Ledang")
+		frames_waited = 0
+		while frames_waited < 240 and selected_character != "Puteri Gunung Ledang":
+			await get_tree().process_frame
+			frames_waited += 1
+	if selected_character != "Puteri Gunung Ledang":
+		_fail_tutorial_test_session()
+		return
+	# In Solo mode the host starts as soon as the character is selected; the
+	# server fills the remaining nine seats with bots as part of match startup.
+	_on_lobby_primary_action()
+	tutorial_test_session_requested = false
+	tutorial_test_session_starting = false
+
+
+func _fail_tutorial_test_session() -> void:
+	tutorial_test_session_requested = false
+	tutorial_test_session_starting = false
+	tutorial_replay_requested = false
+	if network_manager != null:
+		network_manager.leave_room()
+	if lan_host != null:
+		lan_host.stop()
+	room_code = ""
+	room_is_host = false
+	await build_menu()
+	show_menu_notice(Lang.text("Could not start the tutorial practice match. Please try again."))
 
 
 func _return_after_connection_loss(message: String) -> void:
@@ -1377,7 +1475,10 @@ func _show_role_reveal() -> void:
 	if is_instance_valid(audio_director): audio_director.start_role_shuffle()
 	add_background(load(WAITING_ROOM_ART))
 	add_color_overlay(Color(0.025, 0.025, 0.025, 0.58))
-	var card := make_panel(Rect2(240, 70, 800, 580), Color(0.105, 0.073, 0.047, 0.97))
+	# The privacy note and countdown each need their own row below the expanded
+	# role card. Keep the countdown fully inside the frame instead of letting it
+	# sit across the lower border on landscape screens.
+	var card := make_panel(Rect2(240, 55, 800, 610), Color(0.105, 0.073, 0.047, 0.97))
 	card.name = "PrivateRoleReveal"
 	_make_child_label(card, Lang.text("YOUR SECRET ROLE"), 24, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(28, 16, 744, 42))
 	var shuffle_status := _make_child_label(card, Lang.text("Cards are being shuffled…"), 16, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 60, 732, 32))
@@ -1400,9 +1501,9 @@ func _show_role_reveal() -> void:
 		_make_child_label(back, Lang.text("ROLE CARD"), 11, CREAM, HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 103, 100, 28))
 		shuffle_cards.append(back)
 	var revealed := _build_revealed_role_card(card)
-	var footer := _make_child_label(card, Lang.text("Only you can see this role. Other players see their own reveal."), 13, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 470, 732, 46))
+	var footer := _make_child_label(card, Lang.text("Only you can see this role. Other players see their own reveal."), 14, Color("d6c5aa"), HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 512, 732, 32))
 	footer.name = "RoleRevealPrivacy"
-	var countdown := _make_child_label(card, "", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 524, 732, 42))
+	var countdown := _make_child_label(card, "", 28, GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(34, 552, 732, 42))
 	countdown.name = "RoleRevealCountdown"
 	var shuffle_slots := [0, 1, 2]
 	for turn in 7:
@@ -1447,7 +1548,7 @@ func _show_role_reveal() -> void:
 
 
 func _build_revealed_role_card(card: Panel) -> Panel:
-	var revealed := _make_child_panel(card, Rect2(28, 104, 744, 354), Color("182e38"))
+	var revealed := _make_child_panel(card, Rect2(28, 92, 744, 416), Color("182e38"))
 	revealed.name = "RevealedRoleCard"
 	revealed.visible = false
 	var revealed_style := StyleBoxFlat.new()
@@ -1462,8 +1563,8 @@ func _build_revealed_role_card(card: Panel) -> Panel:
 	role_portrait.texture = load(CHARACTER_PORTRAITS.get(card_character, CHARACTER_PORTRAITS["Orang Kampung Lelaki"]))
 	role_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	role_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	role_portrait.position = Vector2(16, 18)
-	role_portrait.size = Vector2(212, 316)
+	role_portrait.position = Vector2(14, 14)
+	role_portrait.size = Vector2(214, 386)
 	revealed.add_child(role_portrait)
 	var role_color := Color("a92625") if player_is_impostor else Color("185b9d")
 	var role_style := StyleBoxFlat.new()
@@ -1473,28 +1574,29 @@ func _build_revealed_role_card(card: Panel) -> Panel:
 	role_style.set_corner_radius_all(10)
 	var role_badge := Panel.new()
 	role_badge.name = "RoleBadge"
-	role_badge.position = Vector2(246, 18)
-	role_badge.size = Vector2(478, 52)
+	role_badge.position = Vector2(240, 18)
+	role_badge.size = Vector2(484, 54)
 	role_badge.add_theme_stylebox_override("panel", role_style)
 	revealed.add_child(role_badge)
 	var role_title := Lang.text("You are Nenek Kebayan" if player_is_impostor else "You are a Villager")
-	var role_title_label := _make_child_label(role_badge, role_title, 19, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(6, 4, 466, 44))
+	var role_title_label := _make_child_label(role_badge, role_title, 20, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, Rect2(8, 4, 468, 46))
 	role_title_label.name = "RoleTitleLabel"
-	var lobby_heading := _make_child_label(revealed, Lang.text("Lobby pick:"), 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 86, 478, 24))
+	var lobby_heading := _make_child_label(revealed, Lang.text("Lobby pick:"), 14, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(240, 82, 484, 26))
 	lobby_heading.name = "RoleLobbyHeading"
-	var lobby_value := _make_child_label(revealed, selected_character, 12, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 112, 478, 28))
+	var lobby_value := _make_child_label(revealed, selected_character, 16, Color("fff0cf"), HORIZONTAL_ALIGNMENT_LEFT, Rect2(240, 112, 484, 28))
 	lobby_value.name = "RoleLobbyValue"
-	var character_heading := _make_child_label(revealed, Lang.text("Your character:"), 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 152, 478, 24))
+	var character_heading := _make_child_label(revealed, Lang.text("Your character:"), 15, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(240, 150, 484, 26))
 	character_heading.name = "RoleCharacterHeading"
-	var character_value := _make_child_label(revealed, card_character, 13, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 180, 478, 28))
+	var character_value := _make_child_label(revealed, card_character, 16, GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(240, 178, 484, 30))
 	character_value.name = "RoleCharacterValue"
-	var role_copy := Lang.text("Complete all twelve tasks.\nFind both Nenek Kebayan\nto save the village.")
+	var role_copy := Lang.text("Villagers: complete the village tasks; watch for suspicious behaviour; discuss and vote carefully; find both Nenek Kebayan to win.")
 	if player_is_impostor:
-		role_copy = Lang.text("You are one of two Nenek.\nSleep the villagers.\nUse fog or lock the doors.")
-	var role_copy_label := _make_child_label(revealed, role_copy, 12, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(246, 236, 478, 98))
+		role_copy = Lang.text("Nenek Kebayan: blend in; put Villagers to sleep unseen; mislead during discussions; respect action cooldowns; win when you equal or outnumber the awake Villagers.")
+	var role_copy_label := _make_child_label(revealed, role_copy, 15, CREAM, HORIZONTAL_ALIGNMENT_LEFT, Rect2(240, 220, 484, 180))
 	role_copy_label.name = "RoleInstructions"
 	role_copy_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	role_copy_label.clip_text = true
+	role_copy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	role_copy_label.clip_text = false
 	return revealed
 
 
@@ -1992,7 +2094,13 @@ func _character_sigil(index: int) -> String:
 	return ["♛", "🐓", "✦", "❀", "🐸", "♧", "✿", "♜", "☾", "⌂", "❀"][index]
 
 
+func _ensure_practice_character() -> void:
+	if not CHARACTERS.has(selected_character):
+		selected_character = CHARACTERS[0]
+
+
 func start_practice() -> void:
+	_ensure_practice_character()
 	_reset_power_state()
 	completed_tasks.clear(); collected_clues.clear(); dead_npcs.clear()
 	village_tasks_expanded = false
@@ -2018,7 +2126,10 @@ func start_practice() -> void:
 		assigned_role_character = role_characters[rng.randi_range(0, role_characters.size() - 1)]
 	practice_power_room = {"map_index": selected_map, "started": true, "finished": false, "meeting_state": "", "players": {1: {"id": 1, "role": "nenek_kebayan" if player_is_impostor else "villager", "alive": true, "sleeping": false, "position": player_position}}}
 	NenekPowers.reset_match(practice_power_room, Time.get_ticks_msec() / 1000.0)
-	_show_role_reveal()
+	if tutorial_test_session_requested:
+		await build_game()
+	else:
+		_show_role_reveal()
 
 
 func build_game() -> void:
@@ -2027,12 +2138,40 @@ func build_game() -> void:
 	_update_power_view()
 	_update_power_hud()
 	if not can_local_act(): _enter_watch_mode()
+	if tutorial_replay_requested or (not tutorial_started_this_session and not bool(preload("res://scripts/settings_store.gd").get_value("tutorial_completed"))):
+		tutorial_started_this_session = true
+		tutorial_replay_requested = false
+		start_tutorial()
+
+func start_tutorial() -> void:
+	if current_screen != "game" or find_child("FirstTimeTutorial", true, false) != null: return
+	_stop_move()
+	var tutorial := preload("res://scripts/first_time_tutorial.gd").new()
+	game_hud.add_child(tutorial)
+	tutorial.call("configure", self)
+
+func tutorial_is_active() -> bool:
+	return find_child("FirstTimeTutorial", true, false) != null
+
+func replay_tutorial() -> void:
+	if is_instance_valid(page_controls): page_controls.close_dialog()
+	if current_screen == "game":
+		start_tutorial()
+		return
+	if current_screen in ["menu", "login"]:
+		tutorial_replay_requested = true
+		play_mode = "solo"
+		start_practice()
 
 func build_control_bar() -> void:
 	game_screen.build_control_bar(self)
 
 
 func interact_nearest() -> void:
+	var tutorial := find_child("FirstTimeTutorial", true, false)
+	if tutorial != null:
+		tutorial.call("on_interact")
+		return
 	if _utility_dialog_open(): return
 	if not can_local_act(): return
 	var task_index := -1 if player_is_impostor else _nearest_index(MapGeometry.task_points(selected_map), 72.0)
@@ -2045,6 +2184,7 @@ func interact_nearest() -> void:
 
 
 func cast_sleep_spell() -> void:
+	if tutorial_is_active(): return
 	if _utility_dialog_open(): return
 	if not player_is_impostor or not can_local_act(): return
 	if Time.get_ticks_msec() / 1000.0 < sleep_ready_at:
@@ -2067,6 +2207,7 @@ func cast_sleep_spell() -> void:
 
 
 func cast_sabotage(kind: String) -> void:
+	if tutorial_is_active(): return
 	if not player_is_impostor or not can_local_act() or current_screen != "game" or _utility_dialog_open(): return
 	if Time.get_ticks_msec() / 1000.0 < sabotage_ready_at:
 		show_notice("Fog and door locking share a two-minute recharge."); return
@@ -2086,6 +2227,7 @@ func cast_sabotage(kind: String) -> void:
 
 
 func open_task(index: int) -> void:
+	if tutorial_is_active(): return
 	if not can_local_act(): return
 	if player_is_impostor:
 		show_notice("Nenek Kebayan cannot complete tasks.")
@@ -2201,6 +2343,7 @@ func _close_task() -> void:
 
 
 func inspect_nearest_clue() -> void:
+	if tutorial_is_active(): return
 	if not can_local_act(): return
 	var online_match: bool = not room_code.is_empty() and network_manager != null and network_manager.is_connected_to_room_server()
 	var clue_points_local: Array = clue_points if not clue_points.is_empty() else MapGeometry.clue_candidates(selected_map).slice(0, 3)
@@ -2233,6 +2376,7 @@ func show_clue_panel(clue_name: String, _character: String) -> void:
 
 
 func show_journal() -> void:
+	if tutorial_is_active(): return
 	if not can_local_act(): return
 	_stop_move()
 	var overlay := make_panel(Rect2(320, 115, 640, 480), Color(0.12, 0.08, 0.06, 0.98))
@@ -2258,6 +2402,7 @@ func show_journal() -> void:
 
 
 func show_map_overlay() -> void:
+	if tutorial_is_active(): return
 	if find_child("MapOverlay", true, false) != null: return
 	_stop_move()
 	var view := load("res://scripts/floor_map_view.gd").new() as Control
@@ -2266,6 +2411,7 @@ func show_map_overlay() -> void:
 
 
 func call_meeting() -> void:
+	if tutorial_is_active(): return
 	if not can_local_act(): return
 	var gong_seconds := ceili(maxf(0.0, gong_ready_at - Time.get_ticks_msec() / 1000.0))
 	if gong_seconds > 0:
@@ -2482,6 +2628,8 @@ func _nearest_index(points: Array, max_distance: float) -> int:
 
 func _set_move(direction: Vector2) -> void:
 	if _utility_dialog_open(): return
+	var tutorial := find_child("FirstTimeTutorial", true, false)
+	if tutorial != null and not tutorial.call("allow_movement"): return
 	if player_voted_out: return
 	move_vector = direction
 
@@ -2489,6 +2637,8 @@ func _set_move(direction: Vector2) -> void:
 var joystick_touch_id := -1
 var joystick_origin := Vector2.ZERO
 func _on_joystick_input(event: InputEvent, pad: Control, _knob: Control) -> void:
+	var tutorial := find_child("FirstTimeTutorial", true, false)
+	if tutorial != null and not tutorial.call("allow_movement"): return
 	if current_screen != "game" or _utility_dialog_open() or player_voted_out or task_overlay_index >= 0 or find_child("MapOverlay", true, false) != null: return
 	if event is InputEventScreenTouch:
 		if event.pressed and joystick_touch_id == -1:

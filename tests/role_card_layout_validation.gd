@@ -29,7 +29,7 @@ func validate_content(card: Panel, character: String, nenek: bool) -> void:
 		check(card.get_global_rect().encloses(label.get_global_rect()),"Text stays inside role card: "+str(label.name))
 	for a in copy_labels.size():
 		for b in range(a+1,copy_labels.size()):
-			check(not copy_labels[a].get_global_rect().intersects(copy_labels[b].get_global_rect()),"Role text rows do not overlap: "+character)
+			check(not copy_labels[a].get_global_rect().intersects(copy_labels[b].get_global_rect()),"Role text rows do not overlap: "+str(copy_labels[a].name)+" / "+str(copy_labels[b].name)+" / "+character)
 	var value: Label=card.find_child("RoleCharacterValue",true,false)
 	var title: Label=card.find_child("RoleTitleLabel",true,false)
 	var portrait: Control=card.find_child("RolePortrait",true,false)
@@ -83,6 +83,7 @@ func validate_flow(nenek: bool) -> void:
 	check(not card.get_global_rect().intersects(privacy.get_global_rect()),"Privacy note sits below role content")
 	var countdown: Label=app.find_child("RoleRevealCountdown",true,false)
 	check(not privacy.get_global_rect().intersects(countdown.get_global_rect()),"Countdown has its own row")
+	check(frame.get_global_rect().encloses(countdown.get_global_rect()),"Countdown stays fully inside the role reveal border")
 	await capture("nenek_reading" if nenek else "villager_reading")
 	var seen: Array[int]=[]
 	var first_tick_at := 0

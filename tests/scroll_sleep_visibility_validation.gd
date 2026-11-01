@@ -10,7 +10,7 @@ func run() -> void:
 	var sprite := actor.get_node("CharacterSprite") as TextureRect
 	var standing_size := sprite.size
 	actor.set_sleeping(true)
-	assert(sprite.size.x == 120 and sprite.size.y == 90)
+	assert(sprite.size.x == 90 and sprite.size.y == 72)
 	actor.set_sleeping(false)
 	assert(sprite.size.is_equal_approx(standing_size))
 	var observer := Node2D.new()

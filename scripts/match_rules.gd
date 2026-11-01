@@ -24,8 +24,9 @@ static func winner(room: Dictionary) -> String:
 	var awake_villagers := 0
 	for id in voter_ids(room):
 		if str(room["players"][id].get("role", "villager")) == "villager": awake_villagers += 1
-	if remaining_nenek(room) == 0 and tasks_complete(room): return "villagers"
-	if remaining_nenek(room) > awake_villagers: return "nenek_kebayan"
+	var nenek_count := remaining_nenek(room)
+	if nenek_count == 0: return "villagers"
+	if nenek_count > awake_villagers or (nenek_count == 1 and awake_villagers == 1): return "nenek_kebayan"
 	return ""
 
 static func voter_ids(room: Dictionary) -> Array[int]:

@@ -25,7 +25,17 @@ func run() -> void:
 	room["players"][3]["alive"]=false
 	check(Rules.winner(room)=="villagers","Both removed plus twelve tasks wins")
 	room["completed_tasks"][7]=0
-	check(Rules.winner(room)=="","Both removed still require remaining task")
+	check(Rules.winner(room)=="villagers","Both removed win even with unfinished tasks")
+	room["completed_tasks"].fill(0)
+	check(Rules.winner(room)=="villagers","Both removed win even when no tasks are complete")
+	room=fixture()
+	room["players"][2]["alive"]=false
+	for id in [5,6,7,8,9,10,11]: room["players"][id]["sleeping"]=true
+	check(Rules.winner(room)=="nenek_kebayan","One Nenek and one awake villager wins")
+	room["players"][5]["sleeping"]=false
+	check(Rules.winner(room)=="","One Nenek and two awake villagers continues")
+	room["players"][2]["alive"]=true
+	check(Rules.winner(room)=="","Two Nenek and two awake villagers still continues")
 	room=fixture()
 	for id in [4,5,6]: room["players"][id]["sleeping"]=true
 	check(Rules.winner(room)=="nenek_kebayan","Awake walking companions never prevent Nenek victory")

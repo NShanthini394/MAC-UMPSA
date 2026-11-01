@@ -199,6 +199,7 @@ func guide() -> void:
 	label.add_theme_color_override("default_color", Data.CREAM)
 	label.add_theme_constant_override("line_separation", 6)
 	content.add_child(label)
+	row("Replay Tutorial", "help", Callable(app, "replay_tutorial"), "SettingsReplayTutorial")
 
 func report() -> void:
 	paragraph("Describe what happened, the map, and the steps to reproduce it. Save or copy this report to share with the game team.")

@@ -1,6 +1,9 @@
 extends RefCounted
 ## Authored Malay game copy, available without HMS Core or a network connection.
 const TEXT := {
+  "Both Nenek Kebayan have been voted out. The Villagers win!": "Kedua-dua Nenek Kebayan telah disingkirkan melalui undian. Orang Kampung menang!",
+  "Nenek Kebayan wins: they outnumber the awake villagers, or only one Nenek Kebayan and one awake villager remain.": "Nenek Kebayan menang: bilangan mereka melebihi Orang Kampung yang berjaga, atau hanya seorang Nenek Kebayan dan seorang Orang Kampung yang berjaga masih tinggal.",
+  "Vote out both Nenek Kebayan to win, even if tasks are unfinished. Follow task routes, inspect clues, and compare observations.": "Singkirkan kedua-dua Nenek Kebayan melalui undian untuk menang, walaupun tugas belum selesai. Ikuti laluan tugas, periksa petunjuk dan bandingkan pemerhatian.",
   "CHOOSE YOUR CHARACTER": "PILIH WATAK ANDA",
   "CHOOSE CHARACTER": "PILIH WATAK",
   "SELECT": "PILIH",

@@ -110,9 +110,9 @@ func set_sleeping(value: bool, animate: bool = false) -> void:
 	_frame_index = 0
 	_apply_frame()
 	if value and _sleep_texture != null:
-		# A lying pose needs a wider canvas than the upright walking sprite.
-		_sprite.size = Vector2(120, 90)
-		_sprite.position.x = -20
+		# Keep the lying pose close to the same on-screen scale as the awake sprite.
+		_sprite.size = Vector2(90, 72)
+		_sprite.position.x = -5
 	else:
 		if _sprite.texture != null:
 			var aspect := _sprite.texture.get_width() / float(maxi(1, _sprite.texture.get_height()))

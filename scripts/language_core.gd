@@ -456,5 +456,65 @@ const TEXT := [
     "Bahasa Inggeris dan Melayu boleh digunakan tanpa internet. Bahasa Cina dan Tamil menggunakan terjemahan Huawei untuk teks game tambahan dan memerlukan internet.",
     "英语和马来语支持离线使用。中文和泰米尔语的其他游戏文本通过华为翻译，需要联网。",
     "ஆங்கிலமும் மலாயும் இணையமின்றி இயங்கும். கூடுதல் விளையாட்டு உரைகளுக்கு சீனமும் தமிழும் Huawei மொழிபெயர்ப்பைப் பயன்படுத்துவதால் இணையம் தேவை."
+  ],
+  [
+    "Playing modes",
+    "Mod permainan",
+    "游戏模式",
+    "விளையாட்டு முறைகள்"
+  ],
+  [
+    "Start Game → Play with Friends, Solo vs Bots, or Quick Match.\nFriends: create or join a private room with a code. The host starts when at least two human players are ready.\nSolo: play offline as one Villager with nine bots.\nQuick Match searches for up to 60 seconds; bots fill empty spaces after the wait.\nEvery match has ten characters: eight Villagers and two Nenek Kebayan.",
+    "Tekan Mula Permainan → Main Bersama Rakan, Solo menentang Bot atau Cari Perlawanan.\nRakan: cipta atau sertai bilik peribadi menggunakan kod. Hos boleh memulakan permainan apabila sekurang-kurangnya dua pemain manusia bersedia.\nSolo: bermain di luar talian sebagai seorang Orang Kampung bersama sembilan bot.\nCari Perlawanan mencari pemain sehingga 60 saat; bot mengisi ruang kosong selepas itu.\nSetiap perlawanan mempunyai sepuluh watak: lapan Orang Kampung dan dua Nenek Kebayan.",
+    "点击开始游戏 → 与朋友游玩、单人对战机器人或快速匹配。\n朋友模式：创建私人房间并分享代码，或输入代码加入。至少两名真人玩家准备就绪后，房主即可开始。\n单人模式：离线扮演一名村民，与九个机器人游玩。\n快速匹配：最多搜索 60 秒；等待结束后由机器人填补空位。\n每场比赛共有十名角色：八名村民和两名 Nenek Kebayan。",
+    "விளையாட்டைத் தொடங்கு → நண்பர்களுடன் விளையாடு, தனியாகப் போட்களுடன் விளையாடு அல்லது விரைவு போட்டி.\nநண்பர்கள்: குறியீட்டுடன் தனி அறையை உருவாக்கவும் அல்லது சேரவும். குறைந்தது இரண்டு மனித வீரர்கள் தயாரானதும் அறைத் தலைவர் தொடங்கலாம்.\nதனி: இணையமின்றி ஒரு கிராமவாசியாக ஒன்பது போட்களுடன் விளையாடவும்.\nவிரைவு போட்டி 60 வினாடிகள் வரை வீரர்களைத் தேடும்; பின்னர் காலியிடங்களைப் போட்கள் நிரப்பும்.\nஒவ்வொரு போட்டியிலும் பத்து கதாபாத்திரங்கள்: எட்டு கிராமவாசிகள் மற்றும் இரண்டு Nenek Kebayan."
+  ],
+  [
+    "Villagers",
+    "Orang Kampung",
+    "村民",
+    "கிராமவாசிகள்"
+  ],
+  [
+    "Complete all twelve tasks and find both Nenek Kebayan to win. Follow task routes, inspect clues, and compare observations.",
+    "Selesaikan semua dua belas tugas dan cari kedua-dua Nenek Kebayan untuk menang. Ikuti laluan tugas, periksa petunjuk dan bandingkan pemerhatian.",
+    "完成全部十二项任务并找出两位 Nenek Kebayan 即可获胜。沿任务路线前进、检查线索并互相核对观察结果。",
+    "வெற்றி பெற பன்னிரண்டு பணிகளையும் முடித்து இரண்டு Nenek Kebayan-களையும் கண்டுபிடிக்கவும். பணி வழிகளைப் பின்பற்றி, தடயங்களைப் பார்த்து, கவனித்தவற்றை ஒப்பிடவும்."
+  ],
+  [
+    "Nenek Kebayan",
+    "Nenek Kebayan",
+    "Nenek Kebayan",
+    "Nenek Kebayan"
+  ],
+  [
+    "Blend in with the Villagers and use your abilities carefully. Sleep Spell puts human Villagers to sleep for the rest of the match; they can move but cannot chat, vote, or complete tasks. Fog lasts 20 seconds; Door Lock lasts 10 seconds. Both abilities recharge in two minutes.",
+    "Bersembunyi dalam kalangan Orang Kampung dan gunakan kebolehan dengan cermat. Mantera Tidur membuat pemain manusia tidur sehingga perlawanan tamat; mereka masih boleh bergerak tetapi tidak boleh berbual, mengundi atau menyelesaikan tugas. Kabus berlangsung selama 20 saat; Kunci Pintu selama 10 saat. Kedua-dua kebolehan dicas semula dalam masa dua minit.",
+    "混入村民之中并谨慎使用能力。睡眠法术会让真人村民睡到本局结束；他们仍可移动，但不能聊天、投票或完成任务。迷雾持续 20 秒；锁门持续 10 秒。两种能力都需要两分钟冷却。",
+    "கிராமவாசிகளுடன் கலந்து, உங்கள் திறன்களை கவனமாகப் பயன்படுத்தவும். தூக்க மந்திரம் மனித கிராமவாசிகளை போட்டி முடியும் வரை தூங்கச் செய்யும்; அவர்கள் நகரலாம், ஆனால் அரட்டை, வாக்கு அல்லது பணிகளைச் செய்ய முடியாது. மூடுபனி 20 வினாடிகள் நீடிக்கும்; கதவுப் பூட்டு 10 வினாடிகள் நீடிக்கும். இரு திறன்களும் மீண்டும் தயாராக இரண்டு நிமிடங்கள் ஆகும்."
+  ],
+  [
+    "Meetings & Voting",
+    "Mesyuarat dan Undian",
+    "会议与投票",
+    "கூட்டமும் வாக்கெடுப்பும்"
+  ],
+  [
+    "Approach the gong and press Interact to call a meeting. Discuss for 45 seconds, then vote or skip within 20 seconds. Votes cannot be changed after submission.",
+    "Dekati gong dan tekan Interaksi untuk memanggil mesyuarat. Berbincang selama 45 saat, kemudian undi atau langkau dalam masa 20 saat. Undi yang telah dihantar tidak boleh diubah.",
+    "走近锣并按互动键召开会议。讨论 45 秒，然后在 20 秒内投票或跳过。提交后不能更改投票。",
+    "கோங்கை அணுகி, தொடர்பு பொத்தானை அழுத்தி கூட்டத்தை அழைக்கவும். 45 வினாடிகள் கலந்துரையாடிய பிறகு, 20 வினாடிகளுக்குள் வாக்களிக்கவும் அல்லது தவிர்க்கவும். சமர்ப்பித்த வாக்கை மாற்ற முடியாது."
+  ],
+  [
+    "Controls",
+    "Kawalan",
+    "操作方式",
+    "கட்டுப்பாடுகள்"
+  ],
+  [
+    "On a phone, drag the touch pad in the lower-left area to move. On a computer, use WASD or the arrow keys. Press E or tap Interact near a task or the gong. Use the map for routes and the journal to review clues.",
+    "Pada telefon, seret pad sentuh di bahagian kiri bawah untuk bergerak. Pada komputer, gunakan WASD atau kekunci anak panah. Tekan E atau sentuh Interaksi berhampiran tugas atau gong. Gunakan peta untuk melihat laluan dan jurnal untuk menyemak petunjuk.",
+    "手机上拖动左下角的触控区域移动；电脑上使用 WASD 或方向键。靠近任务或铜锣时按 E 或点击互动。使用地图查看路线，并在日志中查看线索。",
+    "தொலைபேசியில் நகர, கீழ்-இடது தொடு தளத்தை இழுக்கவும். கணினியில் WASD அல்லது அம்புக்குறிகளைப் பயன்படுத்தவும். பணி அல்லது கோங்கிற்கு அருகில் E அழுத்தவும் அல்லது தொடர்பைத் தட்டவும். வழிகளுக்கு வரைபடத்தையும் தடயங்களை மீண்டும் பார்க்க குறிப்பேட்டையும் பயன்படுத்தவும்."
   ]
 ]

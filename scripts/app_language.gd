@@ -1,5 +1,6 @@
 extends Node
 ## Local UI catalogues plus Huawei translations of authored game text only.
+signal language_changed(code: String)
 const CODES := ["en", "ms", "zh", "ta"]
 const NAMES := ["English", "Bahasa Melayu", "中文 (Chinese)", "தமிழ் (Tamil)"]
 const Core = preload("res://scripts/language_core.gd")
@@ -65,6 +66,7 @@ func select_language(index: int) -> void:
 	preload("res://scripts/settings_store.gd").set_value("language", CODES[selected])
 	_save()
 	_refresh_current()
+	language_changed.emit(CODES[selected])
 	scan_elapsed = 1.0
 
 func _save() -> void:

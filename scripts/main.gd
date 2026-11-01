@@ -495,12 +495,17 @@ func show_create_account() -> void:
 	LoginScreen.show_create_account(self)
 
 func show_email_sign_in() -> void:
+	var hero := find_child("LoginHero", true, false) as Control
+	if hero: hero.hide()
+	var choices := find_child("LoginPanel", true, false) as Control
+	if choices: choices.hide()
 	LoginScreen.show_email_form(self, "signin")
 
 func _auth_notice(message: String) -> void:
 	var footer := find_child("LoginFooterLabel", true, false) as Label
 	if footer: footer.visible = message.is_empty()
 	var notice := find_child("AuthNoticeLabel", true, false) as Label
+	if notice and not notice.is_visible_in_tree(): notice = null
 	if notice == null: notice = find_child("LoginNoticeLabel", true, false) as Label
 	if notice: notice.text = message
 
@@ -530,6 +535,10 @@ func _close_email_auth() -> void:
 	_auth_notice("")
 	var overlay := find_child("CreateAccountOverlay", true, false)
 	if overlay: overlay.queue_free()
+	var hero := find_child("LoginHero", true, false) as Control
+	if hero: hero.show()
+	var choices := find_child("LoginPanel", true, false) as Control
+	if choices: choices.show()
 
 func _on_authenticated() -> void:
 	var profile := preload("res://scripts/account_profiles.gd").profile(firebase_auth.user)

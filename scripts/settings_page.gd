@@ -3,6 +3,8 @@ const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
 const Store = preload("res://scripts/settings_store.gd")
 const Icons = preload("res://scripts/settings_icons.gd")
+const GameGuide = preload("res://scripts/game_guide.gd")
+const Lang = preload("res://scripts/app_language.gd")
 var app: Control
 var navigation: CanvasLayer
 var content: VBoxContainer
@@ -55,7 +57,7 @@ func show_section(value: String) -> void:
 	for child in get_children():
 		if child.has_meta("settings_content"): remove_child(child); child.queue_free()
 	var frame := Control.new(); frame.set_meta("settings_content", true); frame.size = size; frame.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(frame)
-	var title := UI.make_child_label(frame, "SETTINGS" + ("  /  " + section if not section.is_empty() else ""), 27, Data.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(80, 40, 1000, 46))
+	var title := UI.make_child_label(frame, Lang.text("SETTINGS") + ("  /  " + Lang.text(section) if not section.is_empty() else ""), 27, Data.GOLD, HORIZONTAL_ALIGNMENT_LEFT, Rect2(80, 40, 1000, 46))
 	title.name = "SettingsPageHeading"
 	var close := UI.make_button(frame, "×", navigation.close_dialog, 52, 52)
 	close.name = "SettingsPageClose"; close.position = Vector2(1158, 36); close.tooltip_text = "Return to game" if app.current_screen in ["game", "meeting"] else "Close Settings"
@@ -185,8 +187,18 @@ func controls() -> void:
 		show_section("CONTROLS & DISPLAY"))
 
 func guide() -> void:
-	var copy := "CHOOSE A MODE\nFriends: create or join a private room. Solo: one human and nine bots. Quick Match searches for up to 60 seconds before filling empty spaces with bots.\n\nVILLAGERS\nComplete all twelve tasks and identify both Nenek Kebayan. Follow task routes, inspect clues and compare observations.\n\nNENEK KEBAYAN\nBlend in with the villagers and use your abilities. Sleeping villagers can explore but cannot complete tasks, chat or vote.\n\nMEETINGS & VOTING\nApproach the gong and press Interact. Discuss for 45 seconds, then vote or Skip within 20 seconds. A submitted vote cannot be changed. Results appear once all eligible voters have submitted.\n\nCONTROLS\nDrag anywhere in the lower-left touch area to move. On a computer use WASD or arrow keys. Use Interact near tasks or the gong, the map for routes, and the journal to review clues."
-	var label := label_(copy, int(Store.get_value("text_size"))); content.add_child(label)
+	var label := RichTextLabel.new()
+	label.name = "SettingsHowToPlayGuide"
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.text = GameGuide.rich_text()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_font_size_override("normal_font_size", int(Store.get_value("text_size")))
+	label.add_theme_color_override("default_color", Data.CREAM)
+	label.add_theme_constant_override("line_separation", 6)
+	content.add_child(label)
 
 func report() -> void:
 	paragraph("Describe what happened, the map, and the steps to reproduce it. Save or copy this report to share with the game team.")

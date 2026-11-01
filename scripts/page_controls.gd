@@ -2,6 +2,8 @@ extends CanvasLayer
 ## Persistent navigation and audio controls, independent of rebuilt game pages.
 const UI = preload("res://scripts/game_ui.gd")
 const Data = preload("res://scripts/game_data.gd")
+const GameGuide = preload("res://scripts/game_guide.gd")
+const Lang = preload("res://scripts/app_language.gd")
 const ICON_CUTOUT_SHADER := """
 shader_type canvas_item;
 render_mode unshaded;
@@ -87,6 +89,9 @@ func configure(controller: Control) -> void:
 	_slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_music.add_child(_slash)
 	preload("res://scripts/settings_store.gd").apply(app)
+	var language_service: Node = app.huawei_translation.app_language
+	if is_instance_valid(language_service) and not language_service.is_connected("language_changed", _refresh_guide_language):
+		language_service.connect("language_changed", _refresh_guide_language)
 	refresh(true)
 
 
@@ -197,7 +202,8 @@ func show_settings() -> void:
 func show_help() -> void:
 	var panel := dialog_panel("help", Rect2(325, 70, 630, 580))
 	panel.name = "HowToPlayOverlay"
-	UI.make_child_label(panel, "HOW TO PLAY", 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 520, 42))
+	var heading := UI.make_child_label(panel, Lang.text("HOW TO PLAY"), 26, Data.GOLD, HORIZONTAL_ALIGNMENT_CENTER, Rect2(25, 20, 520, 42))
+	heading.name = "HowToPlayHeading"
 	var guide := RichTextLabel.new()
 	guide.name = "HowToPlayGuide"
 	guide.bbcode_enabled = true
@@ -207,9 +213,22 @@ func show_help() -> void:
 	guide.add_theme_font_size_override("normal_font_size", int(preload("res://scripts/settings_store.gd").get_value("text_size")))
 	guide.add_theme_color_override("default_color", Data.CREAM)
 	guide.add_theme_constant_override("line_separation", 3)
-	guide.text = "[color=#f7c35a][b]Playing modes[/b][/color]\nStart Game → Play with Friends, Solo vs Bots, or Quick Match.\nFriends: create/join a code room; host starts when at least two humans are ready.\nSolo: one Villager and nine bots, with no internet needed.\nQuick Match: up to 60 seconds of searching, then bots fill the spaces.\nEvery match has ten characters and starts after a 5-second countdown.\n\n[color=#f7c35a][b]Villagers[/b][/color]\nComplete all twelve tasks AND find both Nenek Kebayan to win.\nApproach the gong and press Interact to call a meeting.\nDiscuss for 45 seconds, then vote or Skip within 20 seconds.\n\n[color=#f7c35a][b]Sleep Spell[/b][/color]\nHuman villagers sleep until the match ends. They can move around the map but cannot chat, vote, or do tasks.\n\n[color=#f7c35a][b]Fog & Door Lock[/b][/color]\nFog covers nearby surroundings for 20 seconds. Doors lock for 10 seconds. Both share a two-minute recharge.\n\n[color=#f7c35a][b]Controls[/b][/color]\nUse WASD, arrow keys, or the touch pad. Press E near a task or gong."
+	guide.text = GameGuide.rich_text()
 	guide.position = Vector2(42, 80); guide.size = Vector2(546, 402)
 	panel.add_child(guide)
+
+
+func _refresh_guide_language(_code: String) -> void:
+	var guide := find_child("HowToPlayGuide", true, false) as RichTextLabel
+	if guide: guide.text = GameGuide.rich_text()
+	var heading := find_child("HowToPlayHeading", true, false) as Label
+	if heading: heading.text = Lang.text("HOW TO PLAY")
+	var settings_guide := app.find_child("SettingsHowToPlayGuide", true, false) as RichTextLabel
+	if settings_guide: settings_guide.text = GameGuide.rich_text()
+	var settings_heading := app.find_child("SettingsPageHeading", true, false) as Label
+	var settings_page: Node = app.find_child("SettingsPage", true, false)
+	if settings_heading and settings_guide and settings_page != null and str(settings_page.get("section")) == "HOW TO PLAY":
+		settings_heading.text = Lang.text("SETTINGS") + "  /  " + Lang.text("HOW TO PLAY")
 
 
 func confirm(title: String, message: String, callback: Callable) -> void:
